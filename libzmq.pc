@@ -1,0 +1,12 @@
+prefix=C:/Users/kay/.conan/data/zeromq/4.3.5/_/_/package/e9a552ebe8f994398de9ceee972f0ad207df0658
+exec_prefix=C:/Users/kay/.conan/data/zeromq/4.3.5/_/_/package/e9a552ebe8f994398de9ceee972f0ad207df0658
+libdir=C:/Users/kay/.conan/data/zeromq/4.3.5/_/_/package/e9a552ebe8f994398de9ceee972f0ad207df0658/lib
+includedir=C:/Users/kay/.conan/data/zeromq/4.3.5/_/_/package/e9a552ebe8f994398de9ceee972f0ad207df0658/include
+
+Name: libzmq
+Description: 0MQ c++ library
+Version: 4.3.5
+Libs: -L${libdir} -lzmq
+Libs.private: -lstdc++ 
+Requires.private: 
+Cflags: -I${includedir} 

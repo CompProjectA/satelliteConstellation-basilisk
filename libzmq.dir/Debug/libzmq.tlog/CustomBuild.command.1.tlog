@@ -1,0 +1,20 @@
+^C:\PROGRAM FILES\BASILISK-2.2.1\CMAKEFILES\E2547BA82FFF554D84B9D3F7F6DAED95\NSIS.TEMPLATE.IN.RULE
+setlocal
+"C:\Program Files\cmake-4.0.0-windows-x86_64\bin\cmake.exe" -E copy C:/Users/kay/.conan/data/zeromq/4.3.5/_/_/build/e9a552ebe8f994398de9ceee972f0ad207df0658/src/builds/cmake/NSIS.template64.in "C:/Program Files/basilisk-2.2.1/NSIS.template.in"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^C:\USERS\KAY\.CONAN\DATA\ZEROMQ\4.3.5\_\_\BUILD\E9A552EBE8F994398DE9CEEE972F0AD207DF0658\SRC\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\cmake-4.0.0-windows-x86_64\bin\cmake.exe" -SC:/Users/kay/.conan/data/zeromq/4.3.5/_/_/build/e9a552ebe8f994398de9ceee972f0ad207df0658/src "-BC:/Program Files/basilisk-2.2.1" --check-stamp-file "C:/Program Files/basilisk-2.2.1/CMakeFiles/generate.stamp"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

@@ -1,0 +1,784 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\external\sha1\sha1.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\external\wepoll\wepoll.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\precompiled.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\address.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\channel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\client.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\clock.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ctx.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\curve_mechanism_base.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\curve_client.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\curve_server.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\dealer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\devpoll.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\dgram.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\dist.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\endpoint.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\epoll.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\err.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\fq.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\io_object.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\io_thread.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ip.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ipc_address.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ipc_connecter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ipc_listener.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\kqueue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\lb.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\mailbox.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\mailbox_safe.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\mechanism.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\mechanism_base.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\metadata.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\msg.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\mtrie.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\norm_engine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\object.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\options.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\own.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\null_mechanism.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pair.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\peer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pgm_receiver.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pgm_sender.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pgm_socket.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pipe.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\plain_client.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\plain_server.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\poll.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\poller_base.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\polling_util.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pollset.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\proxy.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pub.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pull.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\push.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\random.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\raw_encoder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\raw_decoder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\raw_engine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\reaper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\rep.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\req.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\router.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\select.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\server.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\session_base.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\signaler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\socket_base.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\socks.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\socks_connecter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\stream.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\stream_engine_base.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\sub.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\tcp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\tcp_address.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\tcp_connecter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\tcp_listener.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\thread.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\trie.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\radix_tree.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\v1_decoder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\v1_encoder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\v2_decoder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\v2_encoder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\v3_1_encoder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\xpub.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\xsub.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\zmq.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\zmq_utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\decoder_allocators.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\socket_poller.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\timers.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\radio.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\dish.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\udp_engine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\udp_address.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\scatter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\gather.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ip_resolver.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\zap_client.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\zmtp_engine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\stream_connecter_base.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\stream_listener_base.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\external\sha1\sha1.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\external\wepoll\wepoll.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\config.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\address.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\array.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\atomic_counter.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\atomic_ptr.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\blob.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\channel.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\client.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\clock.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\command.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\compat.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\condition_variable.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ctx.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\curve_client.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\curve_client_tools.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\curve_mechanism_base.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\curve_server.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\dbuffer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\dealer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\decoder.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\decoder_allocators.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\devpoll.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\dgram.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\dish.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\dist.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\encoder.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\endpoint.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\epoll.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\err.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\fd.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\fq.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\gather.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\generic_mtrie.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\generic_mtrie_impl.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\gssapi_client.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\gssapi_mechanism_base.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\gssapi_server.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\i_decoder.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\i_encoder.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\i_engine.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\i_mailbox.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\i_poll_events.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\io_object.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\io_thread.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ip.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ipc_address.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ipc_connecter.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ipc_listener.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\kqueue.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\lb.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\likely.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\macros.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\mailbox.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\mailbox_safe.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\mechanism.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\mechanism_base.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\metadata.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\msg.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\mtrie.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\mutex.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\norm_engine.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\null_mechanism.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\object.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\options.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\own.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pair.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\peer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pgm_receiver.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pgm_sender.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pgm_socket.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pipe.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\plain_client.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\plain_common.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\plain_server.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\poll.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\poller.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\poller_base.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\polling_util.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pollset.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\precompiled.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\proxy.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pub.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\pull.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\push.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\radio.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\random.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\raw_decoder.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\raw_encoder.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\raw_engine.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\reaper.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\rep.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\req.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\router.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\scatter.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\secure_allocator.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\select.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\server.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\session_base.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\signaler.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\socket_base.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\socket_poller.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\socks.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\socks_connecter.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\stdint.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\stream.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\stream_engine_base.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\stream_connecter_base.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\stream_listener_base.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\sub.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\tcp.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\tcp_address.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\tcp_connecter.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\tcp_listener.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\thread.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\timers.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\tipc_address.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\tipc_connecter.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\tipc_listener.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\trie.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\udp_address.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\udp_engine.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\v1_decoder.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\v1_encoder.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\v2_decoder.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\v2_encoder.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\v3_1_encoder.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\v2_protocol.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\vmci.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\vmci_address.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\vmci_connecter.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\vmci_listener.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\windows.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\wire.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\xpub.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\xsub.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ypipe.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ypipe_base.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\ypipe_conflate.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\yqueue.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\zap_client.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\src\zmtp_engine.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Program Files\basilisk-2.2.1\platform.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\include\zmq.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\include\zmq_utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Program Files\basilisk-2.2.1\NSIS.template.in">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Program Files\basilisk-2.2.1\CMakeFiles\e2547ba82fff554d84b9d3f7f6daed95\NSIS.template.in.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\AUTHORS" />
+    <None Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\LICENSE" />
+    <None Include="C:\Users\kay\.conan\data\zeromq\4.3.5\_\_\build\e9a552ebe8f994398de9ceee972f0ad207df0658\src\NEWS" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="C:\Program Files\basilisk-2.2.1\version.rc">
+      <Filter>Source Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{611952CE-03D7-333F-AF99-BE6A984C9302}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{B09D4C70-E22F-3D3E-AF0A-77970ABC8E98}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{A74CCF9B-BBD5-340B-AD90-4FEF83492990}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

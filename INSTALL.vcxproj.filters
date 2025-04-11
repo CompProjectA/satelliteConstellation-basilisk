@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Program Files\basilisk-2.2.1\CMakeFiles\e2a7cc89911a974e150794f5c38ad359\INSTALL_force.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{611952CE-03D7-333F-AF99-BE6A984C9302}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
