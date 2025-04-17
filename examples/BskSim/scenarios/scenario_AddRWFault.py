@@ -83,6 +83,8 @@ import os
 import sys
 
 import numpy as np
+from Basilisk.utilities import vizSupport
+
 from Basilisk.utilities import orbitalMotion, macros
 
 filename = inspect.getframeinfo(inspect.currentframe()).filename
@@ -97,28 +99,57 @@ import BSK_Dynamics, BSK_Fsw
 import BSK_Plotting as BSK_plt
 
 # Create your own scenario child class
+
 class scenario_AddRWFault(BSKSim, BSKScenario):
     def __init__(self):
         super(scenario_AddRWFault, self).__init__()
         self.name = 'scenario_AddRWFault'
 
-        # declare additional class variables
+        # Declare message recorders
         self.msgRecList = {}
         self.sNavTransName = "sNavTransMsg"
         self.attGuidName = "attGuidMsg"
 
+        # Set dynamics and FSW models
         self.set_DynModel(BSK_Dynamics)
         self.set_FswModel(BSK_Fsw)
 
+        # Configure initial spacecraft state
         self.configure_initial_conditions()
+
+        # Log relevant output messages
         self.log_outputs()
-        
+
+        # Reaction wheel fault settings
         self.oneTimeRWFaultFlag = 1
         self.repeatRWFaultFlag = 1
         self.oneTimeFaultTime = macros.min2nano(10.)
-        
-        DynModels = self.get_DynModel()
         self.DynModels.RWFaultLog = []
+
+        # Vizard camera support
+        if vizSupport.vizFound:
+            viz = vizSupport.enableUnityVisualization(
+                self,
+                self.DynModels.taskName,
+                self.DynModels.scObject,
+                liveStream=True
+            )
+            viz.settings.orbitLinesOn = 1
+            viz.settings.showSpacecraftLabels = 1
+
+            # Attach a forward-pointing camera
+            vizSupport.createStandardCamera(
+                viz,
+                setMode=1,
+                spacecraftName=self.DynModels.scObject.ModelTag,
+                displayName="ScienceCam",
+                fieldOfView=10 * macros.D2R,
+                pointingVector_B=[0.0, 1.0, 0.0],
+                position_B=[0.0, 1.5, 0.0]
+            )
+
+
+
 
     def configure_initial_conditions(self):
         # Configure Dynamics initial conditions
