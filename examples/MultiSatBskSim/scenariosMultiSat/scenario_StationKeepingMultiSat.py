@@ -233,11 +233,26 @@ class scenario_StationKeepingFormationFlying(BSKSim, BSKScenario):
                 gsList.append([batteryPanel, tankPanel])
 
             viz = vizSupport.enableUnityVisualization(self, self.DynModels[0].taskName, DynModelsList
-                                                      # , saveFile=__file__
+                                                      ,liveStream=True
                                                       , rwEffectorList=rwStateEffectorList
                                                       , thrEffectorList=thDynamicEffectorList
                                                       , genericStorageList=gsList
                                                       )
+            # Add cameras to each spacecraft for visual tracking in Vizard  
+        for i in range(self.numberSpacecraft):
+            vizSupport.createStandardCamera(
+                viz,
+                setMode=1,
+                spacecraftName=f"sat-{i}",
+                displayName=f"Camera-{i+1}",
+                fieldOfView=60 * macros.D2R,
+                pointingVector_B=[1.0, 0.0, 0.0],
+                position_B=[0.0, 0.0, 0.5]
+            )
+
+
+
+
             viz.settings.showSpacecraftLabels = True
             viz.settings.orbitLinesOn = 2  # show osculating relative orbit trajectories
             viz.settings.mainCameraTarget = "sat-1"

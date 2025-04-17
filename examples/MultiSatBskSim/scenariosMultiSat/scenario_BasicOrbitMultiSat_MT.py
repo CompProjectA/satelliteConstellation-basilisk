@@ -139,7 +139,7 @@ class scenario_BasicOrbitFormationFlying(BSKSim, BSKScenario):
             storageList[0] = [batteryPanel, tankPanel]
 
             viz = vizSupport.enableUnityVisualization(self, self.DynModels[0].taskName, DynModelsList
-                                                      # , saveFile=__file__
+                                                      ,liveStream=True
                                                       , rwEffectorList=rwStateEffectorList
                                                       , genericStorageList=storageList
                                                       )
