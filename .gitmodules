@@ -1,0 +1,3 @@
+[submodule "bsk_rl"]
+	path = bsk_rl
+	url = https://github.com/CompProjectA/satelliteConstellation-bsk_rl.git
