@@ -489,19 +489,23 @@ def run(planetCase):
         transceiverHUD.animationSpeed = 1
 
         # Configure vizard settings
-        vizFile = os.path.realpath(__file__).strip(".py") + "_" + planetCase + ".py"
-        viz = vizSupport.enableUnityVisualization(scSim, simTaskName, scObject
-                                                  # , saveFile=vizFile
-                                                  , transceiverList=transceiverHUD)
+        viz = vizSupport.enableUnityVisualization(scSim, simTaskName, scObject,
+                                          transceiverList=transceiverHUD,
+                                          liveStream=True)
         viz.epochInMsg.subscribeTo(gravFactory.epochMsg)
         viz.settings.orbitLinesOn = -1
         viz.settings.keyboardAngularRate = np.deg2rad(0.5)
         viz.settings.showMissionTime = 1
 
-        vizSupport.createStandardCamera(viz, setMode=1, spacecraftName=scObject.ModelTag,
-                                        fieldOfView=10 * macros.D2R,
-                                        displayName="10˚ FOV Camera",
-                                        pointingVector_B=[0,1,0], position_B=cameraLocation)
+        cameraLocation = [0.0, 1.5, 0.0]
+        vizSupport.createStandardCamera(
+            viz, setMode=1,
+            spacecraftName=scObject.ModelTag,
+            fieldOfView=10 * macros.D2R,
+            displayName="Science Camera",
+            pointingVector_B=[0, 1, 0],
+            position_B=cameraLocation
+        )
 
     # Initialize and execute simulation for the first section (stops at periapsis of hyperbola before delta V)
     scSim.InitializeSimulation()
