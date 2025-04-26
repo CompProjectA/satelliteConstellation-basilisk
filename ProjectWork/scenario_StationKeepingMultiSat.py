@@ -199,11 +199,13 @@ class scenario_StationKeepingFormationFlying(BSKSim, BSKScenario):
         self.configure_initial_conditions()
         self.log_outputs(relativeNavigation)
 
+# Enable Vizard visualization if available
         if vizSupport.vizFound:
-            # if this scenario is to interface with the BSK Viz, uncomment the following line
             DynModelsList = []
             rwStateEffectorList = []
             thDynamicEffectorList = []
+
+            # Setup Vizard for all spacecraft dynamics
             for i in range(self.numberSpacecraft):
                 DynModelsList.append(self.DynModels[i].scObject)
                 rwStateEffectorList.append(self.DynModels[i].rwStateEffector)
@@ -232,34 +234,52 @@ class scenario_StationKeepingFormationFlying(BSKSim, BSKScenario):
 
                 gsList.append([batteryPanel, tankPanel])
 
-            viz = vizSupport.enableUnityVisualization(self, self.DynModels[0].taskName, DynModelsList
-                                                      ,liveStream=True
-                                                      , rwEffectorList=rwStateEffectorList
-                                                      , thrEffectorList=thDynamicEffectorList
-                                                      , genericStorageList=gsList
-                                                      )
-            # Add cameras to each spacecraft for visual tracking in Vizard  
-        for i in range(self.numberSpacecraft):
+            viz = vizSupport.enableUnityVisualization(
+                self, self.DynModels[0].taskName, DynModelsList,
+                liveStream=True,
+                rwEffectorList=rwStateEffectorList,
+                thrEffectorList=thDynamicEffectorList,
+                genericStorageList=gsList
+            )
+
+
+
+            # Define target location on Earth (latitude, longitude in degrees)
+            target_latitude = 40.0
+            target_longitude = -105.0
+
+            # Convert Earth location (lat/lon) to inertial coordinates
+            EnvModel = self.get_EnvModel()
+            planetRadius = EnvModel.planetRadius
+            target_position = planetRadius * np.array([
+                np.cos(np.radians(target_latitude)) * np.cos(np.radians(target_longitude)),
+                np.cos(np.radians(target_latitude)) * np.sin(np.radians(target_longitude)),
+                np.sin(np.radians(target_latitude))
+            ])
+
             vizSupport.createStandardCamera(
                 viz,
-                setMode=1,
-                spacecraftName=f"sat-{i}",
-                displayName=f"Camera-{i+1}",
-                fieldOfView=60 * macros.D2R,
+                setMode=1,  # Spacecraft-fixed camera
+                spacecraftName="sat-0",
+                displayName="Imaging Camera",
+                fieldOfView=30 * macros.D2R,
                 pointingVector_B=[1.0, 0.0, 0.0],
                 position_B=[0.0, 0.0, 0.5]
             )
 
 
-
-
+            # Additional Vizard settings
             viz.settings.showSpacecraftLabels = True
-            viz.settings.orbitLinesOn = 2  # show osculating relative orbit trajectories
-            viz.settings.mainCameraTarget = "sat-1"
-            viz.liveSettings.relativeOrbitChief = "sat-0"  # set the chief for relative orbit trajectory
+            viz.settings.orbitLinesOn = 2  # Display relative orbits
+            viz.settings.mainCameraTarget = "sat-0"
+            viz.liveSettings.relativeOrbitChief = "sat-0"
+
+            # Show storage panel for each spacecraft
             for i in range(self.numberSpacecraft):
-                vizSupport.setInstrumentGuiSetting(viz, spacecraftName=self.DynModels[i].scObject.ModelTag,
-                                                   showGenericStoragePanel=True)
+                vizSupport.setInstrumentGuiSetting(
+                    viz, spacecraftName=self.DynModels[i].scObject.ModelTag,
+                    showGenericStoragePanel=True
+                )
 
     def configure_initial_conditions(self):
         EnvModel = self.get_EnvModel()
