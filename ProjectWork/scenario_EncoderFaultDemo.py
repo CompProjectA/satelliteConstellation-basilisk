@@ -1,6 +1,7 @@
 import os, sys, inspect
 import numpy as np
 from Basilisk.utilities import orbitalMotion, macros
+from Basilisk.utilities import vizSupport
 
 # Setup matplotlib backend early
 import matplotlib
@@ -40,7 +41,28 @@ class scenario_EncoderFaultDemo(BSKSim, BSKScenario):
         self.log_outputs()
 
         print("[DEBUG] Setting up fault injection...")
-        #self.setup_fault() <-------------- currently issue that cause the plot to now show up
+        #self.setup_fault() <-------------- currently issue that cause the plot to now show up and vizard to no open
+
+        if vizSupport.vizFound:
+            viz = vizSupport.enableUnityVisualization(
+                self,
+                self.DynModels.taskName,
+                self.DynModels.scObject,
+                liveStream=True
+            )
+            viz.settings.orbitLinesOn = 1
+            viz.settings.showSpacecraftLabels = 1
+
+            # Attach a forward-pointing camera
+            vizSupport.createStandardCamera(
+                viz,
+                setMode=1,
+                spacecraftName=self.DynModels.scObject.ModelTag,
+                displayName="ScienceCam",
+                fieldOfView=10 * macros.D2R,
+                pointingVector_B=[0.0, 1.0, 0.0],
+                position_B=[0.0, 1.5, 0.0]
+            )
 
     def configure_initial_conditions(self):
         oe = orbitalMotion.ClassicElements()
