@@ -61,6 +61,7 @@ def run(show_plots=True):
     else:
         print("Vizard Visualization Module Not Found. Check Basilisk installation.")
     simulationTime = macros.min2nano(10.0)
+    scSim.InitializeSimulation()
     scSim.ConfigureStopTime(simulationTime)
     scSim.ExecuteSimulation()
 
