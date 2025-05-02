@@ -83,9 +83,9 @@ from Basilisk import __path__
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
 
-sys.path.append(path + '/../')
-sys.path.append(path + '/../modelsMultiSat')
-sys.path.append(path + '/../plottingMultiSat')
+sys.path.append(path + '/../examples/MultiSatBskSim')
+sys.path.append(path + '/../examples/MultiSatBskSim/modelsMultiSat')
+sys.path.append(path + '/../examples/MultiSatBskSim/plottingMultiSat')
 from BSK_MultiSatMasters import BSKSim, BSKScenario
 import BSK_EnvironmentEarth
 import BSK_MultiSatDynamics
@@ -398,5 +398,5 @@ if __name__ == "__main__":
         1.0,         # time step (s)
         'LEO',       # orbit Case (LEO, GTO, GEO)
         False,       # useSphericalHarmonics
-        'Earth'      # planetCase (Earth, Mars)
+        'Mars'      # planetCase (Earth, Mars)
     )
