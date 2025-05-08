@@ -62,19 +62,19 @@ def run(show_plots=True):
             if i != j:
                 scLocation.addSpacecraftToModel(other_sat.scStateOutMsg)
 
-        # Setup parameters
+        
         scLocation.rEquator = earth.radEquator
         scLocation.rPolar = earth.radEquator * 0.98
-        scLocation.aHat_B = [0, 0, -1]  # Look "down" from satellite
-        scLocation.theta = np.radians(120.0)  # Wider field of view
-        scLocation.maximumRange = 1e7  # Larger range
+        scLocation.aHat_B = [1.0, 0.0, 0.0] 
+        scLocation.theta = np.radians(180.0)  
+        scLocation.maximumRange = 2e7  # Larger range
         scSim.AddModelToTask(simTaskName, scLocation)
         scLocationModules.append(scLocation)
 
         # Record access results
-        accessRecorder = scLocation.accessOutMsgs[0].recorder()
-        accessRecorders.append(accessRecorder)
-        scSim.AddModelToTask(simTaskName, accessRecorder)
+        recorder = scLocation.scStateInMsgs[0].recorder()
+        accessRecorders.append(recorder)
+        scSim.AddModelToTask(simTaskName, recorder)
 
     # Enable visualization if available
     if vizSupport.vizFound:
@@ -107,13 +107,14 @@ def run(show_plots=True):
         time_vec = accessRecorders[0].times() * macros.NANO2MIN
         plt.figure(figsize=(10, 6))
 
-        for i, recorder in enumerate(accessRecorders):
-            access = recorder.hasAccess
-            plt.plot(time_vec, access, label=f'Sat{i+1} Access')
+        for i in range(num_satellites):
+            for j in range(num_satellites - 1):
+                access = accessRecorders[i].r_BN_N
+                plt.plot(time_vec, access, label=f'Sat{i+1} to Sat{j+1 if j < i else j+2}')
 
         plt.xlabel('Time (minutes)')
         plt.ylabel('Has Access (1 = Yes, 0 = No)')
-        plt.title('Access Status of Each Satellite')
+        plt.title('Access Between Satellites')
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
