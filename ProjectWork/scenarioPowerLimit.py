@@ -3,7 +3,8 @@ import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-from Basilisk.utilities import orbitalMotion, macros
+from Basilisk.utilities import orbitalMotion, macros, vizSupport
+
 
 # Get the file path information
 filename = inspect.getframeinfo(inspect.currentframe()).filename
@@ -19,12 +20,12 @@ import BSK_Plotting as BSK_plt
 ###############################################################################
 # SCENARIO DEFINITION
 ###############################################################################
-class scenario_AddRWFault(BSKSim, BSKScenario):
+class scenario_PowerLimitFault(BSKSim, BSKScenario):
     def __init__(self):
-        super(scenario_AddRWFault, self).__init__()
-        self.name = 'scenario_AddRWFault'
+        super(scenario_PowerLimitFault, self).__init__()
+        self.name = 'scenario_PowerLimitFault'
 
-        # Declare message recorder names and additional variables
+        # Declare message recorder names
         self.msgRecList = {}
         self.sNavTransName = "sNavTransMsg"
         self.attGuidName = "attGuidMsg"
@@ -35,18 +36,46 @@ class scenario_AddRWFault(BSKSim, BSKScenario):
         self.configure_initial_conditions()
         self.log_outputs()
 
-        # Fault injection flags and timing
+        # Fault injection parameters
         self.oneTimeRWFaultFlag = 1
-        self.repeatRWFaultFlag = 1
-        self.oneTimeFaultTime = macros.min2nano(10.)  # Fault injected at 10 minutes
+        self.oneTimeFaultTime = macros.min2nano(15.)  # Inject fault at 30 minutes
 
         DynModels = self.get_DynModel()
         self.DynModels.RWFaultLog = []
 
+        # Define Earth as the observation target
+        self.targetPosition_N = np.array([0.0, 0.0, 0.0])  # Earth's center in inertial coordinates
+
+
+        # Enable Vizard visualization
+        if vizSupport.vizFound:
+            viz = vizSupport.enableUnityVisualization(
+                self,
+                self.DynModels.taskName,
+                self.DynModels.scObject,
+                liveStream=True,
+                saveFile="power_fault"
+            )
+            viz.settings.orbitLinesOn = 1
+            viz.settings.showSpacecraftLabels = 1
+
+            # Attach a forward-pointing camera
+            vizSupport.createStandardCamera(
+                viz,
+                setMode=1,
+                spacecraftName=self.DynModels.scObject.ModelTag,
+                displayName="ScienceCam",
+                fieldOfView=10 * macros.D2R,
+                pointingVector_B=[0.0, 0.0, 0.0],  # Initial orientation
+                position_B=[0.0, 1.5, 0.0]
+            )
+            
+            self.viz = viz  # Store for later camera updates
+
     def configure_initial_conditions(self):
         # Set classical orbital elements
         oe = orbitalMotion.ClassicElements()
-        oe.a = 1e7      # m
+        oe.a = 1e7  # m
         oe.e = 0.01
         oe.i = 33.3 * macros.D2R
         oe.Omega = 48.2 * macros.D2R
@@ -56,9 +85,9 @@ class scenario_AddRWFault(BSKSim, BSKScenario):
         DynModels = self.get_DynModel()
         mu = DynModels.gravFactory.gravBodies['earth'].mu
         rN, vN = orbitalMotion.elem2rv(mu, oe)
-        orbitalMotion.rv2elem(mu, rN, vN)  # Optional verification of orbital data
         DynModels.scObject.hub.r_CN_NInit = rN
         DynModels.scObject.hub.v_CN_NInit = vN
+
         # Set initial attitude and angular velocities
         DynModels.scObject.hub.sigma_BNInit = [[0.1], [0.2], [-0.3]]
         DynModels.scObject.hub.omega_BN_BInit = [[0.001], [-0.01], [0.03]]
@@ -78,25 +107,16 @@ class scenario_AddRWFault(BSKSim, BSKScenario):
         self.msgRecList[self.sNavTransName] = DynModel.simpleNavObject.transOutMsg.recorder(samplingTime)
         self.AddModelToTask(DynModel.taskName, self.msgRecList[self.sNavTransName])
 
-        # Reaction wheel logs
-        self.rwLogs = []
-        for item in range(4):
-            self.rwLogs.append(DynModel.rwStateEffector.rwOutMsgs[item].recorder(samplingTime))
-            self.AddModelToTask(DynModel.taskName, self.rwLogs[item])
         return
 
 ###############################################################################
-# RUNNING THE SCENARIO WITH FAULT INDEX AND POWER LIMIT
+# RUNNING THE SCENARIO WITH FAULT INJECTION
 ###############################################################################
 def runScenario(scenario, powerLimit, faultIndex):
-    """
-    Inject a power limit fault on a given reaction wheel (defined by faultIndex)
-    with a specified powerLimit value (in Nm).
-    """
     simulationTime = macros.min2nano(30.)
     scenario.modeRequest = "hillPoint"
 
-    # Create a one-time fault event
+    # Inject reaction wheel power limit fault
     scenario.createNewEvent(
         "addOneTimeRWFault",
         scenario.get_FswModel().processTasksTimeStep,
@@ -106,103 +126,60 @@ def runScenario(scenario, powerLimit, faultIndex):
          "self.oneTimeRWFaultFlag = 0"]
     )
     
-    # Repeated micro faults (using a fraction of the powerLimit)
-    scenario.createNewEvent(
-        "addRepeatedRWFault",
-        scenario.get_FswModel().processTasksTimeStep,
-        True,
-        ["self.repeatRWFaultFlag == 1"],
-        [f"self.DynModels.PeriodicRWFault(1./3000, 'powerLimit', {powerLimit}/20.0, 1, self.TotalSim.CurrentNanos)",
-         "self.setEventActivity('addRepeatedRWFault', True)"]
-    )
-    
     scenario.InitializeSimulation()
     scenario.ConfigureStopTime(simulationTime)
     scenario.ExecuteSimulation()
-    return
+
+    # Save visualization output file *after* simulation completes
+    scenario.viz.settings.recordFile = "./_VizFiles/power_fault_UnityViz.bin"
+
 
 ###############################################################################
-# SUMMARY SWEEP: PLOT CONSISTENT TRENDS AND METRICS
+# PLOTTING CAMERA TRACKING PERFORMANCE
 ###############################################################################
-def runSweepSummary(showPlots=True):
-    # Power limits on the x-axis (in Watts)
-    power_limits_W = [0.001, 0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
-    fault_indices = [1, 2, 3, 4]  # 4 RW faults
+def pull_outputs(scenario, showPlots, powerLimit, faultIndex):
+    attErrRec = scenario.msgRecList[scenario.attGuidName]
+    sigma_BR = np.delete(attErrRec.sigma_BR, 0, 0)  # Attitude error quaternion
+    timeData = np.delete(attErrRec.times(), 0, 0) * macros.NANO2MIN
 
-    # Simulated performance metrics for RW faults
-    results = {fault: {"reward": [], "alive": [], "imaging": [], "battery": []}
-               for fault in fault_indices}
+    num_RW = 4
+    RW_speeds = np.delete(scenario.rwSpeedRec.wheelSpeeds[:, range(num_RW)], 0, 0)
+    RW_speeds_norm = RW_speeds / np.max(RW_speeds, axis=0)  # Normalize speeds
 
-    for fault in fault_indices:
-        for p in power_limits_W:
-            # Simulated trends (replace with real outputs if needed)
-            severity = (np.log10(p * 1000)) * (fault / 4.0)
-            reward = max(40 + 10 * fault, 100 - 10 * severity * fault)
-            alive = max(50 + 5 * fault, 100 - 15 * severity * fault)
-            imaging = max(60 + 7 * fault, 100 - 5 * severity * fault)
-            battery = max(20 + 3 * fault, 100 - 20 * severity * fault)
-            results[fault]["reward"].append(reward)
-            results[fault]["alive"].append(alive)
-            results[fault]["imaging"].append(imaging)
-            results[fault]["battery"].append(battery)
+    fault_time_min = scenario.oneTimeFaultTime * macros.NANO2MIN
 
-    # Plot the sweep summary as a 2x2 grid with four lines per subplot.
-    fault_colors = {1: "blue", 2: "orange", 3: "green", 4: "red"}
-    plt.figure(figsize=(12, 8))
-    
-    # Subplot 1: Reward/Non-fault (%) vs Requests |R|
-    plt.subplot(2, 2, 1)
-    for fault in fault_indices:
-        plt.plot(power_limits_W, results[fault]["reward"],
-                 marker='o', color=fault_colors[fault], label=f'RW {fault} Fault')
-    plt.xlabel("Requests |R|")
-    plt.ylabel("Reward/Non-fault (%)")
-    plt.title("Reward vs Requests")
-    plt.grid(True)
+    # Clear previous plots
+    BSK_plt.clear_all_plots()
+
+    # Plot Attitude Error
+    plt.figure(figsize=(10, 5))
+    plt.plot(timeData, np.linalg.norm(sigma_BR, axis=1), label="Attitude Error Norm")
+    plt.axvline(fault_time_min, linestyle="--", color="red", label="Fault Injection")
+    plt.xlabel("Time (min)")
+    plt.ylabel("Attitude Error Norm")
+    plt.title(f"Attitude Error (PL={powerLimit}W, FI={faultIndex})")
     plt.legend()
-    
-    # Subplot 2: Alive/Non-fault (%) vs Orbits Completed
-    plt.subplot(2, 2, 2)
-    for fault in fault_indices:
-        plt.plot(power_limits_W, results[fault]["alive"],
-                 marker='o', color=fault_colors[fault], label=f'RW {fault} Fault')
-    plt.xlabel("Orbits Completed")
-    plt.ylabel("Alive/Non-fault (%)")
-    plt.title("Alive Status vs Orbits")
     plt.grid(True)
-    plt.legend()
 
-    # Subplot 3: Imaging Success/Non-fault (%) vs Requests |R|
-    plt.subplot(2, 2, 3)
-    for fault in fault_indices:
-        plt.plot(power_limits_W, results[fault]["imaging"],
-                 marker='o', color=fault_colors[fault], label=f'RW {fault} Fault')
-    plt.xlabel("Requests |R|")
-    plt.ylabel("Imaging Success/Non-fault (%)")
-    plt.title("Imaging Success vs Requests")
-    plt.grid(True)
+    # Plot RW Speed Changes
+    plt.figure(figsize=(10, 5))
+    for i in range(num_RW):
+        plt.plot(timeData, RW_speeds_norm[:, i], label=f"RW {i+1} Speed (Norm)")
+    plt.axvline(fault_time_min, linestyle="--", color="red", label="Fault Injection")
+    plt.xlabel("Time (min)")
+    plt.ylabel("Normalized RW Speed")
+    plt.title(f"Reaction Wheel Speeds (PL={powerLimit}W, FI={faultIndex})")
     plt.legend()
+    plt.grid(True)
 
-    # Subplot 4: Average Battery Ratio vs Requests |R|
-    plt.subplot(2, 2, 4)
-    for fault in fault_indices:
-        plt.plot(power_limits_W, results[fault]["battery"],
-                 marker='o', color=fault_colors[fault], label=f'RW {fault} Fault')
-    plt.xlabel("Requests |R|")
-    plt.ylabel("Average Battery Ratio")
-    plt.title("Battery Ratio vs Requests")
-    plt.grid(True)
-    plt.legend()
-    
-    plt.tight_layout()
+    # Show plots
     if showPlots:
         plt.show()
-    else:
-        plt.close('all')
 
 ###############################################################################
-# MAIN ENTRY POINT
+# MAIN EXECUTION
 ###############################################################################
 if __name__ == "__main__":
-    # Run the sweep summary to generate graphs with deterministic trends
-    runSweepSummary(showPlots=True)
+    scenario = scenario_PowerLimitFault()
+    runScenario(scenario, powerLimit=0.5, faultIndex=2)
+    pull_outputs(scenario, showPlots=True, powerLimit=0.5, faultIndex=2)
