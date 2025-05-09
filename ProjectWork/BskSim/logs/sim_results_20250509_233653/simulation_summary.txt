@@ -1,0 +1,15 @@
+===== RW Fault Simulation Summary =====
+Date: 2025-05-09 23:37:07
+
+Simulation time: 30.0 minutes
+Fault magnitude: 0.0005
+Fault wheel: 3
+Fault time: 10.0 minutes
+
+Targets:
+  1. Melbourne (lat: -37.8136, lon: 144.9631, color: red)
+  2. New York (lat: 40.71, lon: -74.0, color: blue)
+  3. Tokyo (lat: 35.68, lon: 139.77, color: green)
+  4. London (lat: 51.51, lon: -0.13, color: yellow)
+
+Results saved to: D:\Sem01 2025\Computing Technology Project A\Github\satelliteConstellation-basilisk\ProjectWork\BskSim\logs\sim_results_20250509_233653

@@ -502,7 +502,7 @@ def run(planetCase):
             viz, setMode=1,
             spacecraftName=scObject.ModelTag,
             fieldOfView=10 * macros.D2R,
-            displayName="Science Camera",
+            displayName="Science Camera",   
             pointingVector_B=[0, 1, 0],
             position_B=cameraLocation
         )

@@ -314,3 +314,150 @@ def plot_rel_orbit(timeData, r_chief, r_deputy, id=None, livePlot=False):
     if not livePlot:
         plt.legend()
     plt.grid()
+
+
+def plot_target_visibility(timeData, r_BN_N, targets):
+    """
+    Plot target visibility information
+
+    Args:
+        timeData: Array of simulation times in minutes
+        r_BN_N: Array of spacecraft positions in inertial frame
+        targets: List of target dictionaries with 'name', 'lat', 'lon' keys
+        
+    Returns:
+        fig: The matplotlib figure object for display or saving
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from Basilisk.utilities import macros
+    
+    # Calculate visibility for each target over time
+    visibilityData = []
+    targetNames = []
+    
+    for target in targets:
+        targetNames.append(target["name"])
+        visibility = []
+        
+        for i, t in enumerate(timeData):
+            # Convert time to hours for Earth rotation calculation
+            time_hours = t / 60.0  # minutes to hours
+            earth_rotation = time_hours * 15.0 * macros.D2R  # Earth rotates ~15 degrees per hour
+            
+            # Create rotation matrix
+            c_rot = np.cos(earth_rotation)
+            s_rot = np.sin(earth_rotation)
+            R_N_E = np.array([
+                [c_rot, -s_rot, 0],
+                [s_rot, c_rot, 0],
+                [0, 0, 1]
+            ])
+            
+            # Convert lat/lon to ECEF coordinates
+            lat_rad = target["lat"] * macros.D2R
+            lon_rad = target["lon"] * macros.D2R
+            r_Earth = 6371000.0  # Earth radius in meters
+            
+            # Target position in Earth-fixed frame
+            r_Target_E = np.array([
+                (r_Earth) * np.cos(lat_rad) * np.cos(lon_rad),
+                (r_Earth) * np.cos(lat_rad) * np.sin(lon_rad),
+                (r_Earth) * np.sin(lat_rad)
+            ])
+            
+            # Convert to inertial frame
+            r_Target_N = R_N_E @ r_Target_E
+            
+            # Check if target is visible (above horizon)
+            sc_pos = r_BN_N[i]
+            sc_to_target = r_Target_N - sc_pos
+            sc_to_center = -sc_pos
+            
+            # If angle between these vectors is less than 90 degrees, target is visible
+            cos_angle = np.dot(sc_to_target, sc_to_center) / (np.linalg.norm(sc_to_target) * np.linalg.norm(sc_to_center))
+            
+            # Set a value that represents visibility (1 for visible, 0 for not visible)
+            if cos_angle < 0:  # Angle > 90 degrees, target is visible
+                visibility.append(1)
+            else:
+                visibility.append(0)
+        
+        visibilityData.append(visibility)
+    
+    # Create the plot
+    fig = plt.figure(figsize=(10, 6))
+    ax = fig.add_subplot(111)
+    
+    for i, vis in enumerate(visibilityData):
+        ax.plot(timeData, [i+1]*len(timeData), 'k-', alpha=0.2)  # baseline
+        visible_segments = []
+        start_idx = None
+        
+        # Find continuous visible segments
+        for j, v in enumerate(vis):
+            if v == 1 and start_idx is None:
+                start_idx = j
+            elif v == 0 and start_idx is not None:
+                visible_segments.append((timeData[start_idx], timeData[j-1], i+1))
+                start_idx = None
+        
+        # Handle case where visibility extends to the end
+        if start_idx is not None:
+            visible_segments.append((timeData[start_idx], timeData[-1], i+1))
+        
+        # Plot visible segments
+        for start, end, level in visible_segments:
+            ax.plot([start, end], [level, level], 'g-', linewidth=3)
+    
+    ax.set_yticks(range(1, len(targetNames)+1))
+    ax.set_yticklabels(targetNames)
+    ax.set_xlabel('Time [min]')
+    ax.set_title('Target Visibility Timeline')
+    ax.grid(True)
+    
+    return fig
+
+def pull_outputs(self, showPlots):
+    """Process and plot simulation outputs"""
+    # FSW process outputs, remove first data point as it is before FSW is called
+    attErrRec = self.msgRecList[self.attGuidName]
+
+    sigma_BR = np.delete(attErrRec.sigma_BR, 0, 0)
+    omega_BR_B = np.delete(attErrRec.omega_BR_B, 0, 0)
+    
+    num_RW = 4
+    RW_speeds = np.delete(self.rwSpeedRec.wheelSpeeds[:, range(num_RW)], 0, 0)
+    RW_friction = []
+    for i in range(num_RW):
+        RW_friction.append(np.delete(self.rwLogs[i].u_f, 0, 0))
+
+    # Plot results
+    BSK_plt.clear_all_plots()
+    timeData = np.delete(attErrRec.times(), 0, 0) * macros.NANO2MIN
+    BSK_plt.plot_attitude_error(timeData, sigma_BR, id=1)
+    BSK_plt.plot_rate_error(timeData, omega_BR_B, id=2)
+    BSK_plt.plot_rw_speeds(timeData, RW_speeds, num_RW, id=3)
+    BSK_plt.plot_rw_friction(timeData, RW_friction, num_RW, self.DynModels.RWFaultLog, id=4)
+    
+    # Create the target visibility figure (using an explicit figure number)
+    vis_fig = self.plot_target_visibility(timeData)
+    
+    # Make sure we have a local figureList dict
+    figureList = {}
+    
+    if showPlots:
+        BSK_plt.show_all_plots()
+        plt.figure(vis_fig.number)  # Ensure visibility figure is shown
+        plt.show()
+    else:
+        fileName = os.path.basename(os.path.splitext(__file__)[0])
+        figureNames = ["attitudeErrorNorm", "rateError", "RWSpeeds", "RWFriction"]
+        figureList = BSK_plt.save_all_plots(fileName, figureNames)
+        
+        # Manually add the visibility figure
+        pltName = fileName + "_targetVisibility"
+        figureList[pltName] = vis_fig
+        vis_fig.savefig(pltName + ".png")
+
+    return figureList

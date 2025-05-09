@@ -1,27 +1,52 @@
+#!/usr/bin/env python
+"""
+rw_fault.py
+
+A simplified Basilisk scenario that simulates spacecraft dynamics with reaction wheel faults
+and properly saves binary files for Vizard visualization.
+"""
 import inspect
 import os
 import sys
 import numpy as np
+
 from Basilisk.utilities import (orbitalMotion, macros, vizSupport)
 
+# Set paths
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
-sys.path.append(path + '/../')
-sys.path.append(path + '/../models')
-sys.path.append(path + '/../plotting')
+ROOT_DIR = os.path.abspath(os.path.join(path, '..'))
+MODELS_DIR = os.path.join(ROOT_DIR, 'models')
+PLOTTING_DIR = os.path.join(ROOT_DIR, 'plotting')
 
-from BSK_masters import BSKSim, BSKScenario
-import BSK_Dynamics, BSK_Fsw
-import BSK_Plotting as BSK_plt
+sys.path.extend([ROOT_DIR, MODELS_DIR, PLOTTING_DIR])
 
-class scenario_AddRWFault(BSKSim, BSKScenario):
+# Import BSK modules - modify these paths as needed for your environment
+try:
+    from BSK_masters import BSKSim, BSKScenario
+    import BSK_Dynamics, BSK_Fsw
+    import BSK_Plotting as BSK_plt
+except ImportError as e:
+    print(f"ERROR: Could not import required modules: {e}")
+    print("Make sure the BSK modules are in your Python path.")
+    sys.exit(1)
+
+class RWFaultScenario(BSKSim, BSKScenario):
     def __init__(self):
-        super(scenario_AddRWFault, self).__init__()
-        self.name = 'scenario_AddRWFault'
+        super(RWFaultScenario, self).__init__()
+        self.name = 'RWFaultScenario'
         self.msgRecList = {}
         self.sNavTransName = "sNavTransMsg"
         self.attGuidName = "attGuidMsg"
+
         self.cameraLocation = [0.0, 2.0, 0.0]
+
+        self.targets = [
+            {"name": "Melbourne", "lat": -37.8136, "lon": 144.9631, "color": "red"},
+            {"name": "New York", "lat": 40.71, "lon": -74.00, "color": "blue"},
+            {"name": "Tokyo", "lat": 35.68, "lon": 139.77, "color": "green"},
+            {"name": "London", "lat": 51.51, "lon": -0.13, "color": "yellow"}
+        ]
 
         self.set_DynModel(BSK_Dynamics)
         self.set_FswModel(BSK_Fsw)
@@ -68,9 +93,9 @@ class scenario_AddRWFault(BSKSim, BSKScenario):
     def pull_outputs(self, showPlots):
         numRW = 4
         RW_speeds = np.delete(self.rwSpeedRec.wheelSpeeds[:, range(numRW)], 0, 0)
-        RW_friction = []
-        for i in range(numRW):
-            RW_friction.append(np.delete(self.rwLogs[i].u_f, 0, 0))
+        RW_friction = [
+            np.delete(self.rwLogs[i].u_f, 0, 0) for i in range(numRW)
+        ]
 
         BSK_plt.clear_all_plots()
         timeData = np.delete(self.rwSpeedRec.times(), 0, 0) * macros.NANO2MIN
@@ -87,7 +112,7 @@ class scenario_AddRWFault(BSKSim, BSKScenario):
 
         return figureList
 
-def runScenario(scenario):
+def runScenario(scenario, saveBinary=True):
     simulationTime = macros.min2nano(30.)
     scenario.modeRequest = "hillPoint"
 
@@ -99,7 +124,7 @@ def runScenario(scenario):
         ["self.get_DynModel().AddRWFault('friction',0.0005,3, self.TotalSim.CurrentNanos)", 
          "self.oneTimeRWFaultFlag=0"]
     )
-    
+
     scenario.createNewEvent(
         "addRepeatedRWFault",
         scenario.get_FswModel().processTasksTimeStep,
@@ -109,38 +134,37 @@ def runScenario(scenario):
          "self.setEventActivity('addRepeatedRWFault',True)"]
     )
 
+    viz = None
     if vizSupport.vizFound:
         viz = vizSupport.enableUnityVisualization(
             scenario,
             scenario.get_DynModel().taskName,
             scenario.get_DynModel().scObject,
             rwEffectorList=scenario.get_DynModel().rwStateEffector,
-            liveStream=True,
-            saveFile="friction_fault"
+            liveStream=not saveBinary,
+            saveFile="rw_fault_viz" if saveBinary else None
         )
 
-        lat = -37.8136
-        lon = 144.9631
-        alt = 0.0
-        radius = 6371000.0 + alt
-        lat_rad = lat * macros.D2R
-        lon_rad = lon * macros.D2R
-        x = radius * np.cos(lat_rad) * np.cos(lon_rad)
-        y = radius * np.cos(lat_rad) * np.sin(lon_rad)
-        z = radius * np.sin(lat_rad)
-        r_Melbourne = [x, y, z]
+        for target in scenario.targets:
+            lat = target["lat"]
+            lon = target["lon"]
+            color = target.get("color", "red")
+            alt = 0.0
+            radius = 6371000.0 + alt
+            lat_rad = lat * macros.D2R
+            lon_rad = lon * macros.D2R
+            x = radius * np.cos(lat_rad) * np.cos(lon_rad)
+            y = radius * np.cos(lat_rad) * np.sin(lon_rad)
+            z = radius * np.sin(lat_rad)
+            location_position = [x, y, z]
 
-        viz.settings.cameraPos = [0, 0, 0]
-        viz.settings.cameraLookAt = r_Melbourne
-        viz.settings.fieldOfView = 70.0
-
-        vizSupport.addLocation(
-            viz,
-            stationName="Melbourne",
-            parentBodyName="earth",
-            r_GP_P=r_Melbourne,
-            color="red"
-        )
+            vizSupport.addLocation(
+                viz,
+                stationName=target["name"],
+                parentBodyName="earth",
+                r_GP_P=location_position,
+                color=color
+            )
 
         vizSupport.createStandardCamera(
             viz,
@@ -156,10 +180,26 @@ def runScenario(scenario):
     scenario.ConfigureStopTime(simulationTime)
     scenario.ExecuteSimulation()
 
-def run(showPlots=True):
-    scenario = scenario_AddRWFault()
-    runScenario(scenario)
-    scenario.pull_outputs(showPlots)
+    return viz
+
+def run(showPlots=True, saveBinary=True):
+    print("\n===== Running Improved RW Fault Scenario =====")
+    print(f"Save Binary: {saveBinary}")
+    scenario = RWFaultScenario()
+    viz = runScenario(scenario, saveBinary)
+    figureList = scenario.pull_outputs(showPlots)
+
+    if saveBinary and viz:
+        print("\nBinary file saved successfully as 'rw_fault_viz.bin'")
+        print("You can now open this file in Vizard for visualization.")
+
+    return scenario, viz, figureList
 
 if __name__ == "__main__":
-    run(True)
+    import argparse
+    parser = argparse.ArgumentParser(description="Run the Improved RW Fault Scenario")
+    parser.add_argument("--no-plots", action="store_true", help="Don't show plots")
+    parser.add_argument("--no-binary", action="store_true", help="Don't save binary file")
+    args = parser.parse_args()
+
+    run(not args.no_plots, not args.no_binary)
