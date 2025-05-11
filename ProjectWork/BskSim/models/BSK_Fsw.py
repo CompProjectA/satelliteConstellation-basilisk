@@ -41,6 +41,7 @@ class BSKFswModels:
         self.attRefMsg = None
         self.attGuidMsg = None
         self.cmdRwMotorMsg = None
+        self.rw_encoder_feedback_scale = [1.0, 1.0, 1.0, 1.0]  # One per reaction wheel
 
         # Define process name and default time-step for all FSW tasks defined later on
         self.processName = SimBase.FSWProcessName
@@ -570,3 +571,30 @@ class BSKFswModels:
         "2024/07/30",
         "Due to the new C module syntax, refer to rwMotorTorqueWrap as rwMotorTorque",
         rwMotorTorqueWrap)
+
+    def inject_rw_encoder_fault(self, rw_index, time_ns):
+        """
+        Injects a fault into the encoder of the specified reaction wheel.
+
+        Args:
+            rw_index (int): Index of the reaction wheel to fault.
+            time_ns (int): Time of fault injection in nanoseconds (for logging).
+        """
+        if rw_index < 0 or rw_index >= len(self.rw_encoder_feedback_scale):
+            print(f"[ERROR] Invalid RW index: {rw_index}")
+            return
+
+        print(f"[FAULT INJECTED] RW Encoder Fault injected on RW {rw_index} at {time_ns * 1e-9:.2f} seconds")
+        self.rw_encoder_feedback_scale[rw_index] = 0.0  # 0.0 means failed encoder
+
+        # If you're using a message to propagate this info, publish or update it here
+        # Example (optional): self.encoderFeedbackMsg.write(self.rw_encoder_feedback_scale)
+
+        # Optionally log to a fault log
+        if not hasattr(self, "faultLog"):
+            self.faultLog = []
+        self.faultLog.append({
+            "type": "encoder",
+            "rw": rw_index,
+            "time_ns": time_ns
+        })
