@@ -15,7 +15,7 @@ The Spacecraft Fault Simulator is a comprehensive tool for simulating and visual
 
 ```
 \satelliteConstellation-basilisk\ProjectWork>
-Aplha/
+BskSim/
 ├── core/
 │   ├── spacecraft_fault_gui.py     # GUI application
 │   ├── spacecraft_fault_cli.py     # CLI interface
