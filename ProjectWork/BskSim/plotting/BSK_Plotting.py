@@ -21,6 +21,7 @@ from Basilisk.utilities import RigidBodyKinematics
 from Basilisk.utilities import macros as mc
 from Basilisk.utilities import orbitalMotion
 from Basilisk.utilities import unitTestSupport
+import os
 
 # --------------------------------- COMPONENTS & SUBPLOT HANDLING ----------------------------------------------- #
 color_x = 'dodgerblue'
@@ -247,26 +248,162 @@ def plot_rw_speeds(timeData, dataOmegaRW, numRW, id=None, livePlot=False):
     for idx in range(numRW):
         plt.plot(timeData, dataOmegaRW[:, idx] / mc.RPM,
                  color=unitTestSupport.getLineColor(idx, numRW),
-                 label=r'$\Omega_{' + str(idx) + '}$')
+                 label=f'RW{idx+1}')
     if not livePlot:
         plt.legend(loc='upper right')
     plt.xlabel('Time [min]')
     plt.ylabel('RW Speed (RPM) ')
+    plt.title('Reaction Wheel Speeds')
+    return plt.gcf()
 
-def plot_rw_friction(timeData, dataFrictionRW, numRW, dataFaultLog=[],  id=None, livePlot=False):
+def plot_rw_friction(timeData, dataFrictionRW, numRW, dataFaultLog=None, id=None, livePlot=False):
     plt.figure(id)
     for idx in range(numRW):
         plt.plot(timeData, dataFrictionRW[idx],
                  color=unitTestSupport.getLineColor(idx, numRW),
-                 label=r'$RW_{' + str(idx+1) + '} Friction$')
-    if dataFaultLog:
-        # fourth column of dataFaultLog is the fault times
-        plt.scatter([row[3] for row in dataFaultLog], np.zeros(len(dataFaultLog)), marker="x", color=(1,0,0),
-            label='Faults')
+                 label=f'RW{idx+1}')
+    
+    # Add fault event markers if available
+    if dataFaultLog and len(dataFaultLog) > 0:
+        for event in dataFaultLog:
+            if isinstance(event, dict) and 'time' in event:
+                event_time = event['time'] * mc.NANO2MIN
+                plt.axvline(x=event_time, color='r', linestyle='--')
+                ymin, ymax = plt.ylim()
+                plt.text(event_time, ymax*0.9, "Fault Injection", 
+                     rotation=90, verticalalignment='top', color='red')
+    
     if not livePlot:
         plt.legend(loc='upper right')
     plt.xlabel('Time [min]')
-    plt.ylabel('RW Static Friction ')
+    plt.ylabel('RW Friction Torque [Nm]')
+    plt.title('Reaction Wheel Friction')
+    return plt.gcf()
+
+
+def plot_rw_power(timeData, rwTorque, rwSpeed, numRW, powerLimit=None, faultTime=None, id=None):
+    """
+    Plot reaction wheel power consumption with power limit fault annotations
+    
+    Parameters:
+    timeData (numpy.ndarray): Time data points
+    rwTorque (list): List of reaction wheel torque values
+    rwSpeed (numpy.ndarray): Reaction wheel speeds
+    numRW (int): Number of reaction wheels
+    powerLimit (float, optional): Power limit value
+    faultTime (float, optional): Fault injection time in minutes
+    id (int, optional): Figure ID
+    
+    Returns:
+    matplotlib.figure.Figure: Figure object
+    """
+    plt.figure(id)
+    
+    # Calculate power as product of torque and speed
+    rwPower = []
+    for i in range(numRW):
+        power = np.abs(rwTorque[i] * rwSpeed[:, i])  # P = τ * ω
+        rwPower.append(power)
+        plt.plot(timeData, power, color=unitTestSupport.getLineColor(i, numRW), label=f'RW{i+1}')
+    
+    # Add power limit and fault time if provided
+    if powerLimit is not None:
+        plt.axhline(y=powerLimit, color='r', linestyle='-', label=f'Power Limit ({powerLimit}W)')
+    
+    if faultTime is not None:
+        plt.axvline(x=faultTime, color='r', linestyle='--', label='Fault Injection')
+    
+    plt.xlabel('Time [min]')
+    plt.ylabel('Power [W]')
+    plt.grid(True)
+    plt.legend(loc='upper right')
+    plt.title('Reaction Wheel Power Consumption')
+    
+    return plt.gcf()
+
+def plot_encoder_fault(timeData, rwSpeeds, rwSpeedCmd, numRW, faultTime=None, faultWheel=None, id=None):
+    """
+    Plot reaction wheel speed vs. command with encoder fault annotations
+    
+    Parameters:
+    timeData (numpy.ndarray): Time data points
+    rwSpeeds (numpy.ndarray): Measured reaction wheel speeds
+    rwSpeedCmd (numpy.ndarray): Commanded reaction wheel speeds
+    numRW (int): Number of reaction wheels
+    faultTime (float, optional): Time when fault was injected in minutes
+    faultWheel (int, optional): Wheel with the fault
+    id (int, optional): Figure ID
+    
+    Returns:
+    matplotlib.figure.Figure: Figure object
+    """
+    fig = plt.figure(id, figsize=(10, 8))
+    fig.suptitle('Reaction Wheel Speed vs. Command')
+    
+    # Create subplots for each wheel
+    for i in range(numRW):
+        plt.subplot(numRW, 1, i+1)
+        
+        plt.plot(timeData, rwSpeeds[:, i], 'b-', label='Measured Speed')
+        if rwSpeedCmd is not None:
+            plt.plot(timeData, rwSpeedCmd[:, i], 'g--', label='Commanded Speed')
+        
+        # Highlight the wheel with the fault
+        if faultTime is not None and faultWheel == i:
+            plt.axvline(x=faultTime, color='r', linestyle='--', label='Encoder Fault')
+            plt.grid(True, color='0.8')
+            plt.title(f'RW{i+1} (Faulty Encoder)')
+        else:
+            plt.grid(True)
+            plt.title(f'RW{i+1}')
+        
+        plt.ylabel('Speed [rad/s]')
+        if i == numRW-1:  # Only add xlabel to the bottom subplot
+            plt.xlabel('Time [min]')
+        
+        plt.legend(loc='upper right')
+    
+    plt.tight_layout()
+    
+    return fig
+
+def plot_attitude_error_with_fault(timeData, sigmaB, faultTime=None, faultType=None, id=None):
+    """
+    Plot attitude error with fault annotations
+    
+    Parameters:
+    timeData (numpy.ndarray): Time data points
+    sigmaB (numpy.ndarray): Attitude error in MRP
+    faultTime (float, optional): Time when fault was injected in minutes
+    faultType (str, optional): Type of fault
+    id (int, optional): Figure ID
+    
+    Returns:
+    matplotlib.figure.Figure: Figure object
+    """
+    fig = plt.figure(id)
+    fig.suptitle('Spacecraft Attitude Error')
+    
+    # Plot each component
+    plt.plot(timeData, sigmaB[:, 0], 'b-', label='Roll')
+    plt.plot(timeData, sigmaB[:, 1], 'g-', label='Pitch')
+    plt.plot(timeData, sigmaB[:, 2], 'r-', label='Yaw')
+    
+    # Plot norm of error
+    norm = np.linalg.norm(sigmaB, axis=1)
+    plt.plot(timeData, norm, 'k--', label='Error Norm')
+    
+    # Add fault event marker if available
+    if faultTime is not None:
+        fault_label = f"{faultType} Fault" if faultType else "Fault Injection"
+        plt.axvline(x=faultTime, color='m', linestyle='--', label=fault_label)
+    
+    plt.xlabel('Time [min]')
+    plt.ylabel('MRP Error')
+    plt.grid(True)
+    plt.legend()
+    
+    return fig
 
 
 def plot_planet(oe, planet):
@@ -418,8 +555,18 @@ def plot_target_visibility(timeData, r_BN_N, targets):
     
     return fig
 
-def pull_outputs(self, showPlots):
-    """Process and plot simulation outputs"""
+# Enhanced pull_outputs function that supports different fault types
+def pull_outputs(self, showPlots=True, fault_type="friction"):
+    """
+    Process and plot simulation outputs with enhanced fault type support
+    
+    Parameters:
+    showPlots (bool): Flag to display plots
+    fault_type (str): Type of fault ("friction", "power_limit", "encoder")
+    
+    Returns:
+    dict: Dictionary of figure objects
+    """
     # FSW process outputs, remove first data point as it is before FSW is called
     attErrRec = self.msgRecList[self.attGuidName]
 
@@ -428,36 +575,95 @@ def pull_outputs(self, showPlots):
     
     num_RW = 4
     RW_speeds = np.delete(self.rwSpeedRec.wheelSpeeds[:, range(num_RW)], 0, 0)
+    
+    # Get torque data for reaction wheels - may not be available for all scenarios
+    RW_torque = []
     RW_friction = []
     for i in range(num_RW):
-        RW_friction.append(np.delete(self.rwLogs[i].u_f, 0, 0))
+        try:
+            RW_friction.append(np.delete(self.rwLogs[i].u_f, 0, 0))
+            # Try to get torque if available
+            if hasattr(self.rwLogs[i], 'u_current'):
+                RW_torque.append(np.delete(self.rwLogs[i].u_current, 0, 0))
+        except:
+            # If attributes don't exist, create empty arrays
+            RW_friction.append(np.zeros_like(RW_speeds[:, i]))
+            RW_torque.append(np.zeros_like(RW_speeds[:, i]))
 
-    # Plot results
-    BSK_plt.clear_all_plots()
-    timeData = np.delete(attErrRec.times(), 0, 0) * macros.NANO2MIN
-    BSK_plt.plot_attitude_error(timeData, sigma_BR, id=1)
-    BSK_plt.plot_rate_error(timeData, omega_BR_B, id=2)
-    BSK_plt.plot_rw_speeds(timeData, RW_speeds, num_RW, id=3)
-    BSK_plt.plot_rw_friction(timeData, RW_friction, num_RW, self.DynModels.RWFaultLog, id=4)
+    # Get reference wheel speeds if available (for encoder faults)
+    RW_speed_cmd = None
+    try:
+        if hasattr(self, 'rwSpeedCmdRec'):
+            RW_speed_cmd = np.delete(self.rwSpeedCmdRec.wheelSpeeds[:, range(num_RW)], 0, 0)
+    except:
+        pass
+
+    # Convert fault time to minutes for plotting
+    fault_time_min = None
+    if hasattr(self, 'oneTimeFaultTime'):
+        fault_time_min = self.oneTimeFaultTime * mc.NANO2MIN
+
+    # Clear previous plots
+    clear_all_plots()
     
-    # Create the target visibility figure (using an explicit figure number)
-    vis_fig = self.plot_target_visibility(timeData)
+    # Get time data
+    timeData = np.delete(attErrRec.times(), 0, 0) * mc.NANO2MIN
     
-    # Make sure we have a local figureList dict
+    # Create common plots for all fault types
+    plot_attitude_error(timeData, sigma_BR, id=1)
+    plot_rate_error(timeData, omega_BR_B, id=2)
+    plot_rw_speeds(timeData, RW_speeds, num_RW, id=3)
+    
+    # Create fault-specific plots
+    if fault_type == "friction":
+        # For friction faults, show friction torque plot
+        plot_rw_friction(timeData, RW_friction, num_RW, 
+                         getattr(self, 'RWFaultLog', None), id=4)
+    elif fault_type == "power_limit":
+        # For power limit faults, show power consumption plot
+        power_limit = getattr(self, 'fault_magnitude', 0.5)
+        plot_rw_power(timeData, RW_torque, RW_speeds, num_RW, 
+                      powerLimit=power_limit, faultTime=fault_time_min, id=4)
+    elif fault_type == "encoder":
+        # For encoder faults, show speed command vs actual plot
+        fault_wheel = getattr(self, 'fault_wheel_number', 0)
+        plot_encoder_fault(timeData, RW_speeds, RW_speed_cmd, num_RW,
+                          faultTime=fault_time_min, faultWheel=fault_wheel, id=4)
+    
+    # Create target visibility plot if targets are available
+    vis_fig = None
+    if hasattr(self, 'targets') and len(self.targets) > 0 and hasattr(self, 'plot_target_visibility'):
+        try:
+            vis_fig = self.plot_target_visibility(timeData)
+        except:
+            pass
+    
+    # Create figure list
     figureList = {}
     
     if showPlots:
-        BSK_plt.show_all_plots()
-        plt.figure(vis_fig.number)  # Ensure visibility figure is shown
-        plt.show()
+        show_all_plots()
+        if vis_fig:
+            plt.figure(vis_fig.number)
+            plt.show()
     else:
         fileName = os.path.basename(os.path.splitext(__file__)[0])
-        figureNames = ["attitudeErrorNorm", "rateError", "RWSpeeds", "RWFriction"]
-        figureList = BSK_plt.save_all_plots(fileName, figureNames)
+        figureNames = ["attitudeErrorNorm", "rateError", "RWSpeeds"]
         
-        # Manually add the visibility figure
-        pltName = fileName + "_targetVisibility"
-        figureList[pltName] = vis_fig
-        vis_fig.savefig(pltName + ".png")
+        # Add fault-specific figure name
+        if fault_type == "friction":
+            figureNames.append("RWFriction")
+        elif fault_type == "power_limit":
+            figureNames.append("RWPower")
+        elif fault_type == "encoder":
+            figureNames.append("RWEncoder")
+        
+        figureList = save_all_plots(fileName, figureNames)
+        
+        # Manually add the visibility figure if it exists
+        if vis_fig:
+            pltName = fileName + "_targetVisibility"
+            figureList[pltName] = vis_fig
+            vis_fig.savefig(pltName + ".png")
 
     return figureList

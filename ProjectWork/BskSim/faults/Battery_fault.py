@@ -1,516 +1,449 @@
-#
-#  ISC License
-#
-#  Copyright (c) 2016, Autonomous Vehicle Systems Lab, University of Colorado at Boulder
-#
-#  Permission to use, copy, modify, and/or distribute this software for any
-#  purpose with or without fee is hereby granted, provided that the above
-#  copyright notice and this permission notice appear in all copies.
-#
-#  THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-#  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-#  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-#  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-#  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-#  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-#  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-#
-
+#!/usr/bin/env python
 """
-Overview
---------
+battery_fault.py
 
-This script duplicates the basic orbit simulation in the scenario :ref:`scenarioBasicOrbit`.
-The difference is that this version allows for the Basilisk simulation data to be live streamed to the
-:ref:`vizard` visualization program.
+A Basilisk scenario that simulates spacecraft dynamics with battery faults
+and properly saves binary files for Vizard visualization.
 
-The script is found in the folder ``basilisk/examples`` and executed by using::
-
-    python3 scenarioBasicOrbitStream.py
-
-To enable live data streaming, the ``enableUnityVisualization()`` method is provided with ``liveStream``
-argument using::
-
-    vizSupport.enableUnityVisualization(scSim, simTaskName, scObject
-                                        , liveStream=True)
-
-When starting Basilisk simulation it prints now to the terminal that it is trying to connect to Vizard::
-
-    Waiting for Vizard at tcp://localhost:5556
-
-Copy ``tcp://localhost:5556`` and open the Vizard application.  Enter this address in the connection field and select
-"Direct Communication" mode as well as "Live Streaming".  After this the Basilisk simulation resumes and
-will live stream the data to Vizard.
-
-.. figure:: /_images/static/vizard-ImgStream.jpg
-   :align: center
-   :scale: 50 %
-
-   Vizard Direct Communication Panel Illustration
-
-
-To avoid the simulation running too quickly, this tutorial example script includes the ``clock_sync`` module that
-enables a 50x realtime mode using::
-
-    clockSync = clock_synch.ClockSynch()
-    clockSync.accelFactor = 50.0
-    scSim.AddModelToTask(simTaskName, clockSync)
-
-This way a 10s simulation time step will take 0.2 seconds with the 50x speed up factor.
-
+For use with the spacecraft fault simulator GUI.
 """
-
-
-#
-# Basilisk Scenario Script and Integrated Test
-#
-# Purpose:  Integrated test of the spacecraft() and gravity modules.  Illustrates
-#           a 3-DOV spacecraft on a range of orbit types with live Vizard data streaming.
-# Author:   Hanspeter Schaub
-# Creation Date:  Sept. 29, 2019
-#
-
-
-
+import inspect
 import os
 import sys
-import inspect
-import matplotlib.pyplot as plt
 import numpy as np
-# The path to the location of Basilisk
-# Used to get the location of supporting data.
-from Basilisk import __path__
+import matplotlib.pyplot as plt
 
+from Basilisk.utilities import (orbitalMotion, macros, vizSupport)
 
+# Set paths
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
+ROOT_DIR = os.path.abspath(os.path.join(path, '..'))
+MODELS_DIR = os.path.join(ROOT_DIR, 'models')
+PLOTTING_DIR = os.path.join(ROOT_DIR, 'plotting')
+VIZ_DIR = os.path.join(ROOT_DIR, 'Vizfile')
 
-sys.path.append(path + '/../')
-sys.path.append(path + '/../modelsMultiSat')
-sys.path.append(path + '/../plottingMultiSat')
+sys.path.extend([ROOT_DIR, MODELS_DIR, PLOTTING_DIR])
 
+# Import BSK modules
+try:
+    from BSK_masters import BSKSim, BSKScenario
+    import BSK_Dynamics, BSK_Fsw
+    import plotting.BSK_Plotting as BSK_plt
+    from Basilisk.simulation import simpleBattery, simplePowerSink, simpleSolarPanel
+    from Basilisk.architecture import messaging
+except ImportError as e:
+    print(f"ERROR: Could not import required modules: {e}")
+    sys.exit(1)
 
+class BatteryFaultScenario(BSKSim, BSKScenario):
+    """
+    Scenario for simulating battery faults in spacecraft.
+    Inherits from BSKSim and BSKScenario for Basilisk simulation framework.
+    """
+    def __init__(self):
+        super(BatteryFaultScenario, self).__init__()
+        self.name = 'BatteryFaultScenario'
+        self.msgRecList = {}
+        self.sNavTransName = "sNavTransMsg"
+        self.attGuidName = "attGuidMsg"
 
-bskPath = __path__[0]
-fileName = os.path.basename(os.path.splitext(__file__)[0])
+        self.cameraLocation = [0.0, 2.0, 0.0]
 
-# import simulation related support
-from Basilisk.simulation import spacecraft
-# general support file with common unit test functions
-# import general simulation support files
-from Basilisk.utilities import (SimulationBaseClass, macros, orbitalMotion,
-                                simIncludeGravBody, unitTestSupport, vizSupport)
-
-from Basilisk.simulation import simSynch
-
-from Basilisk.simulation import simpleBattery 
-from Basilisk.architecture import messaging
-from Basilisk.simulation import simpleSolarPanel
-from Basilisk.simulation import eclipse
-from Basilisk.simulation import simplePowerSink
-
-
-
-
-
-
-
-
-def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, planetCase):
-    
-
-    # Create simulation variable names
-    simTaskName = "simTask"
-    simProcessName = "simProcess"
-
-   
-
-    #  Create a sim module as an empty container
-    scSim = SimulationBaseClass.SimBaseClass()
-
-    #
-    #  create the simulation process
-    #
-    dynProcess = scSim.CreateNewProcess(simProcessName)
-
-    # create the dynamics task and specify the integration update time
-    simulationTimeStep = macros.sec2nano(timeStep)
-    dynProcess.addTask(scSim.CreateNewTask(simTaskName, simulationTimeStep))
-
-    #
-    #   setup the simulation tasks/objects
-    #
-
-    # initialize spacecraft object and set properties
-    scObject = spacecraft.Spacecraft()
-    scObject.ModelTag = "bskSat"
-
-     
-
-    
-    # Create and configure the battery
-    battery = simpleBattery.SimpleBattery()
-    battery.ModelTag = "satBattery"
-    battery.storageCapacity   = 100.0 
-    battery.storedCharge_Init = 50.0 
-    scSim.AddModelToTask(simTaskName, battery)
-    #for camara
-    batteryReader = messaging.PowerStorageStatusMsgReader()
-    batteryReader.subscribeTo(battery.batPowerOutMsg)      # listen for battery status
-    scSim.batteryReader = batteryReader  
-    
-    print(dir(battery))
-
-    # Power Consumption 
-    # Primary power sink (10 W)
-    # Create & add the power sink 
-    powerSink = simplePowerSink.SimplePowerSink()
-    powerSink.ModelTag    = "powerSink"
-    powerSink.nodePowerOut = -0.01       # sink 10 W
-    scSim.AddModelToTask(simTaskName, powerSink)
-    # hook the sink into the battery
-    battery.addPowerNodeToModel(powerSink.nodePowerOutMsg)
-
-
-    scSim.powerSink = powerSink
-    # compute the 1 min 
-    faultTime = macros.min2nano(60.0)
-
-    scSim.createNewEvent(
-        "powerSinkFault",        
-        simulationTimeStep,               # how often to check
-        True,                   
-        [f"self.TotalSim.CurrentNanos >= {faultTime}"],   # condition
-        [
-        # start drawing 10 W 
-        "self.powerSink.nodePowerOut = -0.05",
-        # disable this event so it only fires once
-        "self.setEventActivity('powerSinkFault', False)"
+        self.targets = [
+            {"name": "Melbourne", "lat": -37.8136, "lon": 144.9631, "color": "red"},
+            {"name": "New York", "lat": 40.71, "lon": -74.00, "color": "blue"},
+            {"name": "Tokyo", "lat": 35.68, "lon": 139.77, "color": "green"},
+            {"name": "London", "lat": 51.51, "lon": -0.13, "color": "yellow"}
         ]
-    )
 
-    
-    
+        self.set_DynModel(BSK_Dynamics)
+        self.set_FswModel(BSK_Fsw)
 
+        self.configure_initial_conditions()
+        self.log_outputs()
 
-    # Solar Panel
-    solarPanel = simpleSolarPanel.SimpleSolarPanel()
-    solarPanel.ModelTag = "solarPanel"
-    solarPanel.setPanelParameters([-1.0, -10.0, -1.0], 0.00001, 0.0000001)
-    solarPanel.stateInMsg.subscribeTo(scObject.scStateOutMsg)
-    scSim.AddModelToTask(simTaskName, solarPanel)
-    battery.addPowerNodeToModel(solarPanel.nodePowerOutMsg)  
-    
-   
-    
-
-    
-    rawSun = np.array([-1.0, -10.0, -1.0])
-    sunDir = (rawSun / np.linalg.norm(rawSun)).tolist()
-    sunMsgData = messaging.SpicePlanetStateMsgPayload()
-    sunMsgData.PositionVector = sunDir
-    sunMsg = messaging.SpicePlanetStateMsg().write(sunMsgData)
-    solarPanel.sunInMsg.subscribeTo(sunMsg)
-    
-
-    
-    
- 
-
-    # Visualization Setup 
-    gsList = []
-
-    
-    # Battery visualization
-    batteryPanel = vizSupport.vizInterface.GenericStorage()
-    batteryPanel.label = "Battery (%)"
-    batteryPanel.units = "%"
-    batteryPanel.minValue = 0
-    batteryPanel.maxValue = 100
-
-    batteryPanel.useStorageLevel = True
-    batteryInMsg = messaging.PowerStorageStatusMsgReader()
-    batteryInMsg.subscribeTo(battery.batPowerOutMsg)
-    batteryPanel.batteryStateInMsg = batteryInMsg
-    batteryPanel.this.disown()
-
-    batteryPanel.thresholds = vizSupport.vizInterface.IntVector([20, 50, 80])
-
-    batteryPanel.color = vizSupport.vizInterface.IntVector(
-        vizSupport.toRGBA255("red") +
-        vizSupport.toRGBA255("orange") +
-        vizSupport.toRGBA255("yellow") +
-        vizSupport.toRGBA255("green")
-    )
-
-    
-
-    solarViz = vizSupport.vizInterface.GenericStorage()
-    solarViz.label           = "Solar Power"
-    solarViz.units           = "W"
-    solarViz.minValue        = 0.0
-    solarViz.maxValue        = 20.0    # set to a bit above your expected peak
-    solarViz.useStorageLevel = False  # raw watts
-
-    
-    solarReader = messaging.PowerNodeUsageMsgReader()
-    solarReader.subscribeTo(solarPanel.nodePowerOutMsg)
-
-    
-    solarViz.storageUnitStateInMsg = solarReader
-    solarViz.this.disown()
-
-
-   
-    
-
-    gsList.append([batteryPanel, solarViz])
-  
- 
-    ##################################################### 
-
-
-    # add spacecraft object to the simulation process
-    scSim.AddModelToTask(simTaskName, scObject)
-
-    # setup Gravity Body
-    gravFactory = simIncludeGravBody.gravBodyFactory()
-    if planetCase == 'Mars':
-        planet = gravFactory.createMarsBarycenter()
-        planet.isCentralBody = True           # ensure this is the central gravitational body
-        if useSphericalHarmonics:
-            planet.useSphericalHarmonicsGravityModel(bskPath + '/supportData/LocalGravData/GGM2BData.txt', 100)
-
-    else:  # Earth
-        planet = gravFactory.createEarth()
-        planet.isCentralBody = True          # ensure this is the central gravitational body
-        if useSphericalHarmonics:
-            planet.useSphericalHarmonicsGravityModel(bskPath + '/supportData/LocalGravData/GGM03S-J2-only.txt', 2)
-    mu = planet.mu
-
-    # attach gravity model to spacecraft
-    gravFactory.addBodiesTo(scObject)
-
-    #
-    #   setup orbit and simulation time
-    #
-    # setup the orbit using classical orbit elements
-    oe = orbitalMotion.ClassicElements()
-    rLEO = 7000. * 1000      # meters
-    rGEO = 42000. * 1000     # meters
-    if orbitCase == 'GEO':
-        oe.a = rGEO
-        oe.e = 0.00001
-        oe.i = 0.0 * macros.D2R
-    elif orbitCase == 'GTO':
-        oe.a = (rLEO + rGEO) / 2.0
-        oe.e = 1.0 - rLEO / oe.a
-        oe.i = 0.0 * macros.D2R
-    else:                   # LEO case, default case 0
-        oe.a = rLEO
-        oe.e = 0.0001
-        oe.i = 33.3 * macros.D2R
-    oe.Omega = 48.2 * macros.D2R
-    oe.omega = 347.8 * macros.D2R
-    oe.f = 85.3 * macros.D2R
-    rN, vN = orbitalMotion.elem2rv(mu, oe)
-    oe = orbitalMotion.rv2elem(mu, rN, vN)      # this stores consistent initial orbit elements
-    # with circular or equatorial orbit, some angles are arbitrary
-
-    #
-    #   initialize Spacecraft States with the initialization variables
-    #
-    scObject.hub.r_CN_NInit = rN  # m   - r_BN_N
-    scObject.hub.v_CN_NInit = vN  # m/s - v_BN_N
-
-    # set the simulation time
-    n = np.sqrt(mu / oe.a / oe.a / oe.a)
-    P = 2. * np.pi / n
-    
-    if useSphericalHarmonics:
-        simulationTime = macros.sec2nano(3. * P)
-    else:
-        simulationTime = macros.sec2nano(3 * P)
-
-    #
-    #   Setup data logging before the simulation is initialized
-    #
-    if useSphericalHarmonics:
-
-        numDataPoints = 400
-    else:
-        numDataPoints = 100
-    samplingTime = unitTestSupport.samplingTime(simulationTime, simulationTimeStep, numDataPoints)
-    dataLog = scObject.scStateOutMsg.recorder(samplingTime)
-    scSim.AddModelToTask(simTaskName, dataLog)
-
-    # Battery state logger
-    batteryLog = battery.batPowerOutMsg.recorder(samplingTime)
-    scSim.AddModelToTask(simTaskName, batteryLog)
-
-    
-
-    if liveStream:
-        clockSync = simSynch.ClockSynch()
-        clockSync.accelFactor = 50.0
-        scSim.AddModelToTask(simTaskName, clockSync)
-
-        # if this scenario is to interface with the BSK Viz, uncomment the following line
-        viz=vizSupport.enableUnityVisualization(scSim, simTaskName, scObject
-                                            , liveStream=True
-                                            , genericStorageList=gsList
-                                            , saveFile=fileName
-                                            ) 
-
-
-    
-        vizSupport.setInstrumentGuiSetting(viz, 
-                                            spacecraftName=scObject.ModelTag,
-                                            showGenericStoragePanel=True)
+        self.oneTimeFaultFlag = 1  # Important - this is the flag for battery faults
+        self.oneTimeFaultTime = macros.min2nano(10.)
+        self.fault_magnitude = 0.05  # Default power drain in kW (50W)
+        self.fault_wheel_number = 0  # Not used for battery faults but needed for GUI compatibility
+        self.DynModels = self.get_DynModel()
+        self.DynModels.BatteryFaultLog = []
         
+        # Battery and power components
+        self.battery = None
+        self.powerSink = None
+        self.solarPanel = None
+        self.batteryReader = None
+        self.solarReader = None
 
-        scSim.viz = viz  
-        threshold = 0.25 * battery.storageCapacity
-        battRec = battery.batPowerOutMsg.recorder(simulationTimeStep)
-        scSim.AddModelToTask(simTaskName, battRec)
-        scSim.battRec = battRec
+    def configure_initial_conditions(self):
+        """Configure orbit and attitude initial conditions"""
+        oe = orbitalMotion.ClassicElements()
+        oe.a = 10000000.0
+        oe.e = 0.01
+        oe.i = 33.3 * macros.D2R
+        oe.Omega = 48.2 * macros.D2R
+        oe.omega = 347.8 * macros.D2R
+        oe.f = 85.3 * macros.D2R
 
-        bodyName = planetCase.lower()    # 'earth' or 'mars'
+        DynModel = self.get_DynModel()
+        mu = DynModel.gravFactory.gravBodies['earth'].mu
+        rN, vN = orbitalMotion.elem2rv(mu, oe)
+        orbitalMotion.rv2elem(mu, rN, vN)
+        DynModel.scObject.hub.r_CN_NInit = rN
+        DynModel.scObject.hub.v_CN_NInit = vN
+        DynModel.scObject.hub.sigma_BNInit = [[0.1], [0.2], [-0.3]]
+        DynModel.scObject.hub.omega_BN_BInit = [[0.001], [-0.01], [0.03]]
 
+    def setup_power_system(self, simTaskName):
+        """Set up the battery and power components"""
+        # Create and configure the battery
+        self.battery = simpleBattery.SimpleBattery()
+        self.battery.ModelTag = "satBattery"
+        self.battery.storageCapacity = 100.0  # Amp-hours
+        self.battery.storedCharge_Init = 100.0  # Start with full charge
+        self.AddModelToTask(simTaskName, self.battery)
+        
+        # Create battery status reader for visualization
+        self.batteryReader = messaging.PowerStorageStatusMsgReader()
+        self.batteryReader.subscribeTo(self.battery.batPowerOutMsg)
+        
+        # Create main power sink (baseline power consumption)
+        self.powerSink = simplePowerSink.SimplePowerSink()
+        self.powerSink.ModelTag = "powerSink"
+        self.powerSink.nodePowerOut = -0.01  # 10W baseline consumption
+        self.AddModelToTask(simTaskName, self.powerSink)
+        
+        # Connect power sink to battery
+        self.battery.addPowerNodeToModel(self.powerSink.nodePowerOutMsg)
+        
+        # Create solar panel
+        self.solarPanel = simpleSolarPanel.SimpleSolarPanel()
+        self.solarPanel.ModelTag = "solarPanel"
+        self.solarPanel.setPanelParameters([-1.0, -10.0, -1.0], 0.0001, 0.000001)
+        self.solarPanel.stateInMsg.subscribeTo(self.DynModels.scObject.scStateOutMsg)
+        self.AddModelToTask(simTaskName, self.solarPanel)
+        self.battery.addPowerNodeToModel(self.solarPanel.nodePowerOutMsg)
+        
+        # Configure sun direction for solar panel
+        sunDir = np.array([-1.0, -10.0, -1.0])
+        sunDir = (sunDir / np.linalg.norm(sunDir)).tolist()
+        sunMsgData = messaging.SpicePlanetStateMsgPayload()
+        sunMsgData.PositionVector = sunDir
+        sunMsg = messaging.SpicePlanetStateMsg().write(sunMsgData)
+        self.solarPanel.sunInMsg.subscribeTo(sunMsg)
+        
+        # Create solar panel power output reader
+        self.solarReader = messaging.PowerNodeUsageMsgReader()
+        self.solarReader.subscribeTo(self.solarPanel.nodePowerOutMsg)
+
+    def log_outputs(self):
+        """Configure message logging for analysis"""
+        FswModel = self.get_FswModel()
+        DynModel = self.get_DynModel()
+        samplingTime = FswModel.processTasksTimeStep
+
+        # RW speeds from dynamics (actual) - needed for plotting
+        self.rwSpeedRec = DynModel.rwStateEffector.rwSpeedOutMsg.recorder(samplingTime)
+        self.AddModelToTask(DynModel.taskName, self.rwSpeedRec)
+
+        self.rwLogs = []
+        for item in range(4):
+            self.rwLogs.append(DynModel.rwStateEffector.rwOutMsgs[item].recorder(samplingTime))
+            self.AddModelToTask(DynModel.taskName, self.rwLogs[item])
+            
+        # FSW controller outputs
+        self.msgRecList[self.attGuidName] = FswModel.attGuidMsg.recorder(samplingTime)
+        self.AddModelToTask(DynModel.taskName, self.msgRecList[self.attGuidName])
+
+    def log_battery_data(self, samplingTime):
+        """Configure battery data logging"""
+        if self.battery:
+            self.batteryLog = self.battery.batPowerOutMsg.recorder(samplingTime)
+            self.AddModelToTask(self.get_DynModel().taskName, self.batteryLog)
+        
+        if self.solarPanel:
+            self.solarLog = self.solarPanel.nodePowerOutMsg.recorder(samplingTime)
+            self.AddModelToTask(self.get_DynModel().taskName, self.solarLog)
+        
+        if self.powerSink:
+            self.powerSinkLog = self.powerSink.nodePowerOutMsg.recorder(samplingTime)
+            self.AddModelToTask(self.get_DynModel().taskName, self.powerSinkLog)
+
+    def apply_battery_fault(self, fault_magnitude, time_nano):
+        """
+        Apply a battery fault by increasing power drain
+        
+        Parameters:
+        fault_magnitude (float): Power drain increase in kW
+        time_nano (float): Time to apply fault in nanoseconds
+        """
+        if self.powerSink:
+            # Convert kW to normalized power units and make negative (power draw)
+            power_draw = -fault_magnitude
+            
+            # Log the fault event
+            self.DynModels.BatteryFaultLog.append({
+                'type': 'battery',
+                'time': time_nano,
+                'magnitude': fault_magnitude
+            })
+            
+            # Set the new power draw
+            self.powerSink.nodePowerOut = power_draw
+            
+            print(f"Battery fault injected: {fault_magnitude} kW power drain at time {time_nano * macros.NANO2MIN:.2f} minutes")
+            return True
+        else:
+            print("ERROR: Power sink not initialized, cannot apply battery fault")
+            return False
+
+    def pull_outputs(self, showPlots):
+        """Process and plot simulation outputs"""
+        numRW = 4
+        RW_speeds = np.delete(self.rwSpeedRec.wheelSpeeds[:, range(numRW)], 0, 0)
+
+        # Get attitude logs
+        attErrRec = self.msgRecList[self.attGuidName]
+        sigma_BR = np.delete(attErrRec.sigma_BR, 0, 0)
+        omega_BR_B = np.delete(attErrRec.omega_BR_B, 0, 0)
+
+        # Clear all existing plots
+        plt.close('all')
+        
+        # Get time data for plots
+        timeData = np.delete(self.rwSpeedRec.times(), 0, 0) * macros.NANO2MIN
+        fault_time_min = self.oneTimeFaultTime * macros.NANO2MIN
+        
+        # Generate plots
+        # Attitude error plot (figure 1)
+        plt.figure(1)
+        plt.plot(timeData, np.linalg.norm(sigma_BR, axis=1))
+        plt.axvline(x=fault_time_min, color='r', linestyle='--', label='Fault Injection')
+        plt.xlabel('Time [min]')
+        plt.ylabel('Attitude Error Norm')
+        plt.title('Attitude Error')
+        plt.grid(True)
+        plt.legend()
+        
+        # Rate error plot (figure 2)
+        plt.figure(2)
+        for i in range(3):
+            plt.plot(timeData, omega_BR_B[:, i], label=f'Axis {i+1}')
+        plt.axvline(x=fault_time_min, color='r', linestyle='--', label='Fault Injection')
+        plt.xlabel('Time [min]')
+        plt.ylabel('Angular Rate Error [rad/s]')
+        plt.title('Rate Error')
+        plt.grid(True)
+        plt.legend()
+        
+        # RW speeds plot (figure 3)
+        plt.figure(3)
+        for i in range(numRW):
+            plt.plot(timeData, RW_speeds[:, i], label=f'RW{i+1}')
+        plt.axvline(x=fault_time_min, color='r', linestyle='--', label='Fault Injection')
+        plt.xlabel('Time [min]')
+        plt.ylabel('Wheel Speed [rad/s]')
+        plt.title('Reaction Wheel Speeds')
+        plt.grid(True)
+        plt.legend()
+        
+        # Battery specific plot (figure 4)
+        if hasattr(self, 'batteryLog'):
+            batteryData = np.delete(self.batteryLog.storageLevel, 0, 0)
+            powerData = np.delete(self.batteryLog.powerOutFlow, 0, 0)
+            
+            plt.figure(4)
+            plt.subplot(211)
+            plt.plot(timeData, batteryData, 'b-', label='Battery Charge Level')
+            plt.axvline(x=fault_time_min, color='r', linestyle='--', label='Fault Injection')
+            plt.xlabel('Time [min]')
+            plt.ylabel('Battery Level [%]')
+            plt.title('Battery Charge Status')
+            plt.grid(True)
+            plt.legend()
+            
+            plt.subplot(212)
+            plt.plot(timeData, powerData, 'g-', label='Power Flow')
+            plt.axvline(x=fault_time_min, color='r', linestyle='--')
+            plt.axhline(y=-self.fault_magnitude, color='m', linestyle='-.', label='Fault Power Level')
+            plt.xlabel('Time [min]')
+            plt.ylabel('Power Flow [kW]')
+            plt.title('Battery Power Flow')
+            plt.grid(True)
+            plt.legend()
+            
+            plt.tight_layout()
+
+        # Create figure list to return
+        figureList = {
+            "attitudeErrorNorm": plt.figure(1),
+            "rateError": plt.figure(2),
+            "RWSpeeds": plt.figure(3)
+        }
+        
+        if hasattr(self, 'batteryLog'):
+            figureList["BatteryStatus"] = plt.figure(4)
+
+        # Show plots if requested
+        if showPlots:
+            plt.show()
+        else:
+            plt.close('all')
+
+        return figureList
+
+def runScenario(scenario, saveBinary=True):
+    """Run the battery fault scenario"""
+    simulationTime = macros.min2nano(30.)
+    scenario.modeRequest = "hillPoint"
+    
+    # Set up power system
+    scenario.setup_power_system(scenario.get_DynModel().taskName)
+    
+    # Log battery data
+    scenario.log_battery_data(scenario.get_FswModel().processTasksTimeStep)
+
+    # Set up battery fault event
+    scenario.createNewEvent(
+        "injectBatteryFault",
+        scenario.get_FswModel().processTasksTimeStep,
+        True,
+        ["self.TotalSim.CurrentNanos>=self.oneTimeFaultTime and self.oneTimeFaultFlag==1"],
+        [f"self.apply_battery_fault({scenario.fault_magnitude}, self.TotalSim.CurrentNanos)", 
+         "self.oneTimeFaultFlag=0"]
+    )
+
+    viz = None
+    if vizSupport.vizFound:
+        # Create generic storage for battery visualization
+        batteryPanel = vizSupport.vizInterface.GenericStorage()
+        batteryPanel.label = "Battery (%)"
+        batteryPanel.units = "%"
+        batteryPanel.minValue = 0
+        batteryPanel.maxValue = 100
+        batteryPanel.useStorageLevel = True
+        batteryPanel.batteryStateInMsg = scenario.batteryReader
+        batteryPanel.this.disown()
+        batteryPanel.thresholds = vizSupport.vizInterface.IntVector([20, 50, 80])
+        batteryPanel.color = vizSupport.vizInterface.IntVector(
+            vizSupport.toRGBA255("red") +
+            vizSupport.toRGBA255("orange") +
+            vizSupport.toRGBA255("yellow") +
+            vizSupport.toRGBA255("green")
+        )
+        
+        # Create solar panel visualization
+        solarViz = vizSupport.vizInterface.GenericStorage()
+        solarViz.label = "Solar Power"
+        solarViz.units = "W"
+        solarViz.minValue = 0.0
+        solarViz.maxValue = 20.0
+        solarViz.useStorageLevel = False
+        solarViz.storageUnitStateInMsg = scenario.solarReader
+        solarViz.this.disown()
+        
+        # List of generic storage elements
+        gsList = [[batteryPanel, solarViz]]
+        
+        # Create visualization binary directory if it doesn't exist
+        vizfiles_dir = os.path.join(VIZ_DIR, "_VizFiles")
+        if not os.path.exists(vizfiles_dir):
+            try:
+                os.makedirs(vizfiles_dir, exist_ok=True)
+            except:
+                print(f"Warning: Could not create directory {vizfiles_dir}")
+        
+        # Enable visualization
+        binary_filename = "battery_fault_viz" if saveBinary else None
+        if saveBinary:
+            binary_path = os.path.join(vizfiles_dir, binary_filename)
+        else:
+            binary_path = None
+            
+        viz = vizSupport.enableUnityVisualization(
+            scenario,
+            scenario.get_DynModel().taskName,
+            scenario.get_DynModel().scObject,
+            rwEffectorList=scenario.get_DynModel().rwStateEffector,
+            liveStream=not saveBinary,
+            saveFile=binary_path,
+            genericStorageList=gsList
+        )
+        
+        # Set up instrument GUI to show battery panel
+        vizSupport.setInstrumentGuiSetting(viz, 
+                                        spacecraftName=scenario.get_DynModel().scObject.ModelTag,
+                                        showGenericStoragePanel=True)
+
+        # Add targets
+        for target in scenario.targets:
+            lat = target["lat"]
+            lon = target["lon"]
+            color = target.get("color", "red")
+            alt = 0.0
+            radius = 6371000.0 + alt
+            lat_rad = lat * macros.D2R
+            lon_rad = lon * macros.D2R
+            x = radius * np.cos(lat_rad) * np.cos(lon_rad)
+            y = radius * np.cos(lat_rad) * np.sin(lon_rad)
+            z = radius * np.sin(lat_rad)
+            location_position = [x, y, z]
+
+            vizSupport.addLocation(
+                viz,
+                stationName=target["name"],
+                parentBodyName="earth",
+                r_GP_P=location_position,
+                color=color
+            )
+
+        # Add camera that looks at the spacecraft body
         vizSupport.createStandardCamera(
             viz,
-            setMode=0,                   # 0 → body-targeting mode
-            bodyTarget=bodyName,         # name of the celestial body to track
-            setView=0,                   # camera looks at body center
-            displayName="ScienceCam",    # name
-            fieldOfView=30 * macros.D2R  # keep your 10° FOV
-    )
-        
-        
-      
+            setMode=1,  # Standard camera mode (attached to body)
+            spacecraftName=scenario.get_DynModel().scObject.ModelTag,
+            fieldOfView=70 * macros.D2R,
+            displayName="RW Camera",
+            pointingVector_B=[0, 0, 0],  # Look at spacecraft center
+            position_B=scenario.cameraLocation  # Camera position in body frame
+        )
 
+    scenario.InitializeSimulation()
+    scenario.ConfigureStopTime(simulationTime)
+    scenario.ExecuteSimulation()
 
+    return viz
 
-    #
-    #   initialize Simulation:  This function clears the simulation log, and runs the self_init()
-    #   cross_init() and reset() routines on each module.
-    #   If the routine InitializeSimulationAndDiscover() is run instead of InitializeSimulation(),
-    #   then the all messages are auto-discovered that are shared across different BSK threads.
-    #
-    # Force message initialization
+def run(showPlots=True, saveBinary=True):
+    """
+    Run the battery fault scenario with default parameters
+    
+    Parameters:
+    showPlots (bool): Flag to display plots
+    saveBinary (bool): Flag to save binary file for visualization
+    
+    Returns:
+    tuple: (scenario, viz, figureList) - The simulation objects and results
+    """
+    print("\n===== Running Battery Fault Scenario =====")
+    print(f"Save Binary: {saveBinary}")
+    scenario = BatteryFaultScenario()
+    viz = runScenario(scenario, saveBinary)
+    figureList = scenario.pull_outputs(showPlots)
 
+    if saveBinary and viz:
+        print("\nBinary file saved successfully as 'battery_fault_viz.bin'")
+        print("You can now open this file in Vizard for visualization.")
 
-    scSim.InitializeSimulation()
+    return scenario, viz, figureList
 
-    #
-    #   configure a simulation stop time and execute the simulation run
-    #
-    scSim.ConfigureStopTime(simulationTime)
-    scSim.ExecuteSimulation()
-
-    # debug: print the raw panel output
-
-
-
-    #
-    #   retrieve the logged data
-    #
-    posData = dataLog.r_BN_N
-    velData = dataLog.v_BN_N
-
-    np.set_printoptions(precision=16)
-
-    #
-    #   plot the results
-    #
-    # draw the inertial position vector components
-    plt.close("all")  # clears out plots from earlier test runs
-    plt.figure(1)
-    fig = plt.gcf()
-    ax = fig.gca()
-    ax.ticklabel_format(useOffset=False, style='plain')
-    for idx in range(3):
-        plt.plot(dataLog.times() * macros.NANO2SEC / P, posData[:, idx] / 1000.,
-                 color=unitTestSupport.getLineColor(idx, 3),
-                 label='$r_{BN,' + str(idx) + '}$')
-    plt.legend(loc='lower right')
-    plt.xlabel('Time [orbits]')
-    plt.ylabel('Inertial Position [km]')
-    figureList = {}
-    pltName = fileName + "1" + orbitCase + str(int(useSphericalHarmonics))+ planetCase
-    figureList[pltName] = plt.figure(1)
-
-    if useSphericalHarmonics is False:
-        # draw orbit in perifocal frame
-        b = oe.a * np.sqrt(1 - oe.e * oe.e)
-        p = oe.a * (1 - oe.e * oe.e)
-        plt.figure(2, figsize=np.array((1.0, b / oe.a)) * 4.75, dpi=100)
-        plt.axis(np.array([-oe.rApoap, oe.rPeriap, -b, b]) / 1000 * 1.25)
-        # draw the planet
-        fig = plt.gcf()
-        ax = fig.gca()
-        if planetCase == 'Mars':
-            planetColor = '#884400'
-        else:
-            planetColor = '#008800'
-        planetRadius = planet.radEquator / 1000
-        ax.add_artist(plt.Circle((0, 0), planetRadius, color=planetColor))
-        # draw the actual orbit
-        rData = []
-        fData = []
-        for idx in range(0, len(posData)):
-            oeData = orbitalMotion.rv2elem(mu, posData[idx], velData[idx])
-            rData.append(oeData.rmag)
-            fData.append(oeData.f + oeData.omega - oe.omega)
-        plt.plot(rData * np.cos(fData) / 1000, rData * np.sin(fData) / 1000, color='#aa0000', linewidth=3.0
-                 )
-        # draw the full osculating orbit from the initial conditions
-        fData = np.linspace(0, 2 * np.pi, 100)
-        rData = []
-        for idx in range(0, len(fData)):
-            rData.append(p / (1 + oe.e * np.cos(fData[idx])))
-        plt.plot(rData * np.cos(fData) / 1000, rData * np.sin(fData) / 1000, '--', color='#555555'
-                 )
-        plt.xlabel('$i_e$ Cord. [km]')
-        plt.ylabel('$i_p$ Cord. [km]')
-        plt.grid()
-
-    else:
-        plt.figure(2)
-        fig = plt.gcf()
-        ax = fig.gca()
-        ax.ticklabel_format(useOffset=False, style='plain')
-        smaData = []
-        for idx in range(0, len(posData)):
-            oeData = orbitalMotion.rv2elem(mu, posData[idx], velData[idx])
-            smaData.append(oeData.a / 1000.)
-        plt.plot(posData[:, 0] * macros.NANO2SEC / P, smaData, color='#aa0000',
-                 )
-        plt.xlabel('Time [orbits]')
-        plt.ylabel('SMA [km]')
-
-    pltName = fileName + "2" + orbitCase + str(int(useSphericalHarmonics)) + planetCase
-    figureList[pltName] = plt.figure(2)
-
-    if show_plots:
-        plt.show()
-
-    # close the plots being saved off to avoid over-writing old and new figures
-    plt.close("all")
-
-    return figureList
-
-#
-# This statement below ensures that the unit test scrip can be run as a
-# stand-along python script
-#
 if __name__ == "__main__":
-    run(
-        False,        # show_plots
-        True,        # liveStream
-        1.0,         # time step (s)
-        'LEO',       # orbit Case (LEO, GTO, GEO)
-        False,       # useSphericalHarmonics
-        'Earth'      # planetCase (Earth, Mars)
-    )
+    import argparse
+    parser = argparse.ArgumentParser(description="Run the Battery Fault Scenario")
+    parser.add_argument("--no-plots", action="store_true", help="Don't show plots")
+    parser.add_argument("--no-binary", action="store_true", help="Don't save binary file")
+    args = parser.parse_args()
 
+    run(not args.no_plots, not args.no_binary)

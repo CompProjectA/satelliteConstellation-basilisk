@@ -3,7 +3,7 @@
 spacecraft_fault_cli.py
 
 A simplified command-line interface for running Basilisk spacecraft simulations
-with reaction wheel fault injection capabilities.
+with various reaction wheel fault injection capabilities.
 """
 import os
 import sys
@@ -28,9 +28,17 @@ sys.path.extend([ROOT_DIR, FAULTS_DIR, MODELS_DIR, PLOTTING_DIR])
 # Import modules
 try:
     from Basilisk.utilities import macros, vizSupport
-    from faults.rw_fault import RWFaultScenario, run as run_scenario
+    # Import the fault loader instead of specific fault modules
+    from core.fault_loader import (
+        get_fault_scenario_class, 
+        create_scenario, 
+        run_scenario, 
+        RWFaultScenario,
+        run as run_fault_scenario
+    )
 except ImportError as e:
     print(f"ERROR: Could not import required modules: {e}")
+    print("Make sure that fault_loader.py exists in the core directory and all fault modules are available.")
     sys.exit(1)
 
 class TargetDefinition:
@@ -71,24 +79,33 @@ class SimulationConfig:
     """Configuration class for simulation parameters"""
     def __init__(self):
         self.simulation_time = 30.0  # minutes
+        
+        # Fault parameters
+        self.fault_type = "friction"  # Options: friction, power_limit, encoder
         self.fault_magnitude = 0.0005
         self.fault_wheel_number = 3  # 0-indexed wheel number
         self.fault_time = 10.0  # minutes
+        
+        # Periodic fault parameters
         self.enable_periodic_fault = False
         self.periodic_fault_interval = 360  # seconds
         self.periodic_fault_magnitude = 0.1
         self.periodic_fault_wheel = 1  # 0-indexed wheel number
+        
+        # Output settings
         self.binary_filename = "rw_fault_viz"
+        self.show_plots = True
+        self.save_binary = True
+        self.interactive = False
+        
+        # Camera and targets
+        self.camera_position = [0.0, 2.0, 0.0]
         self.targets = [
             TargetDefinition("Melbourne", -37.8136, 144.9631, "red"),
             TargetDefinition("New York", 40.71, -74.00, "blue"),
             TargetDefinition("Tokyo", 35.68, 139.77, "green"),
             TargetDefinition("London", 51.51, -0.13, "yellow")
         ]
-        self.camera_position = [0.0, 2.0, 0.0]
-        self.show_plots = True
-        self.save_binary = True
-        self.interactive = False
         
     def validate(self):
         """Validate configuration parameters"""
@@ -98,8 +115,13 @@ class SimulationConfig:
             raise ValueError("Periodic fault wheel number must be between 0 and 3")
         if self.fault_time >= self.simulation_time:
             raise ValueError("Fault time must be less than simulation time")
-        if self.fault_magnitude <= 0:
-            raise ValueError("Fault magnitude must be positive")
+            
+        # Validate fault-specific parameters
+        if self.fault_type == "friction" and self.fault_magnitude <= 0:
+            raise ValueError("Friction fault magnitude must be positive")
+        elif self.fault_type == "power_limit" and self.fault_magnitude <= 0:
+            raise ValueError("Power limit must be positive")
+            
         if self.enable_periodic_fault and self.periodic_fault_magnitude <= 0:
             raise ValueError("Periodic fault magnitude must be positive")
 
@@ -114,7 +136,13 @@ def parse_args():
           python spacecraft_fault_cli.py
           
           # Run with custom fault parameters
-          python spacecraft_fault_cli.py --fault-magnitude 0.001 --fault-wheel 2 --fault-time 15.0
+          python spacecraft_fault_cli.py --fault-type friction --fault-magnitude 0.001 --fault-wheel 2 --fault-time 15.0
+          
+          # Run with power limit fault
+          python spacecraft_fault_cli.py --fault-type power_limit --fault-magnitude 0.5 --fault-wheel 2 --fault-time 15.0
+          
+          # Run with encoder fault
+          python spacecraft_fault_cli.py --fault-type encoder --fault-wheel 2 --fault-time 15.0
           
           # Enable periodic fault injection
           python spacecraft_fault_cli.py --enable-periodic-fault --periodic-fault-interval 180
@@ -134,7 +162,9 @@ def parse_args():
     parser.add_argument("-o", "--output", help="Binary output filename (default: rw_fault_viz)")
     
     # Fault parameters
-    parser.add_argument("--fault-magnitude", type=float, help="Magnitude of the friction fault (default: 0.0005)")
+    parser.add_argument("--fault-type", choices=["friction", "power_limit", "encoder"], 
+                        help="Type of fault to inject (default: friction)")
+    parser.add_argument("--fault-magnitude", type=float, help="Magnitude of the fault (default: 0.0005 for friction, 0.5 for power_limit)")
     parser.add_argument("--fault-wheel", type=int, choices=range(4), 
                         help="Wheel number to inject fault into (0-3, default: 3)")
     parser.add_argument("--fault-time", type=float, help="Time to inject fault in minutes (default: 10.0)")
@@ -170,7 +200,9 @@ def apply_args_to_config(args, config):
     if args.output:
         config.binary_filename = args.output
     
-    # Fault parameters
+    # Fault type and parameters
+    if args.fault_type is not None:
+        config.fault_type = args.fault_type
     if args.fault_magnitude is not None:
         config.fault_magnitude = args.fault_magnitude
     if args.fault_wheel is not None:
@@ -218,11 +250,34 @@ def interactive_mode(config):
     except ValueError:
         print("Invalid input, using default value")
     
+    # Fault type selection
+    print("\nAvailable fault types:")
+    print("  1. friction - Adds additional friction to the reaction wheel")
+    print("  2. power_limit - Restricts the maximum power available to the reaction wheel") 
+    print("  3. encoder - Causes measurement errors in the reaction wheel speed feedback")
+    
+    while True:
+        fault_choice = input(f"Select fault type (1-3) [1 for {config.fault_type}]: ") or "1"
+        
+        if fault_choice == "1":
+            config.fault_type = "friction"
+            break
+        elif fault_choice == "2":
+            config.fault_type = "power_limit"
+            break
+        elif fault_choice == "3":
+            config.fault_type = "encoder"
+            break
+        else:
+            print("Invalid choice, please select 1, 2, or 3")
+    
     # Fault parameters
-    try:
-        config.fault_magnitude = float(input(f"Fault magnitude [{config.fault_magnitude}]: ") or config.fault_magnitude)
-    except ValueError:
-        print("Invalid input, using default value")
+    if config.fault_type in ["friction", "power_limit"]:
+        try:
+            fault_magnitude_prompt = "Fault magnitude" if config.fault_type == "friction" else "Power limit (W)"
+            config.fault_magnitude = float(input(f"{fault_magnitude_prompt} [{config.fault_magnitude}]: ") or config.fault_magnitude)
+        except ValueError:
+            print("Invalid input, using default value")
     
     try:
         config.fault_wheel_number = int(input(f"Fault wheel number (0-3) [{config.fault_wheel_number}]: ") or config.fault_wheel_number)
@@ -297,10 +352,18 @@ def interactive_mode(config):
     save_binary = input(f"Save binary file (y/n) [{'y' if config.save_binary else 'n'}]: ") or ('y' if config.save_binary else 'n')
     config.save_binary = save_binary.lower() == 'y'
 
+
 def create_custom_scenario(config):
     """Create and configure a custom RW fault scenario based on the configuration"""
-    # Create the base scenario
-    scenario = RWFaultScenario()
+    # Create the base scenario using the appropriate class for the fault type
+    try:
+        # Use the fault loader to get the correct scenario class
+        ScenarioClass = get_fault_scenario_class(config.fault_type)
+        scenario = ScenarioClass()
+    except ValueError:
+        # Fallback to the default scenario class if fault type is not recognized
+        print(f"WARNING: Fault type '{config.fault_type}' not recognized, using friction fault as default")
+        scenario = RWFaultScenario()
     
     # Set simulation time
     simulationTime = macros.min2nano(config.simulation_time)
@@ -313,6 +376,15 @@ def create_custom_scenario(config):
     
     # Set fault parameters
     scenario.oneTimeFaultTime = macros.min2nano(config.fault_time)
+    scenario.fault_wheel_number = config.fault_wheel_number
+    if config.fault_type != "encoder":  # Encoder faults don't use magnitude
+        scenario.fault_magnitude = config.fault_magnitude
+    
+    # Setup battery components if needed for Battery fault scenario
+    if config.fault_type == "battery" and hasattr(scenario, 'setup_power_system'):
+        print("Setting up power system for battery fault simulation")
+        scenario.setup_power_system(scenario.get_DynModel().taskName)
+        scenario.log_battery_data(scenario.get_FswModel().processTasksTimeStep)
     
     # Override the fault event creation
     def customize_scenario(scenario):
@@ -320,77 +392,196 @@ def create_custom_scenario(config):
         # Set mode request
         scenario.modeRequest = "hillPoint"
         
-        # Configure one-time fault event
-        scenario.createNewEvent(
-            "addOneTimeRWFault",
-            scenario.get_FswModel().processTasksTimeStep,
-            True,
-            ["self.TotalSim.CurrentNanos>=self.oneTimeFaultTime and self.oneTimeRWFaultFlag==1"],
-            [f"self.get_DynModel().AddRWFault('friction',{config.fault_magnitude},{config.fault_wheel_number}, self.TotalSim.CurrentNanos)", 
-             "self.oneTimeRWFaultFlag=0"]
-        )
+        # Configure one-time fault event based on fault type
+        fault_cmd = ""
+        if config.fault_type == "friction":
+            fault_cmd = f"self.get_DynModel().AddRWFault('friction',{config.fault_magnitude},{config.fault_wheel_number}, self.TotalSim.CurrentNanos)"
+            print(f"Creating friction fault event with magnitude {config.fault_magnitude}")
+        elif config.fault_type == "power_limit":
+            fault_cmd = f"self.get_DynModel().AddRWFault('powerLimit',{config.fault_magnitude},{config.fault_wheel_number}, self.TotalSim.CurrentNanos)"
+            print(f"Creating power limit fault event with limit {config.fault_magnitude}W")
+        elif config.fault_type == "encoder":
+            fault_cmd = f"self.inject_rw_encoder_fault({config.fault_wheel_number}, self.TotalSim.CurrentNanos)"
+            print(f"Creating encoder fault event for wheel {config.fault_wheel_number}")
+        elif config.fault_type == "battery":
+            fault_cmd = f"self.apply_battery_fault({config.fault_magnitude}, self.TotalSim.CurrentNanos)"
+            print(f"Creating battery fault event with power drain {config.fault_magnitude}kW")
         
-        # Configure periodic fault event if enabled
+        if fault_cmd:
+            # Create the fault event with appropriate name and flag
+            if config.fault_type == "battery":
+                # Battery faults use oneTimeFaultFlag
+                scenario.createNewEvent(
+                    "injectBatteryFault",
+                    scenario.get_FswModel().processTasksTimeStep,
+                    True,
+                    ["self.TotalSim.CurrentNanos>=self.oneTimeFaultTime and self.oneTimeFaultFlag==1"],
+                    [fault_cmd, "self.oneTimeFaultFlag=0"]
+                )
+            else:
+                # Other faults use oneTimeRWFaultFlag
+                scenario.createNewEvent(
+                    "addOneTimeRWFault",
+                    scenario.get_FswModel().processTasksTimeStep,
+                    True,
+                    ["self.TotalSim.CurrentNanos>=self.oneTimeFaultTime and self.oneTimeRWFaultFlag==1"],
+                    [fault_cmd, "self.oneTimeRWFaultFlag=0"]
+                )
+        
+        # Configure periodic fault event if enabled and supported
         if config.enable_periodic_fault:
-            scenario.createNewEvent(
-                "addRepeatedRWFault",
-                scenario.get_FswModel().processTasksTimeStep,
-                True,
-                ["self.repeatRWFaultFlag==1"],
-                [f"self.get_DynModel().PeriodicRWFault({config.periodic_fault_interval},'friction',{config.periodic_fault_magnitude},{config.periodic_fault_wheel}, self.TotalSim.CurrentNanos)", 
-                 "self.setEventActivity('addRepeatedRWFault',True)"]
-            )
+            periodic_cmd = ""
+            if config.fault_type == "friction":
+                periodic_cmd = f"self.get_DynModel().PeriodicRWFault({config.periodic_fault_interval},'friction',{config.periodic_fault_magnitude},{config.periodic_fault_wheel}, self.TotalSim.CurrentNanos)"
+            elif config.fault_type == "power_limit":
+                periodic_cmd = f"self.get_DynModel().PeriodicRWFault({config.periodic_fault_interval},'powerLimit',{config.periodic_fault_magnitude},{config.periodic_fault_wheel}, self.TotalSim.CurrentNanos)"
+            # Note: Encoder and Battery faults do not support periodic injection in this implementation
+            
+            if periodic_cmd:
+                scenario.createNewEvent(
+                    "addRepeatedRWFault",
+                    scenario.get_FswModel().processTasksTimeStep,
+                    True,
+                    ["self.repeatRWFaultFlag==1"],
+                    [periodic_cmd, 
+                     "self.setEventActivity('addRepeatedRWFault',True)"]
+                )
         
         # Set up visualization if vizSupport is available
         viz = None
         if vizSupport.vizFound and config.save_binary:
-            # Create visualization with RW effector list
-            binary_path = os.path.join(VIZ_DIR, config.binary_filename)
-            viz = vizSupport.enableUnityVisualization(
-                scenario,
-                scenario.get_DynModel().taskName,
-                scenario.get_DynModel().scObject,
-                rwEffectorList=scenario.get_DynModel().rwStateEffector,
-                liveStream=False,
-                saveFile=binary_path  # <- now uses absolute path in Vizfile
-            )
-
+            # CRITICAL FIX: Ensure no double path by using a fixed VIZ_DIR structure
+            # Before creating any paths, clean up any existing binary files with the same name
+            binary_base_name = f"{config.binary_filename}_UnityViz.bin"
             
-            # Add target locations
-            for target in scenario.targets:
-                lat = target["lat"]
-                lon = target["lon"]
-                color = target.get("color", "red")
+            # Check all potential locations and remove old files to avoid confusion
+            potential_paths = [
+                os.path.join(VIZ_DIR, binary_base_name),
+                os.path.join(VIZ_DIR, "_VizFiles", binary_base_name),
+                os.path.join(VIZ_DIR, "_VizFiles", "_VizFiles", binary_base_name)
+            ]
+            
+            for path in potential_paths:
+                if os.path.exists(path):
+                    try:
+                        os.remove(path)
+                        print(f"Removed old binary file: {path}")
+                    except Exception as e:
+                        print(f"Note: Could not remove old binary file {path}: {e}")
+            
+            # Create a clean VIZ_DIR path
+            viz_files_dir = os.path.join(VIZ_DIR, "_VizFiles")
+            try:
+                if not os.path.exists(VIZ_DIR):
+                    os.makedirs(VIZ_DIR, exist_ok=True)
                 
-                # Convert lat/lon to ECEF coordinates
-                alt = 0.0
-                radius = 6371000.0 + alt  # Earth radius + altitude
-                lat_rad = lat * macros.D2R
-                lon_rad = lon * macros.D2R
-                x = radius * np.cos(lat_rad) * np.cos(lon_rad)
-                y = radius * np.cos(lat_rad) * np.sin(lon_rad)
-                z = radius * np.sin(lat_rad)
-                location_position = [x, y, z]
+                if not os.path.exists(viz_files_dir):
+                    os.makedirs(viz_files_dir, exist_ok=True)
+            except Exception as e:
+                print(f"Warning: Could not create visualization directories: {e}")
+            
+            # Use a consistent and proper path for the binary file
+            binary_path = os.path.join(viz_files_dir, config.binary_filename)
+            print(f"Saving Viz file to {binary_path}_UnityViz.bin")
+            
+            # Create the visualization with proper error handling
+            try:
+                # Special handling for battery fault visualization
+                if config.fault_type == "battery" and hasattr(scenario, 'battery') and hasattr(scenario, 'solarReader'):
+                    # Create generic storage for battery visualization
+                    batteryPanel = vizSupport.vizInterface.GenericStorage()
+                    batteryPanel.label = "Battery (%)"
+                    batteryPanel.units = "%"
+                    batteryPanel.minValue = 0
+                    batteryPanel.maxValue = 100
+                    batteryPanel.useStorageLevel = True
+                    batteryPanel.batteryStateInMsg = scenario.batteryReader
+                    batteryPanel.this.disown()
+                    batteryPanel.thresholds = vizSupport.vizInterface.IntVector([20, 50, 80])
+                    batteryPanel.color = vizSupport.vizInterface.IntVector(
+                        vizSupport.toRGBA255("red") +
+                        vizSupport.toRGBA255("orange") +
+                        vizSupport.toRGBA255("yellow") +
+                        vizSupport.toRGBA255("green")
+                    )
+                    
+                    # Create solar panel visualization
+                    solarViz = vizSupport.vizInterface.GenericStorage()
+                    solarViz.label = "Solar Power"
+                    solarViz.units = "W"
+                    solarViz.minValue = 0.0
+                    solarViz.maxValue = 20.0
+                    solarViz.useStorageLevel = False
+                    solarViz.storageUnitStateInMsg = scenario.solarReader
+                    solarViz.this.disown()
+                    
+                    # List of generic storage elements
+                    gsList = [[batteryPanel, solarViz]]
+                    
+                    # Enable visualization with generic storage
+                    viz = vizSupport.enableUnityVisualization(
+                        scenario,
+                        scenario.get_DynModel().taskName,
+                        scenario.get_DynModel().scObject,
+                        rwEffectorList=scenario.get_DynModel().rwStateEffector,
+                        liveStream=False,
+                        saveFile=binary_path,
+                        genericStorageList=gsList
+                    )
+                    
+                    # Set up instrument GUI to show battery panel
+                    vizSupport.setInstrumentGuiSetting(viz, 
+                                                    spacecraftName=scenario.get_DynModel().scObject.ModelTag,
+                                                    showGenericStoragePanel=True)
+                else:
+                    # Standard visualization for other fault types
+                    viz = vizSupport.enableUnityVisualization(
+                        scenario,
+                        scenario.get_DynModel().taskName,
+                        scenario.get_DynModel().scObject,
+                        rwEffectorList=scenario.get_DynModel().rwStateEffector,
+                        liveStream=False,
+                        saveFile=binary_path
+                    )
                 
-                # Add location to visualization
-                vizSupport.addLocation(
+                # Add target locations
+                for target in scenario.targets:
+                    lat = target["lat"]
+                    lon = target["lon"]
+                    color = target.get("color", "red")
+                    
+                    # Convert lat/lon to ECEF coordinates
+                    alt = 0.0
+                    radius = 6371000.0 + alt  # Earth radius + altitude
+                    lat_rad = lat * macros.D2R
+                    lon_rad = lon * macros.D2R
+                    x = radius * np.cos(lat_rad) * np.cos(lon_rad)
+                    y = radius * np.cos(lat_rad) * np.sin(lon_rad)
+                    z = radius * np.sin(lat_rad)
+                    location_position = [x, y, z]
+                    
+                    # Add location to visualization
+                    vizSupport.addLocation(
+                        viz,
+                        stationName=target["name"],
+                        parentBodyName="earth",
+                        r_GP_P=location_position,
+                        color=color
+                    )
+                
+                # Add camera that looks at the spacecraft body
+                vizSupport.createStandardCamera(
                     viz,
-                    stationName=target["name"],
-                    parentBodyName="earth",
-                    r_GP_P=location_position,
-                    color=color
+                    setMode=1,  # Standard camera mode
+                    spacecraftName=scenario.get_DynModel().scObject.ModelTag,
+                    fieldOfView=70 * macros.D2R,
+                    displayName="RW Camera",
+                    pointingVector_B=[0, 0, 0],  # Look at spacecraft center
+                    position_B=scenario.cameraLocation  # Camera position in body frame
                 )
-            
-            # Add camera that looks at the spacecraft body
-            vizSupport.createStandardCamera(
-                viz,
-                setMode=1,  # Standard camera mode
-                spacecraftName=scenario.get_DynModel().scObject.ModelTag,
-                fieldOfView=70 * macros.D2R,
-                displayName="RW Camera",
-                pointingVector_B=[0, 0, 0],  # Look at spacecraft center
-                position_B=scenario.cameraLocation  # Camera position in body frame
-            )
+            except Exception as e:
+                print(f"ERROR: Failed to create visualization: {e}")
+                viz = None
         
         # Initialize and run the simulation
         scenario.InitializeSimulation()
@@ -409,7 +600,17 @@ def run_custom_simulation(config):
     print("\n===== Running Custom RW Fault Scenario =====")
     print(f"Configuration:")
     print(f"  - Simulation time: {config.simulation_time} minutes")
-    print(f"  - Fault magnitude: {config.fault_magnitude}")
+    print(f"  - Fault type: {config.fault_type}")
+    
+    # Display appropriate parameters based on fault type
+    if config.fault_type == "friction":
+        print(f"  - Friction magnitude: {config.fault_magnitude}")
+    elif config.fault_type == "power_limit":
+        print(f"  - Power limit: {config.fault_magnitude}W")
+    elif config.fault_type == "battery":
+        print(f"  - Battery power drain: {config.fault_magnitude}kW")
+    # Encoder fault doesn't have a magnitude parameter
+    
     print(f"  - Fault wheel: {config.fault_wheel_number}")
     print(f"  - Fault time: {config.fault_time} minutes")
     
@@ -430,8 +631,24 @@ def run_custom_simulation(config):
     scenario, customize_scenario = create_custom_scenario(config)
     viz = customize_scenario(scenario)
     
-    # Generate and display/save plots
-    figureList = scenario.pull_outputs(config.show_plots)
+    # Generate plots but don't show them interactively (will save instead)
+    # This avoids the FigureCanvasAgg warning
+    figureList = None
+    try:
+        # Disable showing plots to avoid matplotlib warning
+        original_show_plots = config.show_plots
+        config.show_plots = False
+        
+        # Generate plots - different methods depending on fault type
+        if hasattr(scenario, 'pull_outputs'):
+            figureList = scenario.pull_outputs(False)  # False means don't display plots
+        else:
+            print("Warning: Scenario doesn't have pull_outputs method, no plots will be generated")
+        
+        # Restore original setting
+        config.show_plots = original_show_plots
+    except Exception as e:
+        print(f"Warning: Error generating plots: {e}")
     
     # Save configuration summary
     try:
@@ -440,7 +657,17 @@ def run_custom_simulation(config):
             f.write(f"===== RW Fault Simulation Summary =====\n")
             f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             f.write(f"Simulation time: {config.simulation_time} minutes\n")
-            f.write(f"Fault magnitude: {config.fault_magnitude}\n")
+            f.write(f"Fault type: {config.fault_type}\n")
+            
+            # Show appropriate fault parameters based on type
+            if config.fault_type == "friction":
+                f.write(f"Friction magnitude: {config.fault_magnitude}\n")
+            elif config.fault_type == "power_limit":
+                f.write(f"Power limit: {config.fault_magnitude}W\n")
+            elif config.fault_type == "battery":
+                f.write(f"Battery power drain: {config.fault_magnitude}kW\n")
+            # Encoder fault doesn't have a magnitude parameter
+            
             f.write(f"Fault wheel: {config.fault_wheel_number}\n")
             f.write(f"Fault time: {config.fault_time} minutes\n\n")
             
@@ -457,30 +684,56 @@ def run_custom_simulation(config):
             f.write(f"\nResults saved to: {output_dir}\n")
             
             if config.save_binary and viz:
-                    vizard_path = os.path.join(VIZ_DIR, f"{config.binary_filename}_UnityViz.bin")
+                # Check multiple possible locations for the binary file
+                vizard_paths = [
+                    os.path.join(VIZ_DIR, f"{config.binary_filename}_UnityViz.bin"),
+                    os.path.join(VIZ_DIR, "_VizFiles", f"{config.binary_filename}_UnityViz.bin")
+                ]
+                
+                binary_found = False
+                for vizard_path in vizard_paths:
                     if os.path.exists(vizard_path):
+                        binary_found = True
                         file_size = os.path.getsize(vizard_path) / (1024*1024)  # Size in MB
-                        print(f"\nBinary file created: {vizard_path} ({file_size:.2f} MB)")
-                        print("\nTo view this file in Vizard:")
-                        print("1. Open Vizard application")
-                        print(f"2. Load the binary file: {vizard_path}")
-                    else:
-                        print(f"\nWarning: Expected binary file {vizard_path} was not created")
+                        f.write(f"\nBinary file created: {vizard_path} ({file_size:.2f} MB)\n")
+                        f.write("\nTo view this file in Vizard:\n")
+                        f.write("1. Open Vizard application\n")
+                        f.write(f"2. Load the binary file: {vizard_path}\n")
+                        break
+                
+                if not binary_found:
+                    f.write(f"\nWarning: Binary file was not found in expected locations\n")
+                    f.write(f"Checked paths:\n")
+                    for path in vizard_paths:
+                        f.write(f"- {path}\n")
         
         print(f"\nSimulation summary saved to {output_dir}/simulation_summary.txt")
     except Exception as e:
         print(f"Warning: Could not save simulation summary: {e}")
     
-    if config.save_binary and viz:
-        vizard_path = f"./_VizFiles/{config.binary_filename}_UnityViz.bin"
-        if os.path.exists(vizard_path):
-            file_size = os.path.getsize(vizard_path) / (1024*1024)  # Size in MB
-            print(f"\nBinary file created: {vizard_path} ({file_size:.2f} MB)")
-            print("\nTo view this file in Vizard:")
-            print("1. Open Vizard application")
-            print(f"2. Load the binary file: {vizard_path}")
-        else:
-            print(f"\nWarning: Expected binary file {vizard_path} was not created")
+    if config.save_binary:
+        # Check all possible locations for the binary file
+        vizard_paths = [
+            os.path.join(VIZ_DIR, f"{config.binary_filename}_UnityViz.bin"),
+            os.path.join(VIZ_DIR, "_VizFiles", f"{config.binary_filename}_UnityViz.bin")
+        ]
+        
+        binary_found = False
+        for vizard_path in vizard_paths:
+            if os.path.exists(vizard_path):
+                binary_found = True
+                file_size = os.path.getsize(vizard_path) / (1024*1024)  # Size in MB
+                print(f"\nBinary file created: {vizard_path} ({file_size:.2f} MB)")
+                print("\nTo view this file in Vizard:")
+                print("1. Open Vizard application")
+                print(f"2. Load the binary file: {vizard_path}")
+                break
+        
+        if not binary_found:
+            print(f"\nWarning: Binary file was not found in expected locations")
+            print(f"Checked paths:")
+            for path in vizard_paths:
+                print(f"- {path}")
     
     return scenario, viz, figureList, output_dir
 
@@ -516,3 +769,5 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+    

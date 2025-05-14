@@ -2,17 +2,15 @@
 """
 rw_fault.py
 
-A simplified Basilisk scenario that simulates spacecraft dynamics with reaction wheel faults
-and properly saves binary files for Vizard visualization.
+A backward-compatible module that provides access to the various reaction wheel fault scenarios.
+This serves as a compatibility layer for existing code that relies on the rw_fault.py interface.
 """
 import inspect
 import os
 import sys
 import numpy as np
 
-from Basilisk.utilities import (orbitalMotion, macros, vizSupport)
-
-# Set paths
+# Fix path resolution to work with new project structure
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
 ROOT_DIR = os.path.abspath(os.path.join(path, '..'))
@@ -21,185 +19,84 @@ PLOTTING_DIR = os.path.join(ROOT_DIR, 'plotting')
 
 sys.path.extend([ROOT_DIR, MODELS_DIR, PLOTTING_DIR])
 
-# Import BSK modules - modify these paths as needed for your environment
-try:
-    from BSK_masters import BSKSim, BSKScenario
-    import BSK_Dynamics, BSK_Fsw
-    import BSK_Plotting as BSK_plt
-except ImportError as e:
-    print(f"ERROR: Could not import required modules: {e}")
-    print("Make sure the BSK modules are in your Python path.")
-    sys.exit(1)
+# Import the specific fault modules - this ensures they are available for the fault loader
+from faults.friction_fault import FrictionFaultScenario, run as run_friction
+from faults.powerlimit_fault import PowerLimitFaultScenario, run as run_powerlimit
+from faults.encoder_fault import EncoderFaultScenario, run as run_encoder
 
-class RWFaultScenario(BSKSim, BSKScenario):
-    def __init__(self):
-        super(RWFaultScenario, self).__init__()
-        self.name = 'RWFaultScenario'
-        self.msgRecList = {}
-        self.sNavTransName = "sNavTransMsg"
-        self.attGuidName = "attGuidMsg"
+# Create a global fault type that can be changed by users or client code
+_current_fault_type = "friction"
 
-        self.cameraLocation = [0.0, 2.0, 0.0]
+def set_fault_type(fault_type):
+    """
+    Set the global fault type for simulations run through this module
+    
+    Parameters:
+    fault_type (str): Type of fault ('friction', 'power_limit', 'encoder')
+    """
+    global _current_fault_type
+    valid_types = {"friction", "power_limit", "encoder"}
+    
+    if fault_type not in valid_types:
+        raise ValueError(f"Invalid fault type '{fault_type}'. Valid options are: {valid_types}")
+    
+    _current_fault_type = fault_type
+    print(f"Fault type set to: {_current_fault_type}")
 
-        self.targets = [
-            {"name": "Melbourne", "lat": -37.8136, "lon": 144.9631, "color": "red"},
-            {"name": "New York", "lat": 40.71, "lon": -74.00, "color": "blue"},
-            {"name": "Tokyo", "lat": 35.68, "lon": 139.77, "color": "green"},
-            {"name": "London", "lat": 51.51, "lon": -0.13, "color": "yellow"}
-        ]
+def get_fault_type():
+    """
+    Get the current global fault type
+    
+    Returns:
+    str: Current fault type
+    """
+    return _current_fault_type
 
-        self.set_DynModel(BSK_Dynamics)
-        self.set_FswModel(BSK_Fsw)
+# For backward compatibility, define RWFaultScenario as the FrictionFaultScenario
+RWFaultScenario = FrictionFaultScenario
 
-        self.configure_initial_conditions()
-        self.log_outputs()
+def run(showPlots=True, saveBinary=True, fault_type=None):
+    """
+    Run a fault scenario with the specified type or the current global fault type
+    
+    Parameters:
+    showPlots (bool): Flag to display plots
+    saveBinary (bool): Flag to save binary file for visualization
+    fault_type (str, optional): Override the global fault type for this run
+    
+    Returns:
+    tuple: (scenario, viz, figureList) - The simulation objects and results
+    """
+    # Use the specified fault type or fall back to the global setting
+    active_fault_type = fault_type or _current_fault_type
+    
+    # Dispatch to the appropriate run function
+    if active_fault_type == "friction":
+        return run_friction(showPlots, saveBinary)
+    elif active_fault_type == "power_limit":
+        return run_powerlimit(showPlots, saveBinary)
+    elif active_fault_type == "encoder":
+        return run_encoder(showPlots, saveBinary)
+    else:
+        # This shouldn't happen due to the set_fault_type validation,
+        # but we add it as a safety check
+        print(f"WARNING: Unknown fault type '{active_fault_type}', using friction fault")
+        return run_friction(showPlots, saveBinary)
 
-        self.oneTimeRWFaultFlag = 1
-        self.repeatRWFaultFlag = 1
-        self.oneTimeFaultTime = macros.min2nano(10.)
-        self.get_DynModel().RWFaultLog = []
-
-    def configure_initial_conditions(self):
-        oe = orbitalMotion.ClassicElements()
-        oe.a = 10000000.0
-        oe.e = 0.01
-        oe.i = 33.3 * macros.D2R
-        oe.Omega = 48.2 * macros.D2R
-        oe.omega = 347.8 * macros.D2R
-        oe.f = 85.3 * macros.D2R
-
-        DynModel = self.get_DynModel()
-        mu = DynModel.gravFactory.gravBodies['earth'].mu
-        rN, vN = orbitalMotion.elem2rv(mu, oe)
-        orbitalMotion.rv2elem(mu, rN, vN)
-        DynModel.scObject.hub.r_CN_NInit = rN
-        DynModel.scObject.hub.v_CN_NInit = vN
-        DynModel.scObject.hub.sigma_BNInit = [[0.1], [0.2], [-0.3]]
-        DynModel.scObject.hub.omega_BN_BInit = [[0.001], [-0.01], [0.03]]
-
-    def log_outputs(self):
-        FswModel = self.get_FswModel()
-        DynModel = self.get_DynModel()
-        samplingTime = FswModel.processTasksTimeStep
-
-        self.rwSpeedRec = DynModel.rwStateEffector.rwSpeedOutMsg.recorder(samplingTime)
-        self.AddModelToTask(DynModel.taskName, self.rwSpeedRec)
-
-        self.rwLogs = []
-        for item in range(4):
-            self.rwLogs.append(DynModel.rwStateEffector.rwOutMsgs[item].recorder(samplingTime))
-            self.AddModelToTask(DynModel.taskName, self.rwLogs[item])
-
-    def pull_outputs(self, showPlots):
-        numRW = 4
-        RW_speeds = np.delete(self.rwSpeedRec.wheelSpeeds[:, range(numRW)], 0, 0)
-        RW_friction = [
-            np.delete(self.rwLogs[i].u_f, 0, 0) for i in range(numRW)
-        ]
-
-        BSK_plt.clear_all_plots()
-        timeData = np.delete(self.rwSpeedRec.times(), 0, 0) * macros.NANO2MIN
-        BSK_plt.plot_rw_speeds(timeData, RW_speeds, numRW)
-        BSK_plt.plot_rw_friction(timeData, RW_friction, numRW, self.get_DynModel().RWFaultLog)
-
-        figureList = {}
-        if showPlots:
-            BSK_plt.show_all_plots()
-        else:
-            fileName = os.path.basename(os.path.splitext(__file__)[0])
-            figureNames = ["RWSpeeds", "RWFriction"]
-            figureList = BSK_plt.save_all_plots(fileName, figureNames)
-
-        return figureList
-
-def runScenario(scenario, saveBinary=True):
-    simulationTime = macros.min2nano(30.)
-    scenario.modeRequest = "hillPoint"
-
-    scenario.createNewEvent(
-        "addOneTimeRWFault",
-        scenario.get_FswModel().processTasksTimeStep,
-        True,
-        ["self.TotalSim.CurrentNanos>=self.oneTimeFaultTime and self.oneTimeRWFaultFlag==1"],
-        ["self.get_DynModel().AddRWFault('friction',0.0005,3, self.TotalSim.CurrentNanos)", 
-         "self.oneTimeRWFaultFlag=0"]
-    )
-
-    scenario.createNewEvent(
-        "addRepeatedRWFault",
-        scenario.get_FswModel().processTasksTimeStep,
-        True,
-        ["self.repeatRWFaultFlag==1"],
-        ["self.get_DynModel().PeriodicRWFault(360,'friction',0.1,1, self.TotalSim.CurrentNanos)", 
-         "self.setEventActivity('addRepeatedRWFault',True)"]
-    )
-
-    viz = None
-    if vizSupport.vizFound:
-        viz = vizSupport.enableUnityVisualization(
-            scenario,
-            scenario.get_DynModel().taskName,
-            scenario.get_DynModel().scObject,
-            rwEffectorList=scenario.get_DynModel().rwStateEffector,
-            liveStream=not saveBinary,
-            saveFile="rw_fault_viz" if saveBinary else None
-        )
-
-        for target in scenario.targets:
-            lat = target["lat"]
-            lon = target["lon"]
-            color = target.get("color", "red")
-            alt = 0.0
-            radius = 6371000.0 + alt
-            lat_rad = lat * macros.D2R
-            lon_rad = lon * macros.D2R
-            x = radius * np.cos(lat_rad) * np.cos(lon_rad)
-            y = radius * np.cos(lat_rad) * np.sin(lon_rad)
-            z = radius * np.sin(lat_rad)
-            location_position = [x, y, z]
-
-            vizSupport.addLocation(
-                viz,
-                stationName=target["name"],
-                parentBodyName="earth",
-                r_GP_P=location_position,
-                color=color
-            )
-
-        vizSupport.createStandardCamera(
-            viz,
-            setMode=1,
-            spacecraftName=scenario.get_DynModel().scObject.ModelTag,
-            fieldOfView=70 * macros.D2R,
-            displayName="RW Camera",
-            pointingVector_B=[0, 0, 0],
-            position_B=scenario.cameraLocation
-        )
-
-    scenario.InitializeSimulation()
-    scenario.ConfigureStopTime(simulationTime)
-    scenario.ExecuteSimulation()
-
-    return viz
-
-def run(showPlots=True, saveBinary=True):
-    print("\n===== Running Improved RW Fault Scenario =====")
-    print(f"Save Binary: {saveBinary}")
-    scenario = RWFaultScenario()
-    viz = runScenario(scenario, saveBinary)
-    figureList = scenario.pull_outputs(showPlots)
-
-    if saveBinary and viz:
-        print("\nBinary file saved successfully as 'rw_fault_viz.bin'")
-        print("You can now open this file in Vizard for visualization.")
-
-    return scenario, viz, figureList
-
+# Allow direct running of this module with a command line fault type selection
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Run the Improved RW Fault Scenario")
+    
+    parser = argparse.ArgumentParser(description="Run a Reaction Wheel Fault Scenario")
+    parser.add_argument("--fault-type", choices=["friction", "power_limit", "encoder"], 
+                        default="friction", help="Type of fault to simulate")
     parser.add_argument("--no-plots", action="store_true", help="Don't show plots")
     parser.add_argument("--no-binary", action="store_true", help="Don't save binary file")
+    
     args = parser.parse_args()
-
-    run(not args.no_plots, not args.no_binary)
+    
+    # Set the global fault type so it's available to other modules
+    set_fault_type(args.fault_type)
+    
+    # Run the simulation with the specified fault type
+    run(not args.no_plots, not args.no_binary, args.fault_type)
