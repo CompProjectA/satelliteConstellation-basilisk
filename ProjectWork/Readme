@@ -1,0 +1,222 @@
+# Spacecraft Fault Simulator
+
+The Spacecraft Fault Simulator is a comprehensive tool for simulating and visualizing various fault types in spacecraft attitude control and power systems. Built on the Basilisk astrodynamics framework, it provides both a graphical user interface (GUI) and command-line interface (CLI) for setting up, running, and analyzing fault scenarios.
+
+## Features
+
+- **Multiple Fault Types**: Simulate friction, power limit, encoder, and battery faults
+- **Interactive GUI**: User-friendly interface for configuring and running simulations
+- **3D Visualization**: Integration with Vizard for 3D visualization of spacecraft dynamics
+- **Comprehensive Plotting**: Fault-specific plots for detailed analysis
+- **Configurable Parameters**: Adjust fault timing, magnitude, location, and duration
+- **Target Visibility**: Define ground targets and see when they're visible
+
+## Project Structure
+
+```
+\satelliteConstellation-basilisk\ProjectWork>
+Aplha/
+├── core/
+│   ├── spacecraft_fault_gui.py     # GUI application
+│   ├── spacecraft_fault_cli.py     # CLI interface
+│   ├── fault_loader.py             # Dynamic fault module loader
+│   ├── rw_fault_help.py            # Help content for reaction wheel faults
+│   └── style.py                    # GUI styling definitions
+├── faults/                         # Core fault implementations
+│   ├── friction_fault.py           # Friction fault module
+│   ├── powerlimit_fault.py         # Power limit fault module
+│   ├── encoder_fault.py            # Encoder fault module
+│   ├── battery_fault.py            # Battery fault module
+│   └── rw_fault.py                 # Compatibility layer
+├── Demo_faults/                    # Standalone demo implementations
+│   ├── friction_fault.py           # Friction fault demo
+│   ├── powerlimit_fault.py         # Power limit fault demo
+│   ├── encoder_fault.py            # Encoder fault demo
+│   └── battery_fault.py            # Battery fault demo
+├── plotting/
+│   └── BSK_Plotting.py             # Plotting utilities
+├── Vizfile/
+│   └── _VizFiles/                  # Binary visualization storage
+├── plots/                          # Generated plot output directory
+└── logs/                           # Simulation logs and results
+```
+
+## Installation
+
+### Prerequisites
+
+- Python 3.6+
+- Basilisk astrodynamics framework
+- NumPy, Matplotlib
+- Tkinter (for GUI)
+- PIL (Python Imaging Library)
+
+### Installation Steps
+
+1. Install Python 3.6+ if not already installed
+2. Install Basilisk following the [official installation guide](https://hanspeterschaub.info/basilisk/Install.html)
+3. Install required Python packages:
+   ```
+   pip install numpy matplotlib pillow
+   ```
+4. Set up your environment:
+   ```
+   source activate bskrl-env  # For conda environments
+   ```
+
+## Usage
+
+### GUI Mode
+
+To launch the GUI interface:
+
+```bash
+cd BskSim/core
+python spacecraft_fault_gui.py
+```
+
+The GUI is organized into three main tabs:
+
+#### 1. Simulation Settings Tab
+- Set simulation time duration
+- Configure output options (show plots, save plots, save binary)
+- Specify filenames and directories
+
+#### 2. Fault Configuration Tab
+- Select fault type:
+  - **Friction**: Mechanical friction in reaction wheels
+  - **Power Limit**: Power restrictions to reaction wheels
+  - **Encoder**: Sensor feedback errors in reaction wheels
+  - **Battery**: Power system degradation or increased consumption
+- Configure fault parameters:
+  - Magnitude (specific to each fault type)
+  - Affected wheel (where applicable)
+  - Fault injection time
+- Optional periodic fault settings
+
+#### 3. Visualization Tab
+- Add/modify ground targets with latitude, longitude, and color
+- Configure camera position for 3D visualization
+- Preview visualization settings
+
+After configuring, click the **Run Simulation** button at the bottom of the window to execute the simulation. The results will be displayed as plots and saved according to your output settings.
+
+### CLI Mode
+
+For command-line usage:
+
+```bash
+cd BskSim/core
+python spacecraft_fault_cli.py --fault-type friction --fault-magnitude 0.001 --fault-wheel 2 --fault-time 15.0
+```
+
+Common options:
+- `--fault-type`: Select from friction, power_limit, encoder, battery
+- `--fault-magnitude`: Set fault magnitude (units depend on fault type)
+- `--fault-wheel`: Specify which reaction wheel to affect (0-3)
+- `--fault-time`: When to inject the fault (minutes)
+- `--sim-time`: Total simulation time (minutes)
+- `--no-plots`: Disable plot generation
+- `--no-binary`: Disable binary file generation
+- `-i`: Interactive mode with prompts
+- `--help`: Show all available options
+
+## Fault Types in Detail
+
+### Friction Fault
+
+Simulates increased friction in a reaction wheel, which can occur due to bearing damage or lubricant issues.
+
+- **Parameters**: 
+  - Friction magnitude (0.0001-0.001 typical)
+  - Affected wheel (0-3)
+  - Fault time (minutes)
+- **Effects**: 
+  - Increased power consumption
+  - Reduced wheel speed response
+  - Possible attitude control degradation
+- **Visualization**: 
+  - RWFriction plot showing increased friction torque
+
+### Power Limit Fault
+
+Simulates a power restriction to a reaction wheel motor, which can occur due to power system failures.
+
+- **Parameters**: 
+  - Power limit value (0.2-1.0 W typical)
+  - Affected wheel (0-3)
+  - Fault time (minutes)
+- **Effects**: 
+  - Torque saturation when wheel requires more power than the limit allows
+  - Attitude control degradation during high-demand maneuvers
+- **Visualization**: 
+  - RWPower plot showing wheel power consumption and limits
+
+### Encoder Fault
+
+Simulates errors in the reaction wheel speed feedback, which can lead to control issues.
+
+- **Parameters**: 
+  - Affected wheel (0-3)
+  - Fault time (minutes)
+- **Effects**: 
+  - Discrepancies between commanded and actual wheel speeds
+  - Oscillations in attitude control
+  - Potential instability
+- **Visualization**: 
+  - RWEncoder plot showing commanded vs. actual wheel speeds
+
+### Battery Fault
+
+Simulates power system issues like increased power consumption or battery degradation.
+
+- **Parameters**: 
+  - Power drain magnitude (0.01-0.1 kW typical)
+  - Fault time (minutes)
+- **Effects**: 
+  - Battery charge depletion
+  - Reduced power availability for spacecraft systems
+  - Possible system shutdowns
+- **Visualization**: 
+  - BatteryStatus plot showing charge level and power flow
+  - Battery and solar panel indicators in Vizard
+
+## Visualization
+
+### Plots
+
+Each simulation generates several plots:
+
+1. **Attitude Error**: Shows the spacecraft's attitude error magnitude
+2. **Rate Error**: Shows the spacecraft's angular rate error
+3. **RW Speeds**: Shows all reaction wheel speeds over time
+4. **Fault-Specific Plot**: 
+   - Friction Fault: RWFriction plot
+   - Power Limit Fault: RWPower plot
+   - Encoder Fault: RWEncoder plot
+   - Battery Fault: BatteryStatus plot
+
+Plots are saved to the `plots/` directory and automatically displayed after simulation.
+
+### 3D Visualization with Vizard
+
+The simulator generates binary files for visualization in Vizard:
+
+1. Run a simulation with "Save Binary for Vizard" enabled
+2. Open the Vizard application
+3. Load the generated binary file from the `Vizfile/_VizFiles/` directory
+4. View the spacecraft dynamics and fault effects in 3D
+
+For battery faults, special visualization panels show the battery charge level and solar panel power generation.
+
+
+## Extending the Simulator
+
+### Adding New Fault Types
+
+To add a new fault type:
+
+1. Create a new fault module in the `faults/` directory
+2. Implement the required fault injection functions
+3. Update `fault_loader.py` to recognize the new fault type
+4. Add the fault type to the GUI selector in `spacecraft_fault_gui.py`
