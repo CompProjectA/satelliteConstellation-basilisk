@@ -79,6 +79,7 @@ import numpy as np
 from Basilisk import __path__
 
 bskPath = __path__[0]
+print(bskPath)
 fileName = os.path.basename(os.path.splitext(__file__)[0])
 
 # import simulation related support
@@ -147,7 +148,6 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
         planet.isCentralBody = True           # ensure this is the central gravitational body
         if useSphericalHarmonics:
             planet.useSphericalHarmonicsGravityModel(bskPath + '/supportData/LocalGravData/GGM2BData.txt', 100)
-
     else:  # Earth
         planet = gravFactory.createEarth()
         planet.isCentralBody = True          # ensure this is the central gravitational body
@@ -194,7 +194,7 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
     n = np.sqrt(mu / oe.a / oe.a / oe.a)
     P = 2. * np.pi / n
     if useSphericalHarmonics:
-        simulationTime = macros.sec2nano(3. * P)
+        simulationTime = macros.sec2nano(0.75 * P)
     else:
         simulationTime = macros.sec2nano(0.75 * P)
 
