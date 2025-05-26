@@ -87,7 +87,7 @@ class BSKDynamicModels():
         
         SimBase.createNewEvent("addRepeatedRWFault", self.processTasksTimeStep, True,
             ["self.repeatRWFaultFlag==1"],
-            ["self.DynModels.PeriodicRWFault(1./3000,'friction',0.005,2, self.TotalSim.CurrentNanos)", "self.setEventActivity('addRepeatedRWFault',True)"])
+            ["self.DynModels.PeriodicRWFault(1./3000,'friction',0.005,1, self.TotalSim.CurrentNanos)", "self.setEventActivity('addRepeatedRWFault',True)"])
 
     # ------------------------------------------------------------------------------------------- #
     # These are module-initialization methods

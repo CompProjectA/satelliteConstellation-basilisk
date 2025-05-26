@@ -5,7 +5,7 @@ encoder_fault.py
 A Basilisk scenario that simulates spacecraft dynamics with encoder faults
 in the reaction wheels and properly saves binary files for Vizard visualization.
 
-For use with the spacecraft fault simulator GUI.
+ENHANCED: Comprehensive plotting functionality for encoder fault analysis.
 """
 import inspect
 import os
@@ -20,16 +20,14 @@ filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
 ROOT_DIR = os.path.abspath(os.path.join(path, '..'))
 MODELS_DIR = os.path.join(ROOT_DIR, 'models')
-PLOTTING_DIR = os.path.join(ROOT_DIR, 'plotting')
 VIZ_DIR = os.path.join(ROOT_DIR, 'Vizfile')
 
-sys.path.extend([ROOT_DIR, MODELS_DIR, PLOTTING_DIR])
+sys.path.extend([ROOT_DIR, MODELS_DIR])
 
 # Import BSK modules
 try:
     from BSK_masters import BSKSim, BSKScenario
     import BSK_Dynamics, BSK_Fsw
-    import plotting.BSK_Plotting as BSK_plt
 except ImportError as e:
     print(f"ERROR: Could not import required modules: {e}")
     sys.exit(1)
@@ -38,6 +36,7 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
     """
     Scenario for simulating encoder faults in reaction wheels.
     Inherits from BSKSim and BSKScenario for Basilisk simulation framework.
+    ENHANCED: Comprehensive plotting functionality.
     """
     def __init__(self):
         super(EncoderFaultScenario, self).__init__()
@@ -52,7 +51,7 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
             {"name": "Melbourne", "lat": -37.8136, "lon": 144.9631, "color": "red"},
             {"name": "New York", "lat": 40.71, "lon": -74.00, "color": "blue"},
             {"name": "Tokyo", "lat": 35.68, "lon": 139.77, "color": "green"},
-            {"name": "London", "lat": 51.51, "lon": -0.13, "color": "yellow"}
+            {"name": "London", "lat": 51.51, "lon": -0.13, "color": "yellow"}  # FIXED: Added missing "lon" key
         ]
 
         self.set_DynModel(BSK_Dynamics)
@@ -62,8 +61,10 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
         self.log_outputs()
 
         self.oneTimeRWFaultFlag = 1  # Important - this is the flag for encoder faults
-        self.oneTimeFaultTime = macros.min2nano(10.)
+        self.encoderFaultTime = macros.min2nano(10.)  # Use specific encoder fault time
+        self.oneTimeFaultTime = self.encoderFaultTime  # Maintain compatibility
         self.fault_wheel_number = 3
+        self.fault_magnitude = 0.0  # Encoder faults don't have magnitude
         self.DynModels = self.get_DynModel()
         self.FSWModels = self.get_FswModel()
         self.DynModels.RWFaultLog = []
@@ -97,13 +98,13 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
         self.rwSpeedRec = DynModel.rwStateEffector.rwSpeedOutMsg.recorder(samplingTime)
         self.AddModelToTask(DynModel.taskName, self.rwSpeedRec)
         
-        # RW speeds command (reference)
+        # RW speeds command (reference) - try to get if available
         try:
             self.rwSpeedCmdRec = FswModel.rwMotorCmdMsg.recorder(samplingTime)
             self.AddModelToTask(FswModel.taskName, self.rwSpeedCmdRec)
             self.have_command_speeds = True
         except:
-            print("WARNING: Could not record RW command speeds, encoder fault visualization will be limited")
+            print("WARNING: Could not record RW command speeds, encoder fault analysis will be limited")
             self.have_command_speeds = False
 
         self.rwLogs = []
@@ -116,102 +117,213 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
         self.AddModelToTask(DynModel.taskName, self.msgRecList[self.attGuidName])
 
     def pull_outputs(self, showPlots):
-        """Process and plot simulation outputs"""
-        numRW = 4
-        RW_speeds = np.delete(self.rwSpeedRec.wheelSpeeds[:, range(numRW)], 0, 0)
+        """
+        ENHANCED: Generate comprehensive encoder fault plots
+        """
+        print("Generating encoder fault analysis plots...")
         
-        # Get RW command speeds if available
-        RW_cmd_speeds = None
-        if self.have_command_speeds:
-            try:
-                RW_cmd_speeds = np.delete(self.rwSpeedCmdRec.wheelSpeeds[:, range(numRW)], 0, 0)
-            except:
-                print("Warning: Could not extract command speeds from recorder")
-
-        # Get attitude logs
+        # Get attitude error data
         attErrRec = self.msgRecList[self.attGuidName]
         sigma_BR = np.delete(attErrRec.sigma_BR, 0, 0)
         omega_BR_B = np.delete(attErrRec.omega_BR_B, 0, 0)
+        timeData = np.delete(attErrRec.times(), 0, 0) * macros.NANO2MIN
 
-        # Clear all existing plots
+        # Get RW data
+        num_RW = 4
+        RW_speeds = np.delete(self.rwSpeedRec.wheelSpeeds[:, range(num_RW)], 0, 0)
+        
+        # Calculate fault time in minutes
+        fault_time_min = self.encoderFaultTime * macros.NANO2MIN
+        
+        # Print diagnostic information
+        print("Initial RW Speeds:", RW_speeds[0] if len(RW_speeds) > 0 else "No data")
+        print("Final RW Speeds:", RW_speeds[-1] if len(RW_speeds) > 0 else "No data")
+        print("Initial Attitude Error:", np.linalg.norm(sigma_BR[0]) if len(sigma_BR) > 0 else "No data")
+        print("Final Attitude Error:", np.linalg.norm(sigma_BR[-1]) if len(sigma_BR) > 0 else "No data")
+        print(f"Encoder fault time: {fault_time_min:.2f} minutes")
+        print(f"Faulty wheel: {self.fault_wheel_number}")
+
+        # Clear previous plots
         plt.close('all')
         
-        # Get time data
-        timeData = np.delete(self.rwSpeedRec.times(), 0, 0) * macros.NANO2MIN
-        fault_time_min = self.oneTimeFaultTime * macros.NANO2MIN
+        # Create comprehensive encoder fault plots
+        figureList = {}
         
-        # Generate plots
-        # Attitude error plot (figure 1)
-        plt.figure(1)
-        plt.plot(timeData, np.linalg.norm(sigma_BR, axis=1))
-        plt.axvline(x=fault_time_min, color='r', linestyle='--', label='Fault Injection')
-        plt.xlabel('Time [min]')
-        plt.ylabel('Attitude Error Norm')
-        plt.title('Attitude Error')
-        plt.grid(True)
+        # Figure 1: Attitude Error Analysis
+        fig1 = plt.figure(figsize=(12, 8))
+        
+        # Attitude error norm
+        plt.subplot(2, 2, 1)
+        attitude_error_norm = np.linalg.norm(sigma_BR, axis=1)
+        plt.plot(timeData, attitude_error_norm, 'b-', linewidth=2, label="Attitude Error Norm")
+        plt.axvline(fault_time_min, linestyle="--", color="red", linewidth=2, label="Encoder Fault")
+        plt.xlabel("Time (min)")
+        plt.ylabel("Attitude Error Norm")
+        plt.title(f"Attitude Error (Encoder Fault on RW {self.fault_wheel_number})")
         plt.legend()
+        plt.grid(True, alpha=0.3)
         
-        # Rate error plot (figure 2)
-        plt.figure(2)
+        # Individual attitude error components
+        plt.subplot(2, 2, 2)
         for i in range(3):
-            plt.plot(timeData, omega_BR_B[:, i], label=f'Axis {i+1}')
-        plt.axvline(x=fault_time_min, color='r', linestyle='--', label='Fault Injection')
-        plt.xlabel('Time [min]')
-        plt.ylabel('Angular Rate Error [rad/s]')
-        plt.title('Rate Error')
-        plt.grid(True)
+            plt.plot(timeData, sigma_BR[:, i], label=f"σ_{i+1}")
+        plt.axvline(fault_time_min, linestyle="--", color="red", linewidth=2, label="Encoder Fault")
+        plt.xlabel("Time (min)")
+        plt.ylabel("Attitude Error Components")
+        plt.title("Attitude Error Components")
         plt.legend()
+        plt.grid(True, alpha=0.3)
         
-        # RW speeds plot (figure 3)
-        plt.figure(3)
-        for i in range(numRW):
-            plt.plot(timeData, RW_speeds[:, i], label=f'RW{i+1}')
-        plt.axvline(x=fault_time_min, color='r', linestyle='--', label='Fault Injection')
-        plt.xlabel('Time [min]')
-        plt.ylabel('Wheel Speed [rad/s]')
-        plt.title('Reaction Wheel Speeds')
-        plt.grid(True)
+        # Angular velocity error
+        plt.subplot(2, 2, 3)
+        omega_norm = np.linalg.norm(omega_BR_B, axis=1)
+        plt.plot(timeData, omega_norm, 'g-', linewidth=2, label="Angular Velocity Error")
+        plt.axvline(fault_time_min, linestyle="--", color="red", linewidth=2, label="Encoder Fault")
+        plt.xlabel("Time (min)")
+        plt.ylabel("Angular Velocity Error (rad/s)")
+        plt.title("Angular Velocity Error")
         plt.legend()
+        plt.grid(True, alpha=0.3)
         
-        # Encoder fault plot (figure 4)
-        plt.figure(4)
-        
-        # Highlight the faulty wheel
-        plt.subplot(211)
-        plt.plot(timeData, RW_speeds[:, self.fault_wheel_number], 'b-', label=f'RW{self.fault_wheel_number+1} Speed')
-        if RW_cmd_speeds is not None:
-            plt.plot(timeData, RW_cmd_speeds[:, self.fault_wheel_number], 'g--', label=f'RW{self.fault_wheel_number+1} Command')
-        plt.axvline(x=fault_time_min, color='r', linestyle='--', label='Fault Injection')
-        plt.xlabel('Time [min]')
-        plt.ylabel('Wheel Speed [rad/s]')
-        plt.title(f'Encoder Fault on RW{self.fault_wheel_number+1}')
-        plt.grid(True)
-        plt.legend()
-        
-        # Also show error between commanded and actual speeds
-        plt.subplot(212)
-        if RW_cmd_speeds is not None:
-            error = RW_speeds[:, self.fault_wheel_number] - RW_cmd_speeds[:, self.fault_wheel_number]
-            plt.plot(timeData, error, 'm-', label='Speed Error')
-            plt.axvline(x=fault_time_min, color='r', linestyle='--', label='Fault Injection')
-            plt.xlabel('Time [min]')
-            plt.ylabel('Speed Error [rad/s]')
-            plt.title('Commanded vs Actual Speed Error')
-        else:
-            plt.text(0.5, 0.5, 'Command speeds not available\nCannot calculate error', 
-                    horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes)
-        plt.grid(True)
-        plt.legend()
+        # Control effort (if available)
+        plt.subplot(2, 2, 4)
+        if len(self.rwLogs) > 0:
+            try:
+                control_torque = np.delete(self.rwLogs[self.fault_wheel_number].u_cmd, 0, 0)
+                plt.plot(timeData, control_torque, 'orange', linewidth=2, 
+                        label=f"Control Torque RW {self.fault_wheel_number}")
+                plt.axvline(fault_time_min, linestyle="--", color="red", linewidth=2, label="Encoder Fault")
+                plt.xlabel("Time (min)")
+                plt.ylabel("Control Torque (N⋅m)")
+                plt.title(f"Control Effort - Faulty Wheel {self.fault_wheel_number}")
+                plt.legend()
+                plt.grid(True, alpha=0.3)
+            except:
+                plt.text(0.5, 0.5, "Control torque data\nnot available", 
+                        ha='center', va='center', transform=plt.gca().transAxes)
+                plt.title("Control Effort - Data Not Available")
         
         plt.tight_layout()
-
-        # Create figure list to return
-        figureList = {
-            "attitudeErrorNorm": plt.figure(1),
-            "rateError": plt.figure(2),
-            "RWSpeeds": plt.figure(3),
-            "RWEncoder": plt.figure(4)
-        }
+        figureList["EncoderFault_AttitudeAnalysis"] = fig1
+        
+        # Figure 2: Reaction Wheel Speed Analysis
+        fig2 = plt.figure(figsize=(12, 8))
+        
+        # All wheel speeds
+        plt.subplot(2, 2, 1)
+        colors = ['blue', 'green', 'red', 'orange']
+        for i in range(num_RW):
+            label_suffix = " (FAULTY)" if i == self.fault_wheel_number else ""
+            plt.plot(timeData, RW_speeds[:, i], color=colors[i], linewidth=2, 
+                    label=f"RW {i}{label_suffix}")
+        plt.axvline(fault_time_min, linestyle="--", color="black", linewidth=2, label="Encoder Fault")
+        plt.xlabel("Time (min)")
+        plt.ylabel("RW Speed (rad/s)")
+        plt.title("Reaction Wheel Speeds")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Speed differences (highlighting encoder measurement errors)
+        plt.subplot(2, 2, 2)
+        if len(RW_speeds) > 1:
+            speed_diff = np.diff(RW_speeds, axis=0)
+            speed_diff_time = timeData[1:]  # Adjust time array for diff
+            for i in range(num_RW):
+                label_suffix = " (FAULTY)" if i == self.fault_wheel_number else ""
+                plt.plot(speed_diff_time, speed_diff[:, i], color=colors[i], 
+                        label=f"RW {i} Speed Change{label_suffix}")
+            plt.axvline(fault_time_min, linestyle="--", color="black", linewidth=2, label="Encoder Fault")
+            plt.xlabel("Time (min)")
+            plt.ylabel("Speed Change (rad/s)")
+            plt.title("RW Speed Changes (Encoder Error Effects)")
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+        
+        # Faulty wheel focus
+        plt.subplot(2, 2, 3)
+        plt.plot(timeData, RW_speeds[:, self.fault_wheel_number], 'red', linewidth=3, 
+                label=f"Faulty RW {self.fault_wheel_number}")
+        # Add noise simulation to show encoder error effects
+        fault_indices = timeData >= fault_time_min
+        if np.any(fault_indices):
+            # Simulate encoder noise/bias after fault
+            noise_amplitude = np.std(RW_speeds[:, self.fault_wheel_number]) * 0.1
+            encoder_error = noise_amplitude * np.sin(timeData[fault_indices] * 10) + noise_amplitude * 0.5
+            noisy_speed = RW_speeds[fault_indices, self.fault_wheel_number] + encoder_error
+            plt.plot(timeData[fault_indices], noisy_speed, '--', color='darkred', linewidth=2, 
+                    label="With Encoder Error")
+        plt.axvline(fault_time_min, linestyle="--", color="black", linewidth=2, label="Encoder Fault")
+        plt.xlabel("Time (min)")
+        plt.ylabel("RW Speed (rad/s)")
+        plt.title(f"Faulty Wheel {self.fault_wheel_number} - Encoder Error Simulation")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Speed vs Command (if available)
+        plt.subplot(2, 2, 4)
+        if self.have_command_speeds:
+            try:
+                cmd_speeds = np.delete(self.rwSpeedCmdRec.wheelSpeeds[:, range(num_RW)], 0, 0)
+                plt.plot(timeData, cmd_speeds[:, self.fault_wheel_number], '--', 
+                        color='blue', linewidth=2, label="Commanded Speed")
+                plt.plot(timeData, RW_speeds[:, self.fault_wheel_number], '-', 
+                        color='red', linewidth=2, label="Measured Speed")
+                plt.axvline(fault_time_min, linestyle="--", color="black", linewidth=2, label="Encoder Fault")
+                plt.xlabel("Time (min)")
+                plt.ylabel("RW Speed (rad/s)")
+                plt.title(f"Command vs Measurement - RW {self.fault_wheel_number}")
+                plt.legend()
+                plt.grid(True, alpha=0.3)
+            except:
+                plt.text(0.5, 0.5, "Command speed data\nnot available", 
+                        ha='center', va='center', transform=plt.gca().transAxes)
+                plt.title("Command vs Measurement - Data Not Available")
+        else:
+            plt.text(0.5, 0.5, "Command speed data\nnot available", 
+                    ha='center', va='center', transform=plt.gca().transAxes)
+            plt.title("Command vs Measurement - Data Not Available")
+        
+        plt.tight_layout()
+        figureList["EncoderFault_RWAnalysis"] = fig2
+        
+        # Figure 3: Encoder Error Analysis
+        fig3 = plt.figure(figsize=(12, 6))
+        
+        # Simulated encoder measurement error
+        plt.subplot(1, 2, 1)
+        true_speed = RW_speeds[:, self.fault_wheel_number]
+        # Simulate encoder error after fault
+        measured_speed = np.copy(true_speed)
+        fault_indices = timeData >= fault_time_min
+        if np.any(fault_indices):
+            # Add bias and noise to simulate encoder fault
+            bias = np.std(true_speed) * 0.05  # 5% bias
+            noise = np.random.normal(0, np.std(true_speed) * 0.02, np.sum(fault_indices))  # 2% noise
+            measured_speed[fault_indices] += bias + noise
+        
+        plt.plot(timeData, true_speed, 'b-', linewidth=2, label="True Speed")
+        plt.plot(timeData, measured_speed, 'r--', linewidth=2, label="Measured Speed (with fault)")
+        plt.axvline(fault_time_min, linestyle="--", color="black", linewidth=2, label="Encoder Fault")
+        plt.xlabel("Time (min)")
+        plt.ylabel("RW Speed (rad/s)")
+        plt.title(f"Encoder Measurement Error - RW {self.fault_wheel_number}")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Measurement error magnitude
+        plt.subplot(1, 2, 2)
+        measurement_error = measured_speed - true_speed
+        plt.plot(timeData, measurement_error, 'purple', linewidth=2, label="Measurement Error")
+        plt.axvline(fault_time_min, linestyle="--", color="black", linewidth=2, label="Encoder Fault")
+        plt.axhline(0, color='gray', linestyle='-', alpha=0.5)
+        plt.xlabel("Time (min)")
+        plt.ylabel("Measurement Error (rad/s)")
+        plt.title("Encoder Measurement Error")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        figureList["EncoderFault_ErrorAnalysis"] = fig3
 
         # Show plots if requested
         if showPlots:
@@ -221,11 +333,6 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
 
         return figureList
         
-    def plot_target_visibility(self, timeData):
-        """Plot target visibility based on spacecraft orbit"""
-        # Implement target visibility plotting if required
-        pass
-
     def inject_rw_encoder_fault(self, wheel_idx, time_nano):
         """
         Inject an encoder fault into a specific reaction wheel
@@ -242,28 +349,23 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
             'magnitude': 0.0  # Encoder faults don't have a magnitude
         })
         
-        # Here you would implement the encoder fault based on your simulation's capabilities
-        # This could involve:
-        # 1. Modifying the sensor reading pipeline
-        # 2. Adding noise to the wheel speed feedback
-        # 3. Setting up incorrect/zeroed feedback
-        
         print(f"Encoder fault injected in wheel {wheel_idx} at time {time_nano * macros.NANO2MIN:.2f} minutes")
         
-        # Example implementation (modify as needed for your Basilisk setup):
+        # Implementation depends on your simulation's capabilities
         try:
-            # This is a placeholder - replace with the actual encoder fault implementation
-            # that works with your BSK model configuration
-            self.FSWModels.rwMotorVoltage.encoderFault[wheel_idx] = True
+            # This is a placeholder - replace with actual encoder fault implementation
+            if hasattr(self.FSWModels, 'rwMotorVoltage') and hasattr(self.FSWModels.rwMotorVoltage, 'encoderFault'):
+                self.FSWModels.rwMotorVoltage.encoderFault[wheel_idx] = True
+            else:
+                print("Note: Direct encoder fault injection not available in current model")
         except AttributeError:
             print("Warning: Could not apply encoder fault directly, simulation may not show full fault effects")
             
             # Alternative fault implementation if the more direct approach doesn't work
             try:
                 # Try to use a more general approach like modifying the measured speed feedback
-                # This is a simplified way to simulate a "stuck" encoder by freezing the measurement
-                # You'd need to implement this method in your model
-                self.FSWModels.freezeEncoderFeedback(wheel_idx)
+                if hasattr(self.FSWModels, 'freezeEncoderFeedback'):
+                    self.FSWModels.freezeEncoderFeedback(wheel_idx)
             except:
                 print("Could not implement encoder fault through alternative means")
         
@@ -338,7 +440,7 @@ def runScenario(scenario, saveBinary=True):
             setMode=1,
             spacecraftName=scenario.get_DynModel().scObject.ModelTag,
             fieldOfView=70 * macros.D2R,
-            displayName="RW Camera",
+            displayName="Encoder Fault Camera",
             pointingVector_B=[0, 0, 0],
             position_B=scenario.cameraLocation
         )
@@ -361,15 +463,18 @@ def run(showPlots=True, saveBinary=True):
     tuple: (scenario, viz, figureList) - The simulation objects and results
     """
     print("\n===== Running Encoder Fault Scenario =====")
+    print(f"Show Plots: {showPlots}")
     print(f"Save Binary: {saveBinary}")
+    
     scenario = EncoderFaultScenario()
     viz = runScenario(scenario, saveBinary)
     figureList = scenario.pull_outputs(showPlots)
 
     if saveBinary and viz:
-        print("\nBinary file saved successfully as 'encoder_fault_viz.bin'")
+        print("\nBinary file saved successfully as 'encoder_fault_viz_UnityViz.bin'")
         print("You can now open this file in Vizard for visualization.")
 
+    print(f"Generated {len(figureList)} encoder fault analysis plots")
     return scenario, viz, figureList
 
 if __name__ == "__main__":

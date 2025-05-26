@@ -1,0 +1,188 @@
+BskSim Project Directory Structure
+
+BskSim/
+├── BSK_masters.py
+├── core/
+│   ├── fault_loader.py
+│   ├── run.py
+│   ├── spacecraft_fault_cli.py
+│   ├── spacecraft_fault_gui.py
+│   ├── spacecraft_simulator_gui.py
+│   ├── style.py
+│   ├── __pycache__/
+│   └── gui_tab/
+│       ├── base_tab.py
+│       ├── constellation_tab.py
+│       ├── fault_tab.py
+│       ├── output_tab.py
+│       ├── target_tab.py
+│       ├── visualization_tab.py
+│       ├── __init__.py
+│       └── __pycache__/
+├── faults/
+│   ├── battery_fault.py
+│   ├── encoder_fault.py
+│   ├── friction_fault.py
+│   ├── powerlimit_fault.py
+│   ├── rw_fault.py
+│   └── __pycache__/
+├── logs/
+├── models/
+├── plots/
+├── plotting/
+├── scenarios/
+├── Vizfile/
+└── __pycache__/
+Brief Explanation of Components
+Root Directory
+
+
+
+BSK_masters.py: Likely contains master configurations or settings for the Basilisk simulation environment
+
+Core Directory
+
+run.py: Main entry point for running the simulation
+spacecraft_fault_cli.py: Command-line interface for spacecraft fault simulations
+spacecraft_fault_gui.py: GUI version for spacecraft fault simulations
+spacecraft_simulator_gui.py: Main GUI for the spacecraft simulator
+fault_loader.py: Utility for loading fault scenarios
+style.py: Styling configurations for the GUI
+gui_tab/: Contains different tabs for the GUI interface
+
+Various tab implementations (constellation, fault, target, etc.) for the simulator interface
+
+
+
+Faults Directory
+
+Contains modules for different types of spacecraft faults:
+
+battery_fault.py: Battery-related fault simulations
+encoder_fault.py: Encoder-related fault simulations
+friction_fault.py: Friction-related fault simulations
+powerlimit_fault.py: Power limitation fault simulations
+rw_fault.py: Reaction wheel fault simulations
+
+
+
+Other Directories
+
+logs/: Likely stores simulation log output
+models/: Probably contains spacecraft or component models
+plots/: May store generated plots from simulations
+plotting/: Contains plotting utilities and functions
+scenarios/: Stores predefined simulation scenarios
+Vizfile/: Likely contains visualization configuration or output
+
+The project appears to be a spacecraft simulation environment with a focus on fault simulation and analysis, with both GUI and CLI interfaces available.
+
+
+
+BskSim/
+├── BSK_masters.py              # Master script for Basilisk simulations
+├── Readme                      # Main README file
+├── core/                       # Core simulator modules
+│   ├── fault_loader.py         # Unified interface for fault modules
+│   ├── gui_tab/                # GUI tab components
+│   │   ├── __init__.py         # Package initialization
+│   │   ├── base_tab.py         # Base class for tabs
+│   │   ├── constellation_tab.py# Constellation management tab
+│   │   ├── fault_tab.py        # Fault configuration tab
+│   │   ├── output_tab.py       # Output settings tab
+│   │   ├── target_tab.py       # Target management tab
+│   │   └── visualization_tab.py# Visualization settings tab
+│   ├── run_fault_simulator.py  # Runner script for the GUI
+│   ├── rw_fault_help.py        # Help content module
+│   ├── spacecraft_simulation.py # Backend simulation engine (needs fixing)
+│   ├── spacecraft_simulator_gui.py # Main GUI application
+│   └── style.py                # GUI styling module
+├── faults/                     # Fault simulation modules
+│   ├── battery_fault.py        # Battery fault simulation
+│   ├── encoder_fault.py        # Encoder fault simulation
+│   ├── friction_fault.py       # Friction fault simulation
+│   ├── powerlimit_fault.py     # Power limit fault simulation
+│   └── rw_fault.py             # Base reaction wheel fault simulation
+├── logs/                       # Simulation log files (created on first run)
+├── models/                     # Basilisk model configurations
+│   ├── BSK_Dynamics.py         # Spacecraft dynamics models
+│   ├── BSK_FormationDynamics.py# Formation flying dynamics models 
+│   ├── BSK_FormationFsw.py     # Formation flying flight software models
+│   └── BSK_Fsw.py              # Flight software models
+├── plots/                      # Simulation plots (created on first run)
+├── plotting/                   # Plotting utility files
+│   └── BSK_Plotting.py         # Basilisk plotting utilities
+├── scenarios/                  # Predefined simulation scenarios
+└── Vizfile/                    # Visualization binary files (created on first run)
+    └── _VizFiles/              # Directory for Vizard binary files
+
+
+    Core Capabilities
+
+Constellation Management
+
+Create and configure multiple satellites with custom orbital parameters
+Support for various formation configurations
+Individual spacecraft property customization
+
+
+Fault Simulation
+
+Inject four fault types: friction, power limit, encoder, and battery
+Configure fault parameters (magnitude, timing, affected wheel)
+Support for periodic and one-time faults
+Apply faults to specific satellites and their respective plots as well 
+
+
+Target Management
+
+Define ground locations with name, coordinates, and color
+Assign targets to specific satellites
+Visualize targets on Earth in simulation
+
+
+Visualization
+
+Configure camera position and field of view
+Single camera view in Vizard for entire constellation
+3D visualization of spacecraft, Earth, and targets
+
+
+Results Analysis
+
+Generate plots of spacecraft behavior and fault effects
+Comprehensive simulation summary
+Binary file output for Vizard visualization
+
+
+
+GUI Structure
+
+Constellation Tab: Configure satellites and orbital parameters
+Fault Tab: Set up fault parameters for selected satellites
+Targets Tab: Manage ground locations and assignments
+Visualization Tab: Configure camera and display settings
+Output Tab: Set simulation parameters and logging options
+Results Tab: View and analyze simulation output
+
+Vizard Output
+
+3D visualization of all satellites in constellation
+Earth model with target markers
+Spacecraft components including reaction wheels
+Fault effects visible in spacecraft behavior
+Time controls for playback and analysis
+Camera view from selected spacecraft perspective
+
+Workflow
+
+Configure constellation of satellites
+Set up faults on specific spacecraft
+Define and assign targets
+Configure visualization settings
+Run simulation
+Analyze results through plots and 3D visualization
+
+The system enables engineers to study fault propagation in spacecraft systems, analyze constellation performance, and develop fault mitigation strategies through an intuitive, interactive interface.
+
+
