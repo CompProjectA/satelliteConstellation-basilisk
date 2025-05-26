@@ -91,9 +91,9 @@ filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
 
 # Import master classes: simulation base class and scenario base class
-sys.path.append(path + '/../')
-sys.path.append(path + '/../models')
-sys.path.append(path + '/../plotting')
+sys.path.append(path + '/../examples/BskSim')
+sys.path.append(path + '/../examples/BskSim/models')
+sys.path.append(path + '/../examples/BskSim/plotting')
 from BSK_masters import BSKSim, BSKScenario
 import BSK_Dynamics, BSK_Fsw
 import BSK_Plotting as BSK_plt

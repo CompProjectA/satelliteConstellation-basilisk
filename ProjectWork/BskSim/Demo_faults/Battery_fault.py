@@ -116,6 +116,7 @@ from Basilisk.simulation import simplePowerSink
 
 
 
+
 def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, planetCase):
     
 
@@ -146,7 +147,12 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
     scObject.ModelTag = "bskSat"
 
      
+    cameraLocation = [0.0, 2.0, 0.0]
 
+    targets = [ {"name": "Tokyo",          "lat":  35.68,   "lon": 139.77,   "color": "green"},
+                {"name": "Sri Lanka",      "lat":   6.9271, "lon":  79.8612, "color": "orange"},
+                {"name": "Central Africa", "lat":   1.5333, "lon":  17.6667, "color": "purple"}
+    ]
     
     # Create and configure the battery
     battery = simpleBattery.SimpleBattery()
@@ -264,7 +270,7 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
    
     
 
-    gsList.append([batteryPanel, solarViz])
+    gsList.append([batteryPanel])
   
  
     ##################################################### 
@@ -307,7 +313,7 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
         oe.e = 1.0 - rLEO / oe.a
         oe.i = 0.0 * macros.D2R
     else:                   # LEO case, default case 0
-        oe.a = rLEO
+        oe.a = (6371e3 + 1700e3)
         oe.e = 0.0001
         oe.i = 33.3 * macros.D2R
     oe.Omega = 48.2 * macros.D2R
@@ -369,22 +375,41 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
                                             showGenericStoragePanel=True)
         
 
-        scSim.viz = viz  
-        threshold = 0.25 * battery.storageCapacity
-        battRec = battery.batPowerOutMsg.recorder(simulationTimeStep)
-        scSim.AddModelToTask(simTaskName, battRec)
-        scSim.battRec = battRec
+        
 
-        bodyName = planetCase.lower()    # 'earth' or 'mars'
+        for tgt in targets:
+            lat = tgt["lat"]
+            lon = tgt["lon"]
+            color = tgt.get("color", "red")
+            alt = 0.0
+            radius = 6371000.0 + alt
+            lat_rad = lat * macros.D2R
+            lon_rad = lon * macros.D2R
+            x = radius * np.cos(lat_rad) * np.cos(lon_rad)
+            y = radius * np.cos(lat_rad) * np.sin(lon_rad)
+            z = radius * np.sin(lat_rad)
+            location_position = [x, y, z]
 
+            vizSupport.addLocation(
+               viz,
+                stationName=tgt["name"],
+                parentBodyName="earth",
+                r_GP_P=location_position,
+                color=color
+            )
+
+        # mount one camera on your sat 
         vizSupport.createStandardCamera(
             viz,
-            setMode=0,                   # 0 → body-targeting mode
-            bodyTarget=bodyName,         # name of the celestial body to track
-            setView=0,                   # camera looks at body center
-            displayName="ScienceCam",    # name
-            fieldOfView=30 * macros.D2R  # keep your 10° FOV
-    )
+            setMode         = 1,                # 1 → spacecraft-attached mode
+            spacecraftName  = scObject.ModelTag,
+            displayName     = "BatteryCam",
+            fieldOfView     = 30 * macros.D2R,
+            pointingVector_B= [0.0, 0.0, 0.0],  # look forward in +X
+            position_B      = cameraLocation,
+            
+           
+        )
         
         
       
@@ -492,6 +517,24 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
     pltName = fileName + "2" + orbitCase + str(int(useSphericalHarmonics)) + planetCase
     figureList[pltName] = plt.figure(2)
 
+    # Retrieve the battery log you set up earlier
+    timeData = batteryLog.times() * macros.NANO2SEC        
+    storageData = batteryLog.storageLevel                  
+    
+    # Plot storage level
+    plt.figure()
+    plt.plot(timeData, storageData, label='Battery Stored Charge')
+    
+    # Mark the fault injection moment
+    faultTime = macros.min2nano(60.0) * macros.NANO2SEC     
+    plt.axvline(x=faultTime, color='r', linestyle='--', label='Fault Injected (–50 W sink)')
+    
+    plt.xlabel('Time [s]')
+    plt.ylabel('Stored Charge [Wh]')
+    plt.title('Battery Storage Level with Fault Injection')
+    plt.legend()
+    plt.grid()
+
     if show_plots:
         plt.show()
 
@@ -506,7 +549,7 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
 #
 if __name__ == "__main__":
     run(
-        False,        # show_plots
+        True,        # show_plots
         True,        # liveStream
         1.0,         # time step (s)
         'LEO',       # orbit Case (LEO, GTO, GEO)
