@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 #!/usr/bin/env python
 """
 friction_fault.py
@@ -477,7 +477,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     run(not args.no_plots, not args.no_binary)
-=======
+
 # Import necessary standard libraries
 import inspect
 import os
@@ -703,4 +703,3 @@ def run(showPlots=True):
 # Run the script if executed directly
 if __name__ == "__main__":
     run(True)
->>>>>>> 9c8a324ff15d33b7979c87ea7ab87c1d132658e7
