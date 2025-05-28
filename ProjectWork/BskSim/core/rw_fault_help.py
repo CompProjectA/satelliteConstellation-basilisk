@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 rw_fault_help.py
 
@@ -7,10 +8,8 @@ Contains help content for the Spacecraft Constellation Fault Simulator.
 
 def get_general_help(section="overview"):
     """Get general help content about the simulator"""
-    
     help_sections = {
-        "overview": """
-Spacecraft Constellation Fault Simulator
+        "overview": """Spacecraft Constellation Fault Simulator
 =======================================
 
 The Spacecraft Constellation Fault Simulator allows you to model multiple satellites 
@@ -28,11 +27,9 @@ Key features:
 - Inject different fault types into reaction wheels
 - Assign observation targets to specific satellites
 - Configure camera positions for visualization
-- View simulation results in plots and 3D visualization
-""",
-        
-        "simulation": """
-Simulation Settings
+- View simulation results in plots and 3D visualization""",
+
+        "simulation": """Simulation Settings
 ==================
 
 Simulation Parameters:
@@ -51,355 +48,225 @@ Workflow:
 4. Configure visualization in the Visualization tab
 5. Set output options in the Output Settings tab
 6. Click the Run Simulation button
-7. View results in the Results tab or open Vizard for 3D visualization
-""",
-        
-        "visualization": """
-Visualization Settings
+7. View results in the Results tab or open Vizard for 3D visualization""",
+
+        "visualization": """Visualization Settings
 ====================
 
-The simulator outputs visualization files that can be viewed in Vizard:
-
-- Binary files contain time history of spacecraft state
-- Camera position can be adjusted to change viewpoint
-- Ground targets are shown on Earth's surface
-- Reaction wheels are visualized with their spin axes
-
-To view the visualization:
-1. Run a simulation with 'Save Binary' enabled
-2. Open the Vizard application
-3. Load the generated binary file from the Vizfile directory
+The Visualization tab controls how the simulation appears in Vizard and the preview.
 
 Camera Configuration:
-- Each satellite can have one camera defined
-- Only one satellite's camera can be active at a time
-- Camera position is defined in the body frame of the satellite
-- Field of view controls how much the camera can see
-- Use the preset buttons for common viewing angles
+- Select which satellite has the active camera
+- Set camera position relative to the satellite body frame
+- Adjust field of view (FOV) for wider or narrower viewing angle
+- Use presets for common viewing angles (Earth View, Target View, etc.)
 
-For best constellation visibility:
-- Use the Earth View preset with a Z value of 50000 or higher
-- This positions the camera far above the spacecraft
-- Increase field of view to see more of the environment
+Orbit Control:
+- Show/hide individual satellite orbits
+- Adjust orbit line width and transparency
+- Master controls to show/hide all orbits at once
 
-Vizard Controls:
-- In Vizard, use the camera dropdown to switch between views
-- Adjust the Field of View to see more or less of the scene
-- Use the time slider at the bottom to control simulation playback
-- Camera settings can be adjusted in the left panel
-"""
-    }
-    
-    return help_sections.get(section, help_sections["overview"])
+Satellite Display:
+- Toggle satellite name labels
+- Adjust satellite size multiplier for visibility
+- Choose color schemes (distinct, rainbow, cool, warm)
+- View satellite information including altitude and assignments
 
-def get_help_content(topic):
-    """Get help content for a specific topic"""
-    
-    help_topics = {
-        "constellation": """
-Constellation Configuration
+Target Settings:
+- Set target altitude above Earth surface
+- Adjust target marker size
+- Show/hide assignment connections between satellites and targets
+- View target assignment summary
+
+The visualization preview shows a simplified 3D view of your constellation.
+The actual Vizard visualization will show full orbital dynamics and motion.""",
+
+        "constellation": """Constellation Configuration
 =========================
 
-The Constellation tab allows you to configure multiple satellites in formation.
+The Constellation tab manages satellite creation and orbital parameters.
 
-You can add, remove, and modify satellite orbital parameters:
-- Semi-major axis (a): Distance from the center of orbit to the farthest point
-- Eccentricity (e): How much the orbit deviates from a perfect circle
-- Inclination (i): Tilt of the orbit with respect to the equator
-- RAAN (Ω): Right Ascension of the Ascending Node
-- Argument of Periapsis (ω): Defines the orientation of the orbit
-- True Anomaly (f): Position of the satellite in its orbit
+Orbit Management:
+- Create multiple orbit configurations (Default, MEO Navigation, High Coverage)
+- Each orbit has altitude and inclination parameters
+- Delete unused orbits (must be empty)
 
-Adding Satellites:
-1. Click "Add Satellite" to add individual satellites
-2. Use "Add Multiple" to create a constellation with evenly spaced satellites
-3. The "True Anomaly" parameter determines the satellite's position in orbit
+Quick Setup Buttons:
+- 4-Sat Default: Creates 4 satellites at 600km altitude
+- 6-Sat MEO: Creates 6 satellites at 1200km altitude  
+- 2-Sat High: Creates 2 satellites at 2000km altitude
 
-Tips:
-- For better visualization, use semi-major axis values above 7000 km
-- Set different inclinations for more interesting orbital dynamics
-- Space satellites evenly in true anomaly for symmetric constellations
-""",
-        
-        "fault": """
-Fault Configuration
+Satellite List:
+- Shows all satellites with their orbit and altitude
+- Add/remove individual satellites
+- Displays orbit assignment and altitude for each satellite
+
+Satellite Details:
+- Edit satellite name
+- Change orbit assignment (moves satellite to new orbit)
+- Adjust position in orbit (true anomaly in degrees)
+- View orbital parameters and coverage information
+
+Orbital Parameters:
+- Semi-major axis (a): Earth radius + altitude in km
+- Eccentricity (e): Shape of orbit (kept small for circular orbits)
+- Inclination (i): Angle between orbit and equator
+- RAAN (Ω): Right ascension of ascending node
+- Argument of periapsis (ω): Orientation of orbit ellipse
+- True anomaly (f): Position along the orbit
+
+All satellites in the same orbit share the same orbital plane.""",
+
+        "fault": """Fault Configuration
 =================
 
-The Fault Configuration tab allows you to inject various faults into spacecraft components.
+The Fault tab configures reaction wheel failures for individual satellites.
 
-Supported fault types include:
+Fault Types:
+1. Friction: Adds mechanical resistance to wheel rotation
+   - Simulates bearing damage or contamination
+   - Magnitude in N⋅m (higher = more severe)
 
-Friction Fault:
-- Adds additional friction to the reaction wheel, simulating mechanical issues like bearing damage
-- Magnitude: 0.0001-0.001 typical (dimensionless friction coefficient)
-- Effect: Reduces wheel acceleration capability and increases power consumption
+2. Power Limit: Restricts maximum electrical power to wheel
+   - Simulates power system degradation
+   - Magnitude in Watts (lower = more severe)
 
-Power Limit Fault:
-- Restricts maximum power available to the reaction wheel, simulating power system limitations
-- Magnitude: 0.2-1.0 typical (Watts)
-- Effect: Limits maximum torque the wheel can provide
+3. Encoder: Causes measurement errors in wheel speed
+   - Simulates sensor failures
+   - Results in control oscillations
 
-Encoder Fault:
-- Causes measurement errors in the wheel speed feedback
-- Effect: Results in attitude control errors and potential instability
+4. Battery: Increases power consumption
+   - Simulates battery degradation
+   - Magnitude in kW additional drain
 
-Battery Fault:
-- Simulates increased power consumption or battery degradation
-- Magnitude: 0.01-0.1 typical (kW drain)
-- Effect: Reduces available power for all spacecraft systems
-
-Fault Configuration:
-- Enable the fault using the checkbox
-- Select the fault type from the radio buttons
-- Set the magnitude appropriate for the fault type
-- Select which reaction wheel to affect (0-3)
-- Set the time when the fault occurs (in minutes)
+Fault Parameters:
+- Enable Fault: Turns fault on/off for selected satellite
+- Wheel Number: Which reaction wheel (0-3) is affected
+- Fault Time: When to inject the fault (minutes into simulation)
+- Magnitude: Severity of the fault (units depend on fault type)
 
 Periodic Faults:
-- Enable periodic faults to simulate intermittent issues
-- Set interval (seconds), magnitude, and affected wheel
-- Useful for simulating cyclical environmental effects or degradation
-""",
-        
-        "target": """
-Target Configuration
+- Enable recurring faults at set intervals
+- Interval: Time between fault occurrences (seconds)
+- Can affect different wheel than main fault
+
+Apply Options:
+- Apply to selected satellite only
+- Apply same configuration to all satellites""",
+
+        "target": """Target Configuration
 ==================
 
-The Targets tab allows you to define ground locations that the spacecraft will observe.
+The Target tab manages ground locations for satellite observations.
 
-For each target, you can specify:
-- Name: Identifier for the location
-- Latitude: North-south position (-90° to 90°)
-- Longitude: East-west position (-180° to 180°)
-- Color: Visual representation in the simulation
-- Priority: Importance level (1-5)
+Target List:
+- Shows all defined targets with assignment status
+- Add/remove targets individually
+- Generate random targets at major cities
+
+Target Details:
+- Name: Identifier for the target location
+- Latitude: -90 to 90 degrees
+- Longitude: -180 to 180 degrees  
+- Priority: 1-5 (higher = more important)
+- Color: Visual marker color in Vizard
 
 Target Assignment:
-- Select a target from the list
-- Choose a satellite from the dropdown
-- Click "Assign Target" to link them
-- Assignments are shown in the Current Assignments box
+- Assign targets to specific satellites
+- Multiple satellites can observe same target
+- Only assigned targets appear in Vizard visualization
+- Auto-assign distributes targets evenly
 
-Auto-Assignment:
-- The "Auto-Assign Targets" button will distribute targets among satellites
-- Higher priority targets are assigned first
-- Targets are distributed evenly among available satellites
+Coverage Map:
+- Visual representation of target locations
+- Shows assignment status with different markers
+- VISIBLE: Target can be seen by assigned satellite
+- ASSIGNED: Target assigned but may not be visible
+- NOT VISIBLE: Unassigned targets
 
-Target Map:
-- Shows a visual representation of all targets
-- Assigned targets are shown with stars, unassigned with circles
-- Larger markers indicate higher priority targets
-- Colors match those used in the visualization
+Coverage Analysis:
+- Check Coverage button analyzes all targets
+- Reports which targets are visible based on satellite altitude
+- Satellites need >200km altitude for good coverage
+- Provides recommendations for improving coverage""",
 
-Random Target Generation:
-- "Generate Random Targets" creates locations around the world
-- Useful for quickly populating the simulation with observation points
-- You can clear existing targets when generating new ones
-""",
-        
-        "visualization": """
-Visualization Configuration
-=========================
-
-The Visualization tab configures how the spacecraft simulation is rendered in 3D.
-
-Camera Settings:
-- Position: Location of the camera in the body frame
-- Field of View: Width of the visible area (in degrees)
-- Only one camera can be active at a time
-
-Presets:
-- Side View: Camera positioned to view from the side
-- Top View: Camera positioned above the spacecraft
-- Front View: Camera positioned in front of the spacecraft
-- Earth View: Camera positioned far away to view the constellation
-
-For Best Results:
-- Use high Z values (15000+) to see the entire constellation
-- Use wider field of view (90-120 degrees) for better visibility
-- Enable only one camera to avoid conflicts
-- The "Disable Other Cameras" button ensures only one camera is active
-
-Camera Preview:
-- Shows a 3D representation of the spacecraft and camera
-- Helps visualize the field of view and camera positioning
-- Blue cone represents the camera's field of view
-- Colored dots represent assigned targets
-
-Visualization Binary Files:
-- Generated binary files can be opened in Vizard
-- Binaries are saved in the Vizfile directory
-- Each simulation creates a new binary file
-- Target locations and spacecraft trajectories are included
-""",
-        
-        "output": """
-Output Settings
+        "output": """Output Settings
 =============
 
-The Output Settings tab controls how simulation results are saved and displayed.
+The Output tab controls simulation parameters and logging.
 
 Simulation Settings:
-- Simulation Time: Duration of the simulation in minutes
-- Show Plots: Display plots immediately after simulation
-- Save Plots: Save plots as image files
-- Save Binary: Generate visualization file for Vizard
+- Simulation Time: Total duration in minutes
+- Quick presets: 10, 30, 60, 90 minute buttons
+- Typical simulations run 30-60 minutes
 
-Directory Settings:
-- Logs Directory: Where simulation logs and summaries are saved
-- Plots Directory: Where plot images are saved
-- Vizard Files Directory: Where binary visualization files are saved
+Output Options:
+- Show Plots: Display graphs during/after simulation
+- Save Plots: Store plot images to disk
+- Save Binary: Create Vizard visualization file
+
+File Directories:
+- Logs Directory: Simulation summaries and data
+- Plots Directory: Generated graphs and charts
+- Vizard Files Directory: Binary files for 3D visualization
+- Reset to Defaults: Restore standard directory paths
 
 Binary Filename:
-- Base name for the visualization binary file
-- "_UnityViz.bin" will be appended automatically
-- Use only alphanumeric characters and underscores
+- Name for the Vizard visualization file
+- Don't include extension (.bin added automatically)
+- File saved in Vizfile/_VizFiles/ directory
 
 Simulation Log:
-- Shows real-time messages during simulation
-- Records errors and warnings
-- Displays information about the simulation progress
-- Can be cleared with the "Clear Log" button
+- Real-time updates during simulation
+- Shows configuration changes and progress
+- Save log to file for record keeping
+- Clear log to remove old messages
+- Auto-scroll keeps latest messages visible
 
-Opening Results:
-- Results can be viewed directly in the Results tab
-- "Open Results Folder" button opens the plots directory
-- Binary files can be opened in Vizard after simulation
-""",
-        
-        "friction": """
-Friction Fault Details
-====================
+The simulation generates:
+- Summary text files with configuration details
+- Plot images showing spacecraft behavior
+- Binary file for Vizard 3D visualization""",
 
-The friction fault simulates increased friction in a reaction wheel, which can occur due to:
-- Bearing damage or wear
-- Lubricant degradation
-- Contamination or debris
-- Mechanical misalignment
+        "results": """Results Tab
+===========
 
-Parameters:
-- Magnitude: Friction coefficient (typical range: 0.0001-0.001)
-- Wheel: Which reaction wheel to affect (0-3)
-- Time: When the fault occurs during simulation (minutes)
+The Results tab displays simulation outputs and analysis.
 
-Effects:
-- Reduced wheel acceleration
-- Increased power consumption
-- Potential attitude control errors
-- Possible wheel speed saturation
+Plot List:
+- Shows all generated plots from simulations
+- Sorted by creation time (newest first)
+- Click to view plot in main display
 
-Characteristic Plots:
-- Wheel speed shows reduced acceleration and deceleration
-- Friction torque increases for the affected wheel
-- Higher power consumption for the affected wheel
-- Attitude errors may increase during maneuvers
+Plot Viewer:
+- Displays selected plot with zoom/pan controls
+- Navigation toolbar for plot interaction
+- Export plot in various formats (PNG, PDF, SVG)
 
-Mitigation Strategies:
-- Fault detection and isolation
-- Controller retuning
-- Wheel speed avoidance regions
-- Switching to redundant wheels
-""",
-        
-        "power_limit": """
-Power Limit Fault Details
-=======================
+Available Plots:
+- Constellation orbit plots
+- Inter-satellite distance graphs
+- Fault effect visualizations
+- Reaction wheel behavior
+- Attitude control performance
 
-The power limit fault simulates restrictions in the maximum power available to a reaction wheel, which can occur due to:
-- Battery degradation
-- Solar panel damage
-- Power distribution issues
-- Thermal constraints
+Plot Information:
+- Filename and creation timestamp
+- File size
+- Analysis notes
 
-Parameters:
-- Magnitude: Maximum power limit in Watts (typical range: 0.2-1.0)
-- Wheel: Which reaction wheel to affect (0-3)
-- Time: When the fault occurs during simulation (minutes)
+Using Results:
+1. Run simulation to generate plots
+2. Select plot from list to view
+3. Use toolbar to zoom/pan for details
+4. Export plots for reports/presentations
+5. Open results folder to access all files
 
-Effects:
-- Limited maximum torque
-- Reduced maneuver capability
-- Increased settling time
-- Potential stability issues during high-demand maneuvers
-
-Characteristic Plots:
-- Wheel torque saturates at the power limit
-- Wheel speed shows rate limiting
-- Attitude errors increase during rapid maneuvers
-- Control effort may oscillate near the limit
-
-Mitigation Strategies:
-- Reduced maneuver rates
-- Modified controller gains
-- Load balancing across wheels
-- Alternate attitude control methods (e.g., magnetorquers)
-""",
-        
-        "encoder": """
-Encoder Fault Details
-===================
-
-The encoder fault simulates errors in the wheel speed measurements, which can occur due to:
-- Sensor damage
-- Electrical interference
-- Communication errors
-- Software glitches
-
-Parameters:
-- Wheel: Which reaction wheel encoder to affect (0-3)
-- Time: When the fault occurs during simulation (minutes)
-
-Effects:
-- Inaccurate control feedback
-- Oscillations in wheel speed
-- Attitude pointing errors
-- Potential instability
-
-Characteristic Plots:
-- Reported wheel speed differs from actual speed
-- Wheel command shows oscillatory behavior
-- Attitude errors exhibit high-frequency components
-- Control effort may become erratic
-
-Mitigation Strategies:
-- Sensor filtering and fusion
-- Robust control techniques
-- Observer-based state estimation
-- Fault detection and reconfiguration
-""",
-        
-        "battery": """
-Battery Fault Details
-===================
-
-The battery fault simulates increased power consumption or battery degradation, which can affect the entire spacecraft:
-- Cell degradation
-- Short circuits
-- Charge controller failure
-- Thermal runaway
-
-Parameters:
-- Magnitude: Additional power drain in kW (typical range: 0.01-0.1)
-- Time: When the fault occurs during simulation (minutes)
-
-Effects:
-- Reduced available power for all systems
-- Faster battery depletion
-- Potential power cycling of non-critical components
-- Limited operational capability
-
-Characteristic Plots:
-- Battery state of charge decreases more rapidly
-- Power generation vs. consumption balance shifts
-- System voltage may show drops during high-demand periods
-- Power management system may activate load shedding
-
-Mitigation Strategies:
-- Power conservation modes
-- Reduced duty cycles
-- Prioritization of critical systems
-- Adjusting orbit for better solar illumination
-"""
+The plots help analyze:
+- Fault impact on spacecraft performance
+- Constellation geometry over time
+- Target visibility windows
+- System behavior during failures"""
     }
-    
-    return help_topics.get(topic, f"No help content available for: {topic}")
+
+    return help_sections.get(section, help_sections["overview"])
