@@ -57,7 +57,8 @@ class FaultTab(BaseTab):
         # Satellite selection at the top
         select_frame = ttk.Frame(self.parent_frame)
         select_frame.pack(fill=tk.X, pady=(0, 10))
-        
+
+      
         ttk.Label(select_frame, text="Select Satellite:").pack(side=tk.LEFT)
         
         self.fault_satellite_var = tk.StringVar()
@@ -79,8 +80,8 @@ class FaultTab(BaseTab):
         fault_config_frame = ttk.LabelFrame(self.parent_frame, text="Fault Configuration", padding=10)
         fault_config_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Add help button
-        self.add_help_button(fault_config_frame, "Fault Configuration", "fault")
+       
+    
         
         # Enable fault checkbox
         self.fault_enabled_var = tk.BooleanVar(value=False)
@@ -136,8 +137,7 @@ class FaultTab(BaseTab):
         periodic_frame = ttk.LabelFrame(fault_config_frame, text="Periodic Fault", padding=10)
         periodic_frame.pack(fill=tk.X, pady=5)
         
-        # Add help button for periodic faults
-        self.add_help_button(periodic_frame, "Periodic Fault", "periodic")
+        
         
         # Enable periodic fault
         self.periodic_enabled_var = tk.BooleanVar(value=False)

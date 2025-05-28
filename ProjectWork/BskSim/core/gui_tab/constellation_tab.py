@@ -2,41 +2,118 @@
 """
 constellation_tab.py
 
-Implements the Constellation Management tab for the Spacecraft Constellation Fault Simulator.
-FIXED: Simplified satellite names, better orbital altitudes for visibility, improved display
+Implements the Constellation Management tab with multiple orbit support.
 """
 import tkinter as tk
 from tkinter import ttk, messagebox
 import numpy as np
-from .base_tab import BaseTab
+
+# Import base tab - handle import error gracefully
+try:
+    from .base_tab import BaseTab
+except ImportError:
+    # Fallback BaseTab if import fails
+    class BaseTab:
+        def __init__(self, parent_app, parent_frame):
+            self.parent_app = parent_app
+            self.parent_frame = parent_frame
+        
+        def add_help_button(self, parent, title, topic=None, command=None):
+            pass
+        
+        def add_log(self, message):
+            if hasattr(self.parent_app, 'add_log'):
+                self.parent_app.add_log(message)
 
 class ConstellationTab(BaseTab):
-    """Constellation Management tab implementation"""
+    """Constellation Management tab with multiple orbit support"""
     
     def __init__(self, parent_app, parent_frame):
-        """
-        Initialize the constellation tab
-        
-        Parameters:
-        parent_app (SatelliteSimulatorApp): The parent application instance
-        parent_frame (ttk.Frame): The parent frame to build the tab in
-        """
+        """Initialize the constellation tab"""
         super().__init__(parent_app, parent_frame)
         
         # Store references to parent app data
         self.satellites = parent_app.satellites
         self.current_satellite_index = parent_app.current_satellite_index
         
+        # Orbit configurations - support multiple orbits
+        self.orbit_configurations = [
+            {
+                "name": "Default Orbit",
+                "altitude": 600,  # km above Earth
+                "inclination": 53.0,
+                "satellites": []
+            },
+            {
+                "name": "MEO Navigation", 
+                "altitude": 1200,  # km above Earth
+                "inclination": 55.0,
+                "satellites": []
+            },
+            {
+                "name": "High Coverage",
+                "altitude": 2000,  # km above Earth
+                "inclination": 98.0,  # Near polar
+                "satellites": []
+            }
+        ]
+
+        
         # Create the tab UI
         self.create_tab_ui()
         
     def create_tab_ui(self):
-        """Create the Constellation Management tab UI"""
-        # Split into two frames
-        left_frame = ttk.Frame(self.parent_frame)
+        """Create the Constellation Management tab UI with orbit support"""
+        # Main container
+        main_container = ttk.Frame(self.parent_frame)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Orbit Management Section
+        orbit_frame = ttk.LabelFrame(main_container, text="Orbit Management", padding=10)
+        orbit_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Orbit selection and creation
+        orbit_controls = ttk.Frame(orbit_frame)
+        orbit_controls.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(orbit_controls, text="Select Orbit:").pack(side=tk.LEFT)
+        
+        self.current_orbit_var = tk.StringVar()
+        self.orbit_combo = ttk.Combobox(orbit_controls, textvariable=self.current_orbit_var)
+        self.orbit_combo.pack(side=tk.LEFT, padx=5)
+        self.update_orbit_combo()
+        
+        # Orbit buttons
+        ttk.Button(orbit_controls, text="New Orbit", 
+                  command=self.create_new_orbit).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(orbit_controls, text="Delete Orbit", 
+                  command=self.delete_orbit).pack(side=tk.LEFT, padx=5)
+        
+        # Quick constellation buttons
+        quick_frame = ttk.Frame(orbit_frame)
+        quick_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(quick_frame, text="Quick Setup:").pack(side=tk.LEFT)
+        
+        ttk.Button(quick_frame, text="4-Sat Default", 
+                command=lambda: self.create_constellation(4, "Default Orbit")).pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(quick_frame, text="6-Sat MEO", 
+                command=lambda: self.create_constellation(6, "MEO Navigation")).pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(quick_frame, text="2-Sat High", 
+                command=lambda: self.create_constellation(2, "High Coverage")).pack(side=tk.LEFT, padx=2)
+
+        
+        # Split main area
+        split_frame = ttk.Frame(main_container)
+        split_frame.pack(fill=tk.BOTH, expand=True)
+        
+        left_frame = ttk.Frame(split_frame)
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         
-        right_frame = ttk.Frame(self.parent_frame)
+        right_frame = ttk.Frame(split_frame)
         right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
         
         # Satellite list on the left
@@ -51,34 +128,13 @@ class ConstellationTab(BaseTab):
                              command=self.add_new_satellite)
         add_btn.pack(side=tk.LEFT, padx=5)
         
-        # Add multi-satellite option
-        multi_frame = ttk.Frame(btn_frame)
-        multi_frame.pack(side=tk.LEFT, padx=5)
-        
-        ttk.Label(multi_frame, text="Add Multiple:").pack(side=tk.LEFT)
-        self.num_satellites_var = tk.IntVar(value=4)
-        num_satellites_spin = ttk.Spinbox(multi_frame, from_=2, to=8, 
-                                          textvariable=self.num_satellites_var, width=5)
-        num_satellites_spin.pack(side=tk.LEFT, padx=5)
-        
-        add_multi_btn = ttk.Button(multi_frame, text="Add Constellation", 
-                                  command=self.add_multiple_satellites)
-        add_multi_btn.pack(side=tk.LEFT, padx=5)
-        
         remove_btn = ttk.Button(btn_frame, text="Remove Satellite", 
                                 command=self.remove_satellite)
-        remove_btn.pack(side=tk.RIGHT, padx=5)
+        remove_btn.pack(side=tk.LEFT, padx=5)
         
-        # Display options
-        display_frame = ttk.Frame(list_frame)
-        display_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Label(display_frame, text="Display:").pack(side=tk.LEFT)
-        self.show_details_var = tk.BooleanVar(value=False)
-        details_check = ttk.Checkbutton(display_frame, text="Show Details", 
-                                      variable=self.show_details_var,
-                                      command=self.update_satellite_listbox)
-        details_check.pack(side=tk.LEFT, padx=5)
+        # Satellite count display
+        self.sat_count_label = ttk.Label(btn_frame, text="Total: 0 satellites")
+        self.sat_count_label.pack(side=tk.RIGHT, padx=5)
         
         # Satellite listbox with scrollbar
         list_container = ttk.Frame(list_frame)
@@ -114,222 +170,253 @@ class ConstellationTab(BaseTab):
         name_entry = ttk.Entry(name_frame, textvariable=self.sat_name_var)
         name_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         
-        # Orbit parameters
-        orbit_frame = ttk.LabelFrame(details_frame, text="Orbit Parameters", padding=10)
-        orbit_frame.pack(fill=tk.X, pady=5)
+        # Orbit assignment
+        orbit_assign_frame = ttk.Frame(details_frame)
+        orbit_assign_frame.pack(fill=tk.X, pady=5)
         
-        # FIXED: Better orbital parameters for improved visibility
-        orbit_params = [
-            ("Semi-major axis (km):", "a", 8000.0),  # FIXED: Higher altitude for better visibility
-            ("Eccentricity:", "e", 0.05),            # Small eccentricity for stable orbit
-            ("Inclination (deg):", "i", 55.0),       # Good for ground coverage
-            ("RAAN (deg):", "Omega", 45.0),          # Right ascension of ascending node
-            ("Arg. of Periapsis (deg):", "omega", 30.0),  # Argument of periapsis
-            ("True Anomaly (deg):", "f", 0.0)        # True anomaly - user specified
-        ]
+        ttk.Label(orbit_assign_frame, text="Assigned Orbit:").pack(side=tk.LEFT)
+        self.sat_orbit_var = tk.StringVar()
+        orbit_assign_combo = ttk.Combobox(orbit_assign_frame, textvariable=self.sat_orbit_var)
+        orbit_assign_combo.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        orbit_assign_combo['values'] = [orbit['name'] for orbit in self.orbit_configurations]
         
-        self.orbit_vars = {}
-        for i, (label_text, param_name, default_val) in enumerate(orbit_params):
-            param_frame = ttk.Frame(orbit_frame)
-            param_frame.pack(fill=tk.X, pady=2)
-            
-            ttk.Label(param_frame, text=label_text).pack(side=tk.LEFT)
-            
-            self.orbit_vars[param_name] = tk.DoubleVar(value=default_val)
-            entry = ttk.Entry(param_frame, textvariable=self.orbit_vars[param_name], width=10)
-            entry.pack(side=tk.RIGHT)
+        # Orbit parameters (read-only display)
+        orbit_info_frame = ttk.LabelFrame(details_frame, text="Orbit Parameters", padding=10)
+        orbit_info_frame.pack(fill=tk.X, pady=5)
         
-        # Orbital period calculator and presets
-        period_frame = ttk.LabelFrame(orbit_frame, text="Orbital Period Control", padding=5)
-        period_frame.pack(fill=tk.X, pady=5)
+        self.orbit_info_text = tk.Text(orbit_info_frame, height=6, state="disabled", font=('Consolas', 9))
+        self.orbit_info_text.pack(fill=tk.X)
         
-        # Current period display
-        period_info_frame = ttk.Frame(period_frame)
-        period_info_frame.pack(fill=tk.X, pady=2)
+        # Position in orbit
+        position_frame = ttk.Frame(details_frame)
+        position_frame.pack(fill=tk.X, pady=5)
         
-        ttk.Label(period_info_frame, text="Current Period:").pack(side=tk.LEFT)
-        self.period_label = ttk.Label(period_info_frame, text="-- minutes", font=('Segoe UI', 9, 'italic'))
-        self.period_label.pack(side=tk.LEFT, padx=5)
+        ttk.Label(position_frame, text="Position in Orbit (degrees):").pack(side=tk.LEFT)
+        self.true_anomaly_var = tk.DoubleVar(value=0.0)
+        position_entry = ttk.Entry(position_frame, textvariable=self.true_anomaly_var, width=10)
+        position_entry.pack(side=tk.LEFT, padx=5)
         
-        # Period presets - FIXED: Better visibility presets
-        preset_frame = ttk.Frame(period_frame)
-        preset_frame.pack(fill=tk.X, pady=2)
+        # Coverage info
+        coverage_frame = ttk.LabelFrame(details_frame, text="Coverage Information", padding=5)
+        coverage_frame.pack(fill=tk.X, pady=5)
         
-        ttk.Label(preset_frame, text="Quick Presets:").pack(side=tk.LEFT)
-        
-        preset_5min_btn = ttk.Button(preset_frame, text="5 min (Fast)", 
-                                    command=lambda: self.set_orbital_period(5.0))
-        preset_5min_btn.pack(side=tk.LEFT, padx=2)
-        
-        preset_15min_btn = ttk.Button(preset_frame, text="15 min (Good)", 
-                                     command=lambda: self.set_orbital_period(15.0))
-        preset_15min_btn.pack(side=tk.LEFT, padx=2)
-        
-        preset_30min_btn = ttk.Button(preset_frame, text="30 min (Best)", 
-                                     command=lambda: self.set_orbital_period(30.0))
-        preset_30min_btn.pack(side=tk.LEFT, padx=2)
-        
-        preset_90min_btn = ttk.Button(preset_frame, text="90 min (ISS)", 
-                                     command=lambda: self.set_orbital_period(90.0))
-        preset_90min_btn.pack(side=tk.LEFT, padx=2)
-        
-        # Custom period setter
-        custom_frame = ttk.Frame(period_frame)
-        custom_frame.pack(fill=tk.X, pady=2)
-        
-        ttk.Label(custom_frame, text="Custom Period (min):").pack(side=tk.LEFT)
-        self.custom_period_var = tk.DoubleVar(value=30.0)  # FIXED: Default to 30 minutes
-        custom_entry = ttk.Entry(custom_frame, textvariable=self.custom_period_var, width=8)
-        custom_entry.pack(side=tk.LEFT, padx=5)
-        
-        custom_btn = ttk.Button(custom_frame, text="Apply", 
-                               command=lambda: self.set_orbital_period(self.custom_period_var.get()))
-        custom_btn.pack(side=tk.LEFT, padx=2)
-        
-        # Calculate period button
-        calc_btn = ttk.Button(preset_frame, text="Calculate", 
-                             command=self.calculate_current_period)
-        calc_btn.pack(side=tk.RIGHT, padx=5)
-        
-        # Add helpful notes - FIXED: Better guidance
-        notes_frame = ttk.Frame(orbit_frame)
-        notes_frame.pack(fill=tk.X, pady=5)
-        note_text = ("FIXED: Default altitude is now 1629km for better visibility.\n"
-                    "30-minute orbits provide good target viewing opportunities.\n"
-                    "Higher altitudes = slower orbits, better for camera work.")
-        ttk.Label(notes_frame, text=note_text, style="Info.TLabel", wraplength=400).pack(anchor=tk.W)
+        self.coverage_info_label = ttk.Label(coverage_frame, text="Select satellite to view coverage", 
+                                           style="Info.TLabel")
+        self.coverage_info_label.pack(fill=tk.X)
         
         # Update button
         update_btn = ttk.Button(details_frame, text="Update Satellite", 
                                command=self.update_current_satellite)
         update_btn.pack(pady=10)
         
-        # Bind orbit parameter changes to update period display
-        for var in self.orbit_vars.values():
-            var.trace('w', self.on_orbit_param_changed)
-        
-        # Select the first satellite
+        # Select the first satellite if available
         if self.satellites:
             self.satellite_listbox.selection_set(0)
             self.on_satellite_selected(None)
     
+    def update_orbit_combo(self):
+        """Update orbit combination dropdown"""
+        orbit_names = [orbit['name'] for orbit in self.orbit_configurations]
+        self.orbit_combo['values'] = orbit_names
+        if orbit_names:
+            self.orbit_combo.current(0)
+    
+    def create_new_orbit(self):
+        """Create a new orbit configuration"""
+        # Simple dialog for orbit parameters
+        dialog = tk.Toplevel(self.parent_app.root)
+        dialog.title("Create New Orbit")
+        dialog.geometry("400x300")
+        dialog.transient(self.parent_app.root)
+        dialog.grab_set()
+        
+        frame = ttk.Frame(dialog, padding=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Orbit name
+        ttk.Label(frame, text="Orbit Name:").pack(anchor=tk.W)
+        name_var = tk.StringVar(value=f"Custom Orbit {len(self.orbit_configurations)+1}")
+        ttk.Entry(frame, textvariable=name_var).pack(fill=tk.X, pady=5)
+        
+        # Altitude
+        ttk.Label(frame, text="Altitude (km):").pack(anchor=tk.W, pady=(10,0))
+        alt_var = tk.DoubleVar(value=1000)
+        ttk.Entry(frame, textvariable=alt_var).pack(fill=tk.X, pady=5)
+        
+        # Inclination
+        ttk.Label(frame, text="Inclination (degrees):").pack(anchor=tk.W, pady=(10,0))
+        inc_var = tk.DoubleVar(value=60.0)
+        ttk.Entry(frame, textvariable=inc_var).pack(fill=tk.X, pady=5)
+        
+        def create_orbit():
+            new_orbit = {
+                "name": name_var.get(),
+                "altitude": alt_var.get(),
+                "inclination": inc_var.get(),
+                "satellites": []
+            }
+            self.orbit_configurations.append(new_orbit)
+            self.update_orbit_combo()
+            dialog.destroy()
+            self.add_log(f"Created new orbit: {new_orbit['name']} at {new_orbit['altitude']}km")
+        
+        ttk.Button(frame, text="Create Orbit", command=create_orbit).pack(pady=20)
+        ttk.Button(frame, text="Cancel", command=dialog.destroy).pack()
+    
+    def delete_orbit(self):
+        """Delete selected orbit configuration"""
+        current_orbit = self.current_orbit_var.get()
+        if not current_orbit:
+            return
+            
+        # Check if orbit has satellites
+        orbit_config = next((o for o in self.orbit_configurations if o['name'] == current_orbit), None)
+        if orbit_config and orbit_config['satellites']:
+            messagebox.showwarning("Cannot Delete", 
+                                 f"Orbit '{current_orbit}' contains {len(orbit_config['satellites'])} satellites. "
+                                 f"Remove satellites first.")
+            return
+        
+        confirm = messagebox.askyesno("Delete Orbit", f"Delete orbit '{current_orbit}'?")
+        if confirm:
+            self.orbit_configurations = [o for o in self.orbit_configurations if o['name'] != current_orbit]
+            self.update_orbit_combo()
+            self.add_log(f"Deleted orbit: {current_orbit}")
+
+
+    def create_constellation(self, num_satellites, orbit_name):
+        """Create a constellation of satellites in specified orbit"""
+        # Find the orbit configuration
+        orbit_config = next((o for o in self.orbit_configurations if o['name'] == orbit_name), None)
+        if not orbit_config:
+            messagebox.showerror("Error", f"Orbit '{orbit_name}' not found")
+            return
+        
+        confirm = messagebox.askyesno("Create Constellation", 
+                                    f"Create {num_satellites} satellites in {orbit_name} orbit?\n"
+                                    f"Altitude: {orbit_config['altitude']}km")
+        if not confirm:
+            return
+        
+        # Calculate orbital parameters
+        altitude_km = orbit_config['altitude']
+        semi_major_axis = 6371 + altitude_km  # Earth radius + altitude
+        inclination = orbit_config['inclination']
+        
+        # Fixed RAAN for each orbit type to ensure separation between different orbits
+        orbit_raan_map = {
+            "Default Orbit": 0.0,
+            "MEO Navigation": 60.0,
+            "High Coverage": 120.0
+        }
+        raan_degrees = orbit_raan_map.get(orbit_name, 0.0)
+
+        # Create satellites
+        for i in range(num_satellites):
+            name = f"{orbit_name.replace(' ', '')}_Sat{i+1}"
+            true_anomaly = i * (360.0 / num_satellites)  # Even spacing
+            
+            # Create satellite with proper orbital parameters
+            satellite = {
+                "name": name,
+                "orbit": {
+                    "a": semi_major_axis,  # Semi-major axis in km
+                    "e": 0.01,  # Small eccentricity for stable orbit
+                    "i": inclination,  # Inclination from orbit config
+                    "Omega": raan_degrees,  # Consistent RAAN for this orbit type
+                    "omega": 0.0,  # Argument of periapsis
+                    "f": true_anomaly  # True anomaly - evenly spaced
+                },
+                "fault": {
+                    "type": "friction",
+                    "magnitude": 0.0005,
+                    "wheel": 3,
+                    "time": 15.0,  # 15 minutes fault injection
+                    "enabled": False,
+                    "periodic": {
+                        "enabled": False,
+                        "interval": 360,
+                        "magnitude": 0.1,
+                        "wheel": 1
+                    }
+                },
+                "camera": {
+                    "position": [0.0, 0.0, 15.0],  # Higher camera position for better target view
+                    "fov": 80.0,  # Wider FOV
+                    "enabled": True if i == 0 else False  # Enable camera only for first satellite
+                },
+                "targets": [],
+                "orbit_name": orbit_name  # Track which orbit this satellite belongs to
+            }
+            
+            self.satellites.append(satellite)
+            orbit_config['satellites'].append(name)
+        
+        # Update UI
+        self.update_satellite_listbox()
+        self.parent_app.update_satellite_dropdowns()
+        
+        self.add_log(f"Created {num_satellites}-satellite constellation in {orbit_name} orbit")
+        self.add_log(f"Satellites at {altitude_km}km altitude, RAAN: {raan_degrees}°")
+        
     def calculate_orbital_period(self, semi_major_axis_km):
-        """
-        Calculate orbital period for given semi-major axis
-        
-        Parameters:
-        semi_major_axis_km (float): Semi-major axis in kilometers
-        
-        Returns:
-        float: Orbital period in minutes
-        """
-        # Earth's gravitational parameter (m³/s²)
-        mu_earth = 3.986004418e14
-        
-        # Convert semi-major axis to meters
-        a_m = semi_major_axis_km * 1000
-        
-        # Calculate period using Kepler's third law: T = 2π√(a³/μ)
+        """Calculate orbital period for given semi-major axis"""
+        mu_earth = 3.986004418e14  # Earth's gravitational parameter (m³/s²)
+        a_m = semi_major_axis_km * 1000  # Convert to meters
         period_sec = 2 * np.pi * np.sqrt((a_m**3) / mu_earth)
-        period_min = period_sec / 60.0
-        
-        return period_min
+        return period_sec / 60.0  # Return in minutes
     
-    def calculate_semi_major_axis_for_period(self, period_minutes):
-        """
-        Calculate semi-major axis for desired orbital period
-        
-        Parameters:
-        period_minutes (float): Desired orbital period in minutes
-        
-        Returns:
-        float: Semi-major axis in kilometers
-        """
-        # Earth's gravitational parameter (m³/s²)
-        mu_earth = 3.986004418e14
-        
-        # Convert period to seconds
-        period_sec = period_minutes * 60.0
-        
-        # Calculate semi-major axis using Kepler's third law: a = ∛(μT²/4π²)
-        a_m = ((mu_earth * (period_sec**2)) / (4 * (np.pi**2)))**(1/3)
-        a_km = a_m / 1000.0
-        
-        return a_km
-    
-    def set_orbital_period(self, period_minutes):
-        """Set orbital period by adjusting semi-major axis"""
+    def calculate_coverage_info(self, satellite):
+        """Calculate coverage information for satellite"""
         try:
-            # Calculate required semi-major axis
-            required_a = self.calculate_semi_major_axis_for_period(period_minutes)
+            altitude = satellite["orbit"]["a"] - 6371  # Altitude above Earth
             
-            # Check if the altitude is reasonable (above Earth's surface)
-            altitude = required_a - 6371.0  # Earth radius
-            if altitude < 200:  # Less than 200 km altitude
-                messagebox.showwarning("Low Altitude Warning", 
-                                     f"Warning: This orbit has altitude of {altitude:.1f} km.\n"
-                                     f"Very low orbits may be unrealistic due to atmospheric drag.")
+            # Calculate coverage radius (simplified)
+            earth_radius = 6371  # km
+            satellite_height = altitude
             
-            # Update the semi-major axis
-            self.orbit_vars["a"].set(required_a)
+            # Maximum range for communication/observation (simplified calculation)
+            horizon_distance = np.sqrt(2 * earth_radius * satellite_height + satellite_height**2)
             
-            # Update period display
-            self.calculate_current_period()
+            # Coverage area (approximate)
+            coverage_area = np.pi * horizon_distance**2
             
-            self.add_log(f"Set orbital period to {period_minutes:.1f} minutes (altitude: {altitude:.1f} km)")
+            # Orbital period
+            period = self.calculate_orbital_period(satellite["orbit"]["a"])
             
-        except Exception as e:
-            messagebox.showerror("Error", f"Could not set orbital period: {e}")
-    
-    def calculate_current_period(self):
-        """Calculate and display the current orbital period"""
-        try:
-            a = self.orbit_vars["a"].get()
-            period = self.calculate_orbital_period(a)
-            altitude = a - 6371.0  # Earth radius
-            
-            self.period_label.config(text=f"{period:.1f} min (alt: {altitude:.0f} km)")
-            
-        except Exception as e:
-            self.period_label.config(text="Error calculating")
-    
-    def on_orbit_param_changed(self, *args):
-        """Called when orbit parameters change"""
-        # Update period display when semi-major axis changes
-        self.calculate_current_period()
+            return {
+                "altitude": altitude,
+                "horizon_distance": horizon_distance,
+                "coverage_area": coverage_area,
+                "period": period
+            }
+        except:
+            return None
             
     def update_satellite_listbox(self):
-        """FIXED: Simplified satellite display names"""
+        """Update the satellite listbox with orbit information"""
         self.satellite_listbox.delete(0, tk.END)
         
-        show_details = self.show_details_var.get()
+        orbit_counts = {}
         
         for i, sat in enumerate(self.satellites):
-            # FIXED: Start with simple name
-            display_name = sat["name"]
+            orbit_name = sat.get("orbit_name", "Unknown")
             
-            if show_details:
-                # Add status indicators only if details are enabled
-                if sat["fault"]["enabled"]:
-                    display_name += " [FAULT]"
-                    
-                if sat["camera"]["enabled"]:
-                    display_name += " [CAMERA]"
-                    
-                # Add target count
-                target_count = sum(1 for target in self.parent_app.targets 
-                                  if sat["name"] in target["assigned_to"])
-                if target_count > 0:
-                    display_name += f" [{target_count}T]"
-                
-                # Add period info
-                try:
-                    period = self.calculate_orbital_period(sat["orbit"]["a"])
-                    display_name += f" ({period:.0f}min)"
-                except:
-                    pass
-                    
+            # Count satellites per orbit
+            if orbit_name not in orbit_counts:
+                orbit_counts[orbit_name] = 0
+            orbit_counts[orbit_name] += 1
+            
+            # Display format: "Satellite Name [Orbit] (altitude)"
+            altitude = sat["orbit"]["a"] - 6371
+            display_name = f"{sat['name']} [{orbit_name}] ({altitude:.0f}km)"
+            
             self.satellite_listbox.insert(tk.END, display_name)
+        
+        # Update satellite count
+        total_sats = len(self.satellites)
+        orbit_summary = ", ".join([f"{count} in {orbit}" for orbit, count in orbit_counts.items()])
+        self.sat_count_label.config(text=f"Total: {total_sats} satellites ({orbit_summary})")
             
     def on_satellite_selected(self, event):
         """Handle satellite selection event"""
@@ -344,154 +431,138 @@ class ConstellationTab(BaseTab):
         if 0 <= index < len(self.satellites):
             sat = self.satellites[index]
             self.sat_name_var.set(sat["name"])
+            self.sat_orbit_var.set(sat.get("orbit_name", "Unknown"))
+            self.true_anomaly_var.set(sat["orbit"]["f"])
             
-            # Load orbit parameters
-            for param, var in self.orbit_vars.items():
-                var.set(sat["orbit"][param])
+            # Update orbit info display
+            self.orbit_info_text.config(state="normal")
+            self.orbit_info_text.delete(1.0, tk.END)
             
-            # Update period display
-            self.calculate_current_period()
+            orbit_info = f"Semi-major axis: {sat['orbit']['a']:.1f} km\n"
+            orbit_info += f"Altitude: {sat['orbit']['a'] - 6371:.1f} km\n"
+            orbit_info += f"Eccentricity: {sat['orbit']['e']:.3f}\n"
+            orbit_info += f"Inclination: {sat['orbit']['i']:.1f}°\n"
+            orbit_info += f"True Anomaly: {sat['orbit']['f']:.1f}°\n"
+            
+            period = self.calculate_orbital_period(sat['orbit']['a'])
+            orbit_info += f"Orbital Period: {period:.1f} minutes"
+            
+            self.orbit_info_text.insert(tk.END, orbit_info)
+            self.orbit_info_text.config(state="disabled")
+            
+            # Update coverage info
+            coverage = self.calculate_coverage_info(sat)
+            if coverage:
+                coverage_text = f"Altitude: {coverage['altitude']:.0f}km, "
+                coverage_text += f"Horizon: {coverage['horizon_distance']:.0f}km, "
+                coverage_text += f"Period: {coverage['period']:.1f}min"
+                self.coverage_info_label.config(text=coverage_text)
+            else:
+                self.coverage_info_label.config(text="Coverage calculation error")
                 
+
+
     def add_new_satellite(self):
-        """Add a new satellite to the constellation"""
-        # Create a default name based on number of satellites
-        name = f"Satellite{len(self.satellites) + 1}"
+        """Add a new satellite to selected orbit"""
+        current_orbit = self.current_orbit_var.get()
+        if not current_orbit:
+            messagebox.showwarning("No Orbit Selected", "Please select an orbit first")
+            return
         
-        # Calculate appropriate true anomaly to evenly space satellites
-        true_anomaly = 0.0
-        if self.satellites:
-            # If satellites exist, calculate a true anomaly that spaces them evenly
-            true_anomaly = len(self.satellites) * (360.0 / (len(self.satellites) + 1))
+        # Find orbit configuration
+        orbit_config = next((o for o in self.orbit_configurations if o['name'] == current_orbit), None)
+        if not orbit_config:
+            messagebox.showerror("Error", f"Orbit '{current_orbit}' not found")
+            return
         
-        # FIXED: Better orbital parameters for visibility
+        # Create satellite name
+        sat_count_in_orbit = len(orbit_config['satellites'])
+        name = f"{current_orbit.replace(' ', '')}_Sat{sat_count_in_orbit + 1}"
+        
+        # Calculate position in orbit
+        if orbit_config['satellites']:
+            # Space evenly among existing satellites
+            total_sats = len(orbit_config['satellites']) + 1
+            true_anomaly = sat_count_in_orbit * (360.0 / total_sats)
+        else:
+            true_anomaly = 0.0
+        
+        # Calculate orbital parameters from orbit config
+        altitude_km = orbit_config['altitude']
+        semi_major_axis = 6371 + altitude_km
+        inclination = orbit_config['inclination']
+        
+        # Fixed RAAN for each orbit type
+        orbit_raan_map = {
+            "Default Orbit": 0.0,
+            "MEO Navigation": 60.0,
+            "High Coverage": 120.0
+        }
+        raan_degrees = orbit_raan_map.get(current_orbit, 0.0)
+        
+        # Create new satellite
         new_satellite = {
             "name": name,
             "orbit": {
-                "a": 8000.0,   # FIXED: Higher altitude for better visibility (1629 km altitude)
-                "e": 0.05,     # Small eccentricity for stable orbit
-                "i": 55.0,     # Inclination in degrees (good for coverage)
-                "Omega": 45.0, # Right ascension of ascending node
-                "omega": 30.0, # Argument of periapsis
-                "f": true_anomaly  # True anomaly - evenly spaced
+                "a": semi_major_axis,
+                "e": 0.01,
+                "i": inclination,
+                "Omega": raan_degrees,  # Consistent RAAN for orbit type
+                "omega": 0.0,
+                "f": true_anomaly
             },
             "fault": {
                 "type": "friction",
                 "magnitude": 0.0005,
                 "wheel": 3,
-                "time": 10.0,  # 10 minutes fault injection
+                "time": 15.0,
                 "enabled": False,
                 "periodic": {
                     "enabled": False,
-                    "interval": 360,  # 6 minutes
+                    "interval": 360,
                     "magnitude": 0.1,
                     "wheel": 1
                 }
             },
             "camera": {
-                "position": [0.0, 0.0, 5.0],  # FIXED: Higher camera position for better view
-                "fov": 70.0,  # Field of view in degrees
-                "enabled": False  # Disable by default
+                "position": [0.0, 0.0, 15.0],  # Higher position for target viewing
+                "fov": 80.0,
+                "enabled": False
             },
-            "targets": []  # Assigned targets
+            "targets": [],
+            "orbit_name": current_orbit
         }
         
         self.satellites.append(new_satellite)
+        orbit_config['satellites'].append(name)
         
-        # Update the UI
+        # Update UI
         self.update_satellite_listbox()
         self.satellite_listbox.selection_clear(0, tk.END)
         self.satellite_listbox.selection_set(len(self.satellites) - 1)
         self.on_satellite_selected(None)
         
-        # Update all satellite dropdowns
         self.parent_app.update_satellite_dropdowns()
-        
-        self.parent_app.add_log(f"Added new satellite: {name}")
-        return new_satellite
-        
-    def add_multiple_satellites(self):
-        """Add multiple satellites to form a constellation"""
-        num_satellites = self.num_satellites_var.get()
-        
-        # Check if the number is valid
-        if num_satellites < 2 or num_satellites > 8:
-            messagebox.showwarning("Invalid Input", 
-                                  "Please enter a number between 2 and 8 satellites.")
-            return
-            
-        # Clear existing satellites if user confirms
-        confirm = messagebox.askyesno("Confirm Constellation Creation", 
-                                    f"This will clear existing satellites and create a new constellation with {num_satellites} satellites. Continue?")
-        if not confirm:
-            return
-            
-        # Clear existing satellites
-        self.satellites.clear()
-        
-        # FIXED: Better constellation with improved visibility
-        for i in range(num_satellites):
-            name = f"Satellite{i+1}"
-            true_anomaly = i * (360.0 / num_satellites)  # Even spacing
-            
-            # Create satellite with better orbital parameters
-            satellite = {
-                "name": name,
-                "orbit": {
-                    "a": 8000.0,   # FIXED: Higher altitude for better visibility
-                    "e": 0.05,     # Small eccentricity for stable orbit
-                    "i": 55.0,     # Inclination in degrees
-                    "Omega": 45.0, # Right ascension of ascending node
-                    "omega": 30.0, # Argument of periapsis
-                    "f": true_anomaly  # Evenly spaced true anomalies
-                },
-                "fault": {
-                    "type": "friction",
-                    "magnitude": 0.0005,
-                    "wheel": 3,
-                    "time": 10.0,  # 10 minutes fault injection
-                    "enabled": False,  # Don't enable faults by default
-                    "periodic": {
-                        "enabled": False,
-                        "interval": 360,  # 6 minutes
-                        "magnitude": 0.1,
-                        "wheel": 1
-                    }
-                },
-                "camera": {
-                    "position": [0.0, 0.0, 5.0],  # FIXED: Better camera position
-                    "fov": 70.0,  # Field of view in degrees
-                    "enabled": True if i == 0 else False  # Enable camera only for first satellite
-                },
-                "targets": []  # Assigned targets
-            }
-            
-            self.satellites.append(satellite)
-                
-        # Update UI
-        self.update_satellite_listbox()
-        self.satellite_listbox.selection_clear(0, tk.END)
-        self.satellite_listbox.selection_set(0)
-        self.on_satellite_selected(None)
-        
-        # Update all satellite dropdowns
-        self.parent_app.update_satellite_dropdowns()
-        
-        # Update target assignments
-        self.parent_app.update_target_assignments()
-        
-        self.parent_app.add_log(f"Created a new constellation with {num_satellites} satellites (improved visibility)")
+        self.add_log(f"Added satellite: {name} to {current_orbit} orbit (RAAN: {raan_degrees}°)")
         
     def remove_satellite(self):
         """Remove the selected satellite"""
         selection = self.satellite_listbox.curselection()
         if selection:
             index = selection[0]
-            sat_name = self.satellites[index]["name"]
+            sat = self.satellites[index]
+            sat_name = sat["name"]
+            orbit_name = sat.get("orbit_name", "Unknown")
             
             # Ask for confirmation
             confirm = messagebox.askyesno("Confirm Removal", 
-                                         f"Are you sure you want to remove {sat_name}?")
+                                         f"Remove {sat_name} from {orbit_name} orbit?")
             if confirm:
+                # Remove from orbit configuration
+                orbit_config = next((o for o in self.orbit_configurations if o['name'] == orbit_name), None)
+                if orbit_config and sat_name in orbit_config['satellites']:
+                    orbit_config['satellites'].remove(sat_name)
+                
                 # Remove satellite
                 self.satellites.pop(index)
                 
@@ -501,16 +572,15 @@ class ConstellationTab(BaseTab):
                     self.satellite_listbox.selection_set(0)
                     self.on_satellite_selected(None)
                 
-                # Update dropdowns
+                # Update dropdowns and target assignments
                 self.parent_app.update_satellite_dropdowns()
                 
-                # Update target assignments
                 for target in self.parent_app.targets:
                     if sat_name in target["assigned_to"]:
                         target["assigned_to"].remove(sat_name)
                 
                 self.parent_app.update_target_assignments()
-                self.parent_app.add_log(f"Removed satellite: {sat_name}")
+                self.add_log(f"Removed satellite: {sat_name} from {orbit_name}")
             
     def update_current_satellite(self):
         """Update the current satellite with UI values"""
@@ -518,17 +588,35 @@ class ConstellationTab(BaseTab):
         if selection:
             index = selection[0]
             old_name = self.satellites[index]["name"]
+            new_orbit = self.sat_orbit_var.get()
             
-            # Update with new values
+            # Update name and orbit assignment
             self.satellites[index]["name"] = self.sat_name_var.get()
+            self.satellites[index]["orbit"]["f"] = self.true_anomaly_var.get()
             
-            # Update orbit parameters
-            for param, var in self.orbit_vars.items():
-                self.satellites[index]["orbit"][param] = var.get()
+            # Handle orbit change
+            old_orbit = self.satellites[index].get("orbit_name", "Unknown") 
+            if new_orbit != old_orbit:
+                # Remove from old orbit
+                old_orbit_config = next((o for o in self.orbit_configurations if o['name'] == old_orbit), None)
+                if old_orbit_config and old_name in old_orbit_config['satellites']:
+                    old_orbit_config['satellites'].remove(old_name)
                 
-            # Update UI
-            self.update_satellite_listbox()
-            self.satellite_listbox.selection_set(index)
+                # Add to new orbit and update parameters
+                new_orbit_config = next((o for o in self.orbit_configurations if o['name'] == new_orbit), None)
+                if new_orbit_config:
+                    new_orbit_config['satellites'].append(self.satellites[index]["name"])
+                    
+                    # Update orbital parameters to match new orbit
+                    altitude_km = new_orbit_config['altitude']
+                    semi_major_axis = 6371 + altitude_km
+                    inclination = new_orbit_config['inclination']
+                    
+                    self.satellites[index]["orbit"]["a"] = semi_major_axis
+                    self.satellites[index]["orbit"]["i"] = inclination
+                    self.satellites[index]["orbit_name"] = new_orbit
+                    
+                    self.add_log(f"Moved {self.satellites[index]['name']} to {new_orbit} orbit")
             
             # Update target assignments if name changed
             if old_name != self.satellites[index]["name"]:
@@ -537,7 +625,17 @@ class ConstellationTab(BaseTab):
                         target["assigned_to"].remove(old_name)
                         target["assigned_to"].append(self.satellites[index]["name"])
             
-            # Update dropdowns
-            self.parent_app.update_satellite_dropdowns()
+            # Update UI
+            self.update_satellite_listbox()
+            self.satellite_listbox.selection_set(index)
+            self.load_satellite_details(index)
             
-            self.parent_app.add_log(f"Updated satellite: {self.satellites[index]['name']}")
+            self.parent_app.update_satellite_dropdowns()
+            self.add_log(f"Updated satellite: {self.satellites[index]['name']}")
+
+    def add_log(self, message):
+        """Add a message to the log"""
+        if hasattr(self.parent_app, 'add_log'):
+            self.parent_app.add_log(message)
+        else:
+            print(f"Log: {message}")

@@ -2,8 +2,7 @@
 """
 target_tab.py
 
-Implements the Target Management tab for the Spacecraft Constellation Fault Simulator.
-ENHANCED: Larger map area, better layout, improved usability, auto-assignment for better Vizard visibility.
+Implements the Target Management tab with improved target-satellite connections.
 """
 import tkinter as tk
 from tkinter import ttk, messagebox, colorchooser
@@ -11,7 +10,7 @@ from .base_tab import BaseTab
 import numpy as np
 
 class TargetTab(BaseTab):
-    """Target Management tab implementation"""
+    """Target Management tab with improved target visibility"""
     
     def __init__(self, parent_app, parent_frame):
         """
@@ -30,7 +29,7 @@ class TargetTab(BaseTab):
         # Create the tab UI
         self.create_tab_ui()
         
-        # AUTO-ASSIGN targets to satellites for better Vizard visibility
+        # Auto-assign targets to satellites for better Vizard visibility
         self.auto_assign_targets_on_startup()
         
     def auto_assign_targets_on_startup(self):
@@ -60,8 +59,8 @@ class TargetTab(BaseTab):
             print(f"Could not auto-assign targets: {e}")
         
     def create_tab_ui(self):
-        """Create the Target Management tab UI"""
-        # Main container with better proportions
+        """Create the Target Management tab UI with improved connections"""
+        # Main container
         main_container = ttk.Frame(self.parent_frame)
         main_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
@@ -69,7 +68,7 @@ class TargetTab(BaseTab):
         info_frame = ttk.Frame(main_container)
         info_frame.pack(fill=tk.X, pady=(0, 10))
         
-        info_text = "Targets are ground locations visible to spacecraft during orbit. For best Vizard visibility, assign targets to satellites below."
+        info_text = "Targets are ground locations tracked by satellites. Only assigned targets will be visible in Vizard."
         ttk.Label(info_frame, text=info_text, style="Info.TLabel", wraplength=1000).pack(anchor=tk.W)
         
         # Auto-assign button for user convenience
@@ -82,6 +81,9 @@ class TargetTab(BaseTab):
         
         ttk.Button(auto_frame, text="Clear All Assignments", 
                   command=self.clear_all_assignments).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(auto_frame, text="Check Coverage", 
+                  command=self.check_target_coverage).pack(side=tk.LEFT, padx=5)
         
         # Top frame for target list and details
         top_frame = ttk.Frame(main_container)
@@ -221,6 +223,10 @@ class TargetTab(BaseTab):
         self.assignment_status_label = ttk.Label(status_frame, text="No target selected", style="Info.TLabel")
         self.assignment_status_label.pack(anchor=tk.W, pady=2)
         
+        # Coverage status
+        self.coverage_status_label = ttk.Label(status_frame, text="", style="Info.TLabel")
+        self.coverage_status_label.pack(anchor=tk.W, pady=2)
+        
         # Satellite selection
         sat_frame = ttk.Frame(assign_frame)
         sat_frame.pack(fill=tk.X, pady=5)
@@ -251,16 +257,16 @@ class TargetTab(BaseTab):
         self.assignments_text = tk.Text(assignments_frame, height=4, width=25, state="disabled")
         self.assignments_text.pack(fill=tk.BOTH, expand=True)
         
-        # ENHANCED: Much larger targets map at the bottom
-        map_frame = ttk.LabelFrame(right_frame, text="Target Map", padding=10)
+        # Target map at the bottom with proper size
+        map_frame = ttk.LabelFrame(right_frame, text="Target Coverage Map", padding=10)
         map_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
-        # Simple world map using matplotlib with MUCH LARGER size
+        # Simple world map using matplotlib with good size
         from matplotlib.figure import Figure
         from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
         
-        # ENHANCED: Larger figure size for better visibility
-        self.map_figure = Figure(figsize=(10, 6), dpi=100)  # Much larger map
+        # Good figure size for visibility
+        self.map_figure = Figure(figsize=(10, 6), dpi=100)
         self.map_ax = self.map_figure.add_subplot(111)
         
         # Create canvas and toolbar for map interaction
@@ -289,18 +295,62 @@ class TargetTab(BaseTab):
             self.assign_satellite_combo.current(0)
             
     def update_target_listbox(self):
-        """Update the target listbox with current targets"""
+        """Update the target listbox with current targets and coverage info"""
         self.target_listbox.delete(0, tk.END)
         for target in self.targets:
-            # Add assignment count and status to display
+            # Add assignment count and coverage status to display
             assignment_count = len(target.get("assigned_to", []))
+            coverage_status = self.calculate_target_coverage_status(target)
+            
             display_name = f"{target['name']} "
             if assignment_count > 0:
-                display_name += f"[{assignment_count} assigned] ✓"
+                display_name += f"[{assignment_count} assigned] "
+                if coverage_status["can_be_seen"]:
+                    display_name += "VISIBLE"
+                else:
+                    display_name += "ASSIGNED"
             else:
                 display_name += "[unassigned]"
             
             self.target_listbox.insert(tk.END, display_name)
+            
+    def calculate_target_coverage_status(self, target):
+        """Calculate if target can be seen by assigned satellites"""
+        if not target.get("assigned_to", []):
+            return {"can_be_seen": False, "reason": "No satellites assigned"}
+        
+        # Simple coverage calculation based on satellite altitudes
+        assigned_satellites = []
+        for sat_name in target["assigned_to"]:
+            for sat in self.satellites:
+                if sat["name"] == sat_name:
+                    assigned_satellites.append(sat)
+                    break
+        
+        if not assigned_satellites:
+            return {"can_be_seen": False, "reason": "Assigned satellites not found"}
+        
+        # Calculate if any satellite can see the target
+        # For simplicity, assume satellites above 200km can see targets
+        can_see = False
+        best_altitude = 0
+        
+        for sat in assigned_satellites:
+            altitude = sat["orbit"]["a"] - 6371  # Altitude in km
+            if altitude > 200:  # Minimum altitude for good coverage
+                can_see = True
+                best_altitude = max(best_altitude, altitude)
+        
+        if can_see:
+            return {
+                "can_be_seen": True, 
+                "reason": f"Visible from {best_altitude:.0f}km altitude"
+            }
+        else:
+            return {
+                "can_be_seen": False, 
+                "reason": f"Satellites too low (need >200km altitude)"
+            }
             
     def on_target_selected(self, event):
         """Handle target selection event"""
@@ -323,13 +373,24 @@ class TargetTab(BaseTab):
             # Set priority if it exists, otherwise default to 1
             self.target_priority_var.set(target.get("priority", 1))
             
-            # Update assignment status
+            # Update assignment status with coverage info
             assigned_to = target.get("assigned_to", [])
+            coverage_status = self.calculate_target_coverage_status(target)
+            
             if assigned_to:
-                status_text = f"Assigned to: {', '.join(assigned_to)} - WILL BE VISIBLE IN VIZARD"
-                self.assignment_status_label.config(text=status_text, foreground="green")
+                status_text = f"Assigned to: {', '.join(assigned_to)}"
+                if coverage_status["can_be_seen"]:
+                    status_text += " - VISIBLE IN VIZARD"
+                    self.assignment_status_label.config(text=status_text, foreground="green")
+                else:
+                    status_text += " - ASSIGNED BUT MAY NOT BE VISIBLE"
+                    self.assignment_status_label.config(text=status_text, foreground="orange")
+                
+                # Show coverage details
+                self.coverage_status_label.config(text=coverage_status["reason"], foreground="blue")
             else:
                 self.assignment_status_label.config(text="Not assigned - WILL NOT BE VISIBLE IN VIZARD", foreground="red")
+                self.coverage_status_label.config(text="", foreground="black")
             
     def update_target_assignments(self):
         """Update the target assignments display"""
@@ -345,8 +406,22 @@ class TargetTab(BaseTab):
                 assigned_to = target.get("assigned_to", [])
                 if assigned_to:
                     for sat_name in assigned_to:
-                        self.assignments_text.insert(tk.END, f"• {sat_name}\n")
-                    self.assignments_text.insert(tk.END, f"\nStatus: VISIBLE in Vizard")
+                        # Find satellite to show altitude info
+                        for sat in self.satellites:
+                            if sat["name"] == sat_name:
+                                altitude = sat["orbit"]["a"] - 6371
+                                self.assignments_text.insert(tk.END, f"• {sat_name} ({altitude:.0f}km)\n")
+                                break
+                        else:
+                            self.assignments_text.insert(tk.END, f"• {sat_name}\n")
+                    
+                    coverage_status = self.calculate_target_coverage_status(target)
+                    if coverage_status["can_be_seen"]:
+                        self.assignments_text.insert(tk.END, f"\nStatus: VISIBLE in Vizard\n")
+                        self.assignments_text.insert(tk.END, f"Reason: {coverage_status['reason']}")
+                    else:
+                        self.assignments_text.insert(tk.END, f"\nStatus: MAY NOT BE VISIBLE\n")
+                        self.assignments_text.insert(tk.END, f"Reason: {coverage_status['reason']}")
                 else:
                     self.assignments_text.insert(tk.END, "No assignments\n\nStatus: NOT VISIBLE in Vizard")
                     
@@ -354,6 +429,76 @@ class TargetTab(BaseTab):
         
         # Update the map
         self.update_map()
+        
+    def check_target_coverage(self):
+        """Check coverage for all targets and show results"""
+        if not self.targets:
+            messagebox.showinfo("No Targets", "No targets defined to check coverage.")
+            return
+            
+        # Create coverage report
+        coverage_window = tk.Toplevel(self.parent_app.root)
+        coverage_window.title("Target Coverage Report")
+        coverage_window.geometry("600x400")
+        coverage_window.transient(self.parent_app.root)
+        
+        # Create scrolled text for report
+        from tkinter import scrolledtext
+        report_text = scrolledtext.ScrolledText(coverage_window, wrap=tk.WORD, height=20)
+        report_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Generate report
+        report = "TARGET COVERAGE ANALYSIS REPORT\n"
+        report += "=" * 50 + "\n\n"
+        
+        visible_count = 0
+        assigned_count = 0
+        unassigned_count = 0
+        
+        for target in self.targets:
+            report += f"Target: {target['name']}\n"
+            report += f"Location: {target['lat']:.2f}°, {target['lon']:.2f}°\n"
+            
+            assigned_to = target.get("assigned_to", [])
+            if assigned_to:
+                assigned_count += 1
+                report += f"Assigned to: {', '.join(assigned_to)}\n"
+                
+                # Get coverage status
+                coverage_status = self.calculate_target_coverage_status(target)
+                if coverage_status["can_be_seen"]:
+                    visible_count += 1
+                    report += f"Visibility: VISIBLE in Vizard\n"
+                    report += f"Coverage: {coverage_status['reason']}\n"
+                else:
+                    report += f"Visibility: ASSIGNED but may not be visible\n"
+                    report += f"Issue: {coverage_status['reason']}\n"
+            else:
+                unassigned_count += 1
+                report += f"Assignment: UNASSIGNED\n"
+                report += f"Visibility: NOT VISIBLE in Vizard\n"
+            
+            report += "\n" + "-" * 30 + "\n\n"
+        
+        # Summary
+        report += "SUMMARY:\n"
+        report += f"Total Targets: {len(self.targets)}\n"
+        report += f"Assigned Targets: {assigned_count}\n"
+        report += f"Visible Targets: {visible_count}\n"
+        report += f"Unassigned Targets: {unassigned_count}\n\n"
+        
+        if visible_count < len(self.targets):
+            report += "RECOMMENDATIONS:\n"
+            report += "• Assign unassigned targets to satellites\n"
+            report += "• Increase satellite altitudes above 200km for better coverage\n"
+            report += "• Use 'Auto-Assign All Targets' button for quick assignment\n"
+        
+        report_text.insert(tk.END, report)
+        report_text.config(state="disabled")
+        
+        # Close button
+        ttk.Button(coverage_window, text="Close", 
+                  command=coverage_window.destroy).pack(pady=10)
             
     def add_new_target(self):
         """Add a new target"""
@@ -408,7 +553,7 @@ class TargetTab(BaseTab):
             {"name": "Los Angeles", "lat": 34.05, "lon": -118.24},
             {"name": "Dubai", "lat": 25.20, "lon": 55.27},
             {"name": "Paris", "lat": 48.85, "lon": 2.35},
-            {"name": "Cairo", "lat": 30.04, "lon": 31.24},
+            {"name": "Cairo", "lat": 30.04, "lon": 31.23},
             {"name": "Singapore", "lat": 1.35, "lon": 103.82},
             {"name": "Melbourne", "lat": -37.81, "lon": 144.96},
             {"name": "Santiago", "lat": -33.46, "lon": -70.65},
@@ -558,7 +703,12 @@ class TargetTab(BaseTab):
                     except:
                         pass
                     
-                    self.parent_app.add_log(f"Assigned {target['name']} to {sat_name} - NOW VISIBLE IN VIZARD")
+                    # Check coverage
+                    coverage_status = self.calculate_target_coverage_status(target)
+                    if coverage_status["can_be_seen"]:
+                        self.parent_app.add_log(f"Assigned {target['name']} to {sat_name} - VISIBLE IN VIZARD")
+                    else:
+                        self.parent_app.add_log(f"Assigned {target['name']} to {sat_name} - {coverage_status['reason']}")
                 else:
                     messagebox.showinfo("Already Assigned", 
                                       f"{target['name']} is already assigned to {sat_name}")
@@ -599,7 +749,7 @@ class TargetTab(BaseTab):
                                       f"{target['name']} is not assigned to {sat_name}")
     
     def auto_assign_targets(self):
-        """Automatically assign targets to satellites for optimal Vizard visibility"""
+        """Automatically assign targets to satellites for optimal coverage"""
         if not self.satellites or not self.targets:
             messagebox.showinfo("Cannot Assign", 
                               "Need at least one satellite and one target to auto-assign.")
@@ -638,7 +788,15 @@ class TargetTab(BaseTab):
         except:
             pass
         
-        self.parent_app.add_log(f"Auto-assigned {len(self.targets)} targets to {len(self.satellites)} satellites - ALL NOW VISIBLE IN VIZARD")
+        # Check coverage for assigned targets
+        visible_count = 0
+        for target in self.targets:
+            coverage_status = self.calculate_target_coverage_status(target)
+            if coverage_status["can_be_seen"]:
+                visible_count += 1
+        
+        self.parent_app.add_log(f"Auto-assigned {len(self.targets)} targets to {len(self.satellites)} satellites")
+        self.parent_app.add_log(f"{visible_count} targets will be VISIBLE in Vizard")
         
     def clear_all_assignments(self):
         """Clear all target assignments"""
@@ -661,27 +819,21 @@ class TargetTab(BaseTab):
             self.parent_app.add_log("Cleared all target assignments - targets will not be visible in Vizard")
         
     def update_map(self):
-        """Update the target map display with enhanced visuals"""
+        """Update the target map display with coverage information"""
         # Clear previous plot
         self.map_ax.clear()
         
         # Draw simple world map background
-        # Just set up the axis for a world map
         self.map_ax.set_xlim(-180, 180)  
         self.map_ax.set_ylim(-90, 90)
         self.map_ax.grid(True, alpha=0.3)
-        self.map_ax.set_title('Target Locations (Assigned targets will be visible in Vizard)', fontsize=14, fontweight='bold')
+        self.map_ax.set_title('Target Coverage Map (Assigned targets visible in Vizard)', fontsize=14, fontweight='bold')
         self.map_ax.set_xlabel('Longitude', fontsize=12)
         self.map_ax.set_ylabel('Latitude', fontsize=12)
         
         # Try to add simple continent outlines if available
         try:
-            # Try to load a world map background
-            from matplotlib.path import Path
-            import numpy as np
-            
-            # Simple approximation of continent outlines using a few major points
-            # This is just a basic outline
+            # Simple approximation of continent outlines
             continents = [
                 # North America
                 [(-168, 66), (-125, 72), (-91, 83), (-60, 74), (-54, 52), 
@@ -703,9 +855,9 @@ class TargetTab(BaseTab):
                 
         except Exception as e:
             # If we can't draw continents, just note it
-            print(f"Could not draw continent outlines: {e}")
+            pass
         
-        # Plot targets with enhanced visibility
+        # Plot targets with coverage information
         for target in self.targets:
             # Extract lat/lon
             lat = target["lat"]
@@ -714,36 +866,51 @@ class TargetTab(BaseTab):
             # Get color
             color = target["color"]
             
-            # Determine marker size based on priority - much larger sizes
-            base_size = 120  # Increased base size for better visibility
-            size = base_size + (target.get("priority", 1) * 50)  # Much larger size variation
+            # Determine marker size based on priority
+            base_size = 100
+            size = base_size + (target.get("priority", 1) * 30)
             
-            # Determine marker style based on assignments
+            # Determine marker style and color based on assignment and coverage
             assigned_to = target.get("assigned_to", [])
+            coverage_status = self.calculate_target_coverage_status(target)
+            
             if assigned_to:
-                marker = '*'  # Star for assigned targets (VISIBLE IN VIZARD)
-                alpha = 1.0
-                edge_color = 'green'
-                line_width = 3
+                if coverage_status["can_be_seen"]:
+                    marker = '*'  # Star for visible targets
+                    alpha = 1.0
+                    edge_color = 'green'
+                    line_width = 3
+                    status_text = "VISIBLE"
+                else:
+                    marker = 'o'  # Circle for assigned but potentially not visible
+                    alpha = 0.8
+                    edge_color = 'orange'
+                    line_width = 2
+                    status_text = "ASSIGNED"
             else:
-                marker = 'X'  # X for unassigned targets (NOT VISIBLE IN VIZARD)
+                marker = 'X'  # X for unassigned targets
                 alpha = 0.6
                 edge_color = 'red'
                 line_width = 2
+                status_text = "NOT VISIBLE"
                 
-            # Draw marker with enhanced visibility
+            # Draw marker
             self.map_ax.scatter(lon, lat, color=color, s=size, 
                                marker=marker, zorder=5, 
                                alpha=alpha,
                                edgecolor=edge_color, linewidth=line_width)
             
-            # Add label with assignment status
+            # Add label with assignment and coverage status
             label_offset = 4  # Degrees offset for label
             if assigned_to:
-                label_text = f"{target['name']}\n✓ VISIBLE"
-                bbox_color = 'lightgreen'
+                if coverage_status["can_be_seen"]:
+                    label_text = f"{target['name']}\n{status_text}"
+                    bbox_color = 'lightgreen'
+                else:
+                    label_text = f"{target['name']}\n{status_text}"
+                    bbox_color = 'lightyellow'
             else:
-                label_text = f"{target['name']}\n✗ NOT VISIBLE"
+                label_text = f"{target['name']}\n{status_text}"
                 bbox_color = 'lightcoral'
                 
             self.map_ax.text(lon, lat + label_offset, label_text, 
@@ -751,21 +918,24 @@ class TargetTab(BaseTab):
                             bbox=dict(facecolor=bbox_color, alpha=0.8, boxstyle='round,pad=0.3',
                                      edgecolor=color, linewidth=1))
         
-        # Add legend
+        # Add legend with coverage information
         from matplotlib.lines import Line2D
         legend_elements = [
             Line2D([0], [0], marker='*', color='w', markerfacecolor='green', 
-                   markersize=12, label='Assigned Targets (VISIBLE in Vizard)', 
-                   markeredgecolor='green', markeredgewidth=2),
+                   markersize=12, label='Visible Targets (VISIBLE in Vizard)', 
+                   markeredgecolor='green', markeredgewidth=3),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', 
+                   markersize=10, label='Assigned Targets (check altitude)', 
+                   markeredgecolor='orange', markeredgewidth=2),
             Line2D([0], [0], marker='X', color='w', markerfacecolor='red', 
-                   markersize=10, label='Unassigned Targets (NOT VISIBLE in Vizard)', 
+                   markersize=10, label='Unassigned Targets (NOT VISIBLE)', 
                    markeredgecolor='red', markeredgewidth=2)
         ]
         self.map_ax.legend(handles=legend_elements, loc='upper right')
         
-        # Update canvas with better layout
+        # Update canvas
         try:
             self.map_figure.tight_layout()
         except:
-            pass  # Ignore layout warnings
+            pass
         self.map_canvas.draw()
