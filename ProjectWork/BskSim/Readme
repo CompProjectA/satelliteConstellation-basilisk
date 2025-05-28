@@ -1,188 +1,138 @@
-BskSim Project Directory Structure
 
+🛰️ Spacecraft Constellation Fault Simulator
+
+A GUI-based spacecraft constellation simulator built on the Basilisk framework. It allows simulation of multiple satellites, injection of realistic reaction wheel faults, and analysis of fault effects using plots and 3D visualisation through Vizard.
+
+Overview
+This simulator is designed for:
+•	Modeling and managing multi-satellite constellations
+•	Injecting faults like encoder drift, friction increase, power limits, and battery degradation
+•	Visualizing scenarios in Unity-based Vizard
+•	Logging telemetry and creating .bin files for later playback
+•	Exporting data for performance evaluation and debugging
+ Features
+•	Multi-satellite support with up to 20 satellites
+•	Four realistic fault types with configurable parameters
+•	Ground target assignment and camera targeting
+•	GUI for fault configuration, simulation control, and output analysis
+•	Vizard-compatible .bin generation
+•	Plotting and telemetry logging
+
+
+
+📁 Directory Structure
+
+satelliteConstellation-basilisk\ProjectWork\BskSim
+"
 BskSim/
-├── BSK_masters.py
-├── core/
-│   ├── fault_loader.py
-│   ├── run.py
-│   ├── spacecraft_fault_cli.py
-│   ├── spacecraft_fault_gui.py
-│   ├── spacecraft_simulator_gui.py
-│   ├── style.py
-│   ├── __pycache__/
-│   └── gui_tab/
-│       ├── base_tab.py
-│       ├── constellation_tab.py
-│       ├── fault_tab.py
-│       ├── output_tab.py
-│       ├── target_tab.py
-│       ├── visualization_tab.py
-│       ├── __init__.py
-│       └── __pycache__/
-├── faults/
-│   ├── battery_fault.py
-│   ├── encoder_fault.py
-│   ├── friction_fault.py
-│   ├── powerlimit_fault.py
-│   ├── rw_fault.py
-│   └── __pycache__/
-├── logs/
-├── models/
-├── plots/
-├── plotting/
-├── scenarios/
-├── Vizfile/
-└── __pycache__/
-Brief Explanation of Components
-Root Directory
-
-
-
-BSK_masters.py: Likely contains master configurations or settings for the Basilisk simulation environment
-
-Core Directory
-
-run.py: Main entry point for running the simulation
-spacecraft_fault_cli.py: Command-line interface for spacecraft fault simulations
-spacecraft_fault_gui.py: GUI version for spacecraft fault simulations
-spacecraft_simulator_gui.py: Main GUI for the spacecraft simulator
-fault_loader.py: Utility for loading fault scenarios
-style.py: Styling configurations for the GUI
-gui_tab/: Contains different tabs for the GUI interface
-
-Various tab implementations (constellation, fault, target, etc.) for the simulator interface
-
-
-
-Faults Directory
-
-Contains modules for different types of spacecraft faults:
-
-battery_fault.py: Battery-related fault simulations
-encoder_fault.py: Encoder-related fault simulations
-friction_fault.py: Friction-related fault simulations
-powerlimit_fault.py: Power limitation fault simulations
-rw_fault.py: Reaction wheel fault simulations
-
-
-
-Other Directories
-
-logs/: Likely stores simulation log output
-models/: Probably contains spacecraft or component models
-plots/: May store generated plots from simulations
-plotting/: Contains plotting utilities and functions
-scenarios/: Stores predefined simulation scenarios
-Vizfile/: Likely contains visualization configuration or output
-
-The project appears to be a spacecraft simulation environment with a focus on fault simulation and analysis, with both GUI and CLI interfaces available.
-
-
-
-BskSim/
-├── BSK_masters.py              # Master script for Basilisk simulations
-├── Readme                      # Main README file
-├── core/                       # Core simulator modules
-│   ├── fault_loader.py         # Unified interface for fault modules
-│   ├── gui_tab/                # GUI tab components
-│   │   ├── __init__.py         # Package initialization
-│   │   ├── base_tab.py         # Base class for tabs
-│   │   ├── constellation_tab.py# Constellation management tab
-│   │   ├── fault_tab.py        # Fault configuration tab
-│   │   ├── output_tab.py       # Output settings tab
-│   │   ├── target_tab.py       # Target management tab
-│   │   └── visualization_tab.py# Visualization settings tab
-│   ├── run_fault_simulator.py  # Runner script for the GUI
-│   ├── rw_fault_help.py        # Help content module
-│   ├── spacecraft_simulation.py # Backend simulation engine (needs fixing)
+├── BSK_masters.py              # Master Basilisk simulation script
+├── Readme                      # This file
+│
+├── core/                       # Core simulation modules
+│   ├── pycache/           # Python cache files
+│   ├── gui_tab/               # GUI tab components
+│   │   ├── init.py        # Package initialization
+│   │   ├── base_tab.py        # Base class for all tabs
+│   │   ├── constellation_tab.py # Satellite constellation management
+│   │   ├── fault_tab.py       # Fault configuration interface
+│   │   ├── output_tab.py      # Output settings and logging
+│   │   ├── results_tab.py     # Results viewing and analysis
+│   │   ├── target_tab.py      # Target location management
+│   │   └── visualization_tab.py # Visualization settings
+│   │
+│   ├─
+│   ├── fault_loader.py        # Dynamic fault module loader
+│   ├── plots.py              # Centralized plotting functions
+│   ├── run_fault_simulator.py # Main application launcher
+│   ├── rw_fault_help.py      # Help content and documentation
+│   ├── spacecraft_simulation.py # Core simulation engine
 │   ├── spacecraft_simulator_gui.py # Main GUI application
-│   └── style.py                # GUI styling module
-├── faults/                     # Fault simulation modules
-│   ├── battery_fault.py        # Battery fault simulation
-│   ├── encoder_fault.py        # Encoder fault simulation
-│   ├── friction_fault.py       # Friction fault simulation
-│   ├── powerlimit_fault.py     # Power limit fault simulation
-│   └── rw_fault.py             # Base reaction wheel fault simulation
-├── logs/                       # Simulation log files (created on first run)
-├── models/                     # Basilisk model configurations
-│   ├── BSK_Dynamics.py         # Spacecraft dynamics models
-│   ├── BSK_FormationDynamics.py# Formation flying dynamics models 
-│   ├── BSK_FormationFsw.py     # Formation flying flight software models
-│   └── BSK_Fsw.py              # Flight software models
-├── plots/                      # Simulation plots (created on first run)
-├── plotting/                   # Plotting utility files
-│   └── BSK_Plotting.py         # Basilisk plotting utilities
-├── scenarios/                  # Predefined simulation scenarios
-└── Vizfile/                    # Visualization binary files (created on first run)
-    └── _VizFiles/              # Directory for Vizard binary files
+│   ├── style.py              # GUI styling and themes
+│   └── swinburne.png         # Application logo
+│
+├── faults/                    # Fault simulation modules
+│   ├── pycache/          # Python cache files
+│   ├── battery_fault.py      # Battery degradation fault
+│   ├── encoder_fault.py      # Encoder measurement fault
+│   ├── friction_fault.py     # Mechanical friction fault
+│   ├── powerlimit_fault.py   # Power limitation fault
+│   └── rw_fault.py          # Base reaction wheel fault class
+│
+├── logs/                      # Simulation output logs
+│   └── sim_results_*/        # Timestamped result directories
+│
+├── models/                    # Basilisk model configurations
+│   ├── pycache/          # Python cache files
+│   ├── BSK_Dynamics.py       # Spacecraft dynamics models
+│   ├── BSK_FormationDynamics.py # Formation flying dynamics
+│   ├── BSK_FormationFsw.py   # Formation flight software
+│   └── BSK_Fsw.py           # Spacecraft flight software
+│
+├── plots/                     # Generated plot images
+│   └── *.png                 # Timestamped plot files
+│
+├── plotting/                  # Plotting utilities
+│   ├── pycache/          # Python cache files
+│   └── BSK_Plotting.py       # Basilisk plotting utilities
+│
+├── scenarios/                 # Predefined simulation scenarios
+│
+└── Vizfile/                  # Vizard visualization files
+└── _VizFiles/            # Binary visualization data
+└── *_UnityViz.bin    # Vizard binary files"
+
+Quick Start
+
+cd core
+python run_fault_simulator.py
+
+GUI Guide
+Tabs Overview:
+1.	Constellation Tab – Configure satellites, orbits, and quick-setup presets.
+2.	Fault Tab – Select fault type, magnitude, timing, and assign it to a satellite.
+3.	Targets Tab – Assign observation targets to each satellite.
+4.	Visualization Tab – Set camera views and visualization settings for Vizard.
+5.	Output Tab – Choose run duration, log options, and enable .bin generation.
+6.	Results Tab – View and export plots of satellite behavior and fault impact.
+
+Simulation Workflow
+1.	Select Constellation → default setup or custom.
+2.	Add Faults → encoder, power limit, etc.
+3.	Assign Targets → random or manual lat/lon input.
+4.	Run Simulation → generate .bin file and logs.
+5.	Visualise in Vizard → load .bin for analysis.
+
+Fault Types
+Fault Type	Description	Effect
+Friction Fault	Simulates rotor resistance	Reduced agility
+Power Limit Fault	Limits motor power	Delayed maneuvers
+Encoder Fault	Introduces sensor error	Inaccurate attitude control
+Battery Fault	Adds power drain	Reduced runtime
+
+📂 Output Files
+
+•	Logs: logs/sim_results_*/
+•	Plots: plots/
+•	Vizard: Vizfile/_VizFiles/*.bin
+
+Troubleshooting
 
 
-    Core Capabilities
+Issue	Fix
+Vizard not showing satellite	Make sure .bin file is generated
+Camera not aiming at target	Validate pointing vector config
+GUI not opening	Check tkinter is installed
+Module errors	Ensure Basilisk is in Python PATH
 
-Constellation Management
-
-Create and configure multiple satellites with custom orbital parameters
-Support for various formation configurations
-Individual spacecraft property customization
-
-
-Fault Simulation
-
-Inject four fault types: friction, power limit, encoder, and battery
-Configure fault parameters (magnitude, timing, affected wheel)
-Support for periodic and one-time faults
-Apply faults to specific satellites and their respective plots as well 
+📄 License
+This simulator is part of an academic project at Swinburne University. Basilisk is a separate open-source tool and follows its own license.
 
 
-Target Management
+Support
+For issues or guidance:
+•	Refer to the in-app Help tab
+•	Visit Basilisk documentation
+•	Use example scenarios in /scenarios for reference
 
-Define ground locations with name, coordinates, and color
-Assign targets to specific satellites
-Visualize targets on Earth in simulation
-
-
-Visualization
-
-Configure camera position and field of view
-Single camera view in Vizard for entire constellation
-3D visualization of spacecraft, Earth, and targets
-
-
-Results Analysis
-
-Generate plots of spacecraft behavior and fault effects
-Comprehensive simulation summary
-Binary file output for Vizard visualization
-
-
-
-GUI Structure
-
-Constellation Tab: Configure satellites and orbital parameters
-Fault Tab: Set up fault parameters for selected satellites
-Targets Tab: Manage ground locations and assignments
-Visualization Tab: Configure camera and display settings
-Output Tab: Set simulation parameters and logging options
-Results Tab: View and analyze simulation output
-
-Vizard Output
-
-3D visualization of all satellites in constellation
-Earth model with target markers
-Spacecraft components including reaction wheels
-Fault effects visible in spacecraft behavior
-Time controls for playback and analysis
-Camera view from selected spacecraft perspective
-
-Workflow
-
-Configure constellation of satellites
-Set up faults on specific spacecraft
-Define and assign targets
-Configure visualization settings
-Run simulation
-Analyze results through plots and 3D visualization
-
-The system enables engineers to study fault propagation in spacecraft systems, analyze constellation performance, and develop fault mitigation strategies through an intuitive, interactive interface.
 
 
