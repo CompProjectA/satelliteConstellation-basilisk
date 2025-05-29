@@ -16,6 +16,8 @@ import subprocess
 import json
 from datetime import datetime
 import logging
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend 
 from PIL import ImageTk, Image
 
 # Set up paths
@@ -83,6 +85,9 @@ class SatelliteSimulatorApp:
     def _on_closing(self):
         """Handle window closing"""
         try:
+            # Stop any running simulation
+            self.is_running = False
+            
             # Close any matplotlib figures
             import matplotlib.pyplot as plt
             plt.close('all')
@@ -91,7 +96,6 @@ class SatelliteSimulatorApp:
         
         # Destroy the window
         self.root.quit()
-        self.root.destroy()
             
     def _setup_logging(self):
         """Configure application logging"""
@@ -304,14 +308,7 @@ class SatelliteSimulatorApp:
         self.time_label.pack(side=tk.RIGHT, padx=10)
 
 
-    def __del__(self):
-        """Cleanup when application is destroyed"""
-        try:
-            # Close any matplotlib figures
-            import matplotlib.pyplot as plt
-            plt.close('all')
-        except:
-            pass
+    
 
     def _create_menu_bar(self):
         """Create the application menu bar"""
@@ -452,7 +449,8 @@ class SatelliteSimulatorApp:
         thread = threading.Thread(target=self._run_simulation_process)
         thread.daemon = True
         thread.start()
-        
+            
+
     def _run_simulation_process(self):
         """Run the simulation process"""
         try:
@@ -515,6 +513,13 @@ class SatelliteSimulatorApp:
             messagebox.showerror("Simulation Error", f"Error: {str(e)}")
             
         finally:
+            # Clean up matplotlib in thread-safe way
+            try:
+                import matplotlib.pyplot as plt
+                plt.close('all')
+            except:
+                pass
+                
             self.is_running = False
             self.run_button.config(state="normal")
             self.update_status("Ready")
@@ -541,6 +546,9 @@ class SatelliteSimulatorApp:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.add_log(f"Saving {len(figureList)} plots...")
             
+            # Import matplotlib here to ensure correct backend
+            import matplotlib.pyplot as plt
+            
             for name, fig in figureList.items():
                 try:
                     if hasattr(fig, 'savefig'):
@@ -549,6 +557,9 @@ class SatelliteSimulatorApp:
                         fig.savefig(path, bbox_inches='tight', dpi=300)
                         self.latest_plots.append(filename)
                         self.add_log(f"Saved: {filename}")
+                        
+                        # Close figure immediately after saving
+                        plt.close(fig)
                 except Exception as e:
                     self.add_log(f"Error saving {name}: {e}")
                     

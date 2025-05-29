@@ -10,10 +10,10 @@ import sys
 import inspect
 import numpy as np
 from datetime import datetime
-import matplotlib.pyplot as plt
+
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
-
+import matplotlib.pyplot as plt
 
 
 # Fix path resolution to work with project structure
