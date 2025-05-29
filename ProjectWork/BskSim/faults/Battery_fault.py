@@ -15,7 +15,7 @@
 #  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 #  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-
+#
 """
 Overview
 --------
@@ -113,6 +113,20 @@ from Basilisk.simulation import simplePowerSink
 
 
 
+class BatteryFaultScenario:
+    def __init__(self):
+        from faults import battery_fault
+
+    def run(self, **kwargs):
+        from faults import battery_fault
+        return battery_fault.run(
+            show_plots=kwargs.get("show_plots", False),
+            liveStream=kwargs.get("liveStream", False),
+            timeStep=kwargs.get("timeStep", 1.0),
+            orbitCase=kwargs.get("orbitCase", 'LEO'),
+            useSphericalHarmonics=kwargs.get("useSphericalHarmonics", False),
+            planetCase=kwargs.get("planetCase", 'Earth')
+        )
 
 
 
