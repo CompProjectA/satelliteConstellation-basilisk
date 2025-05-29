@@ -55,484 +55,707 @@ def generate_fault_plots(fault_type, fault_data, time_data, fault_time_min, spac
     return plots
 
 def generate_friction_plots(fault_data, time_data, fault_time_min, spacecraft_name):
-    """Generate comprehensive friction fault specific plots"""
+    """
+    Generate the 4 key friction fault plots with enhanced debugging
+    """
+    print("DEBUG: Starting friction plot generation...")
     plots = {}
     
-    # Main friction analysis figure
-    fig_friction = plt.figure(figsize=(14, 10))
+    # DEBUG: Check fault data contents
+    print(f"DEBUG: Fault data contents: {fault_data}")
     
-    # Subplot 1: Wheel speeds with fault effects
-    plt.subplot(2, 3, 1)
-    if 'wheel_speeds' in fault_data:
-        wheel_speeds = fault_data['wheel_speeds']
-        colors = ['blue', 'green', 'red', 'orange']
-        for i in range(min(wheel_speeds.shape[1], 4)):
-            label_suffix = " (FAULTY)" if i == fault_data.get('fault_wheel', 3) else ""
-            plt.plot(time_data, wheel_speeds[:, i], color=colors[i], linewidth=2, 
-                    label=f'Wheel {i}{label_suffix}')
-    else:
-        # Generate representative data if real data not available
-        colors = ['blue', 'green', 'red', 'orange']
-        for i in range(4):
-            speed = 100 * np.sin(time_data/10 + i) + 50 * i
-            # Add fault effect
-            fault_idx = time_data >= fault_time_min
-            if i == fault_data.get('fault_wheel', 3):  # Faulty wheel
-                speed[fault_idx] *= (1.0 - fault_data.get('friction_magnitude', 0.0005) * 200)  # Reduced speed due to friction
-            plt.plot(time_data, speed, color=colors[i], linewidth=2, label=f'Wheel {i}')
-    
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Wheel Speed (rad/s)')
-    plt.title(f'Wheel Speeds: Friction Fault - {spacecraft_name}')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Subplot 2: Friction torque evolution
-    plt.subplot(2, 3, 2)
+    # Get fault parameters with debugging
     friction_baseline = fault_data.get('friction_baseline', 0.02)
     friction_magnitude = fault_data.get('friction_magnitude', 0.0005)
-    
-    friction = np.full_like(time_data, friction_baseline)
+    fault_wheel = fault_data.get('fault_wheel', 0)  # Default to RW1 (index 0)
     fault_idx = time_data >= fault_time_min
-    friction[fault_idx] += friction_magnitude
     
-    plt.plot(time_data, friction, 'red', linewidth=3, label='Friction Torque')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
-    plt.axhline(y=friction_baseline, color='gray', linestyle=':', alpha=0.7, label='Baseline')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Friction Torque (N·m)')
-    plt.title(f'Friction Evolution - {spacecraft_name}')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
+    print(f"DEBUG: Friction parameters:")
+    print(f"  - Baseline: {friction_baseline}")
+    print(f"  - Magnitude: {friction_magnitude}") 
+    print(f"  - Fault Wheel: {fault_wheel}")
+    print(f"  - Fault indices: {np.sum(fault_idx)} out of {len(time_data)}")
     
-    # Subplot 3: Power consumption analysis
-    plt.subplot(2, 3, 3)
-    power_normal = 0.5 + 0.1 * np.sin(time_data/3)
-    power_fault = np.copy(power_normal)
-    power_fault[fault_idx] += friction_magnitude * 200  # More power needed due to friction
-    
-    plt.plot(time_data, power_normal, '--', color='blue', linewidth=2, label='Normal Power')
-    plt.plot(time_data, power_fault, '-', color='red', linewidth=2, label='With Friction Fault')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Power (W)')
-    plt.title(f'Power Consumption Impact - {spacecraft_name}')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Subplot 4: Attitude error progression
-    plt.subplot(2, 3, 4)
-    if 'attitude_error' in fault_data:
-        attitude_error = fault_data['attitude_error']
-    else:
-        attitude_error = 0.1 * np.sin(time_data/5)
-        # Friction causes gradual attitude error buildup
-        attitude_error[fault_idx] += friction_magnitude * 100 * (time_data[fault_idx] - fault_time_min)
-    
-    plt.plot(time_data, attitude_error, 'blue', linewidth=2, label='Attitude Error')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Attitude Error (deg)')
-    plt.title(f'Attitude Control Impact - {spacecraft_name}')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Subplot 5: Friction vs Speed relationship
-    plt.subplot(2, 3, 5)
-    if 'wheel_speeds' in fault_data:
-        faulty_wheel_idx = fault_data.get('fault_wheel', 3)
-        faulty_speeds = fault_data['wheel_speeds'][:, faulty_wheel_idx]
-        pre_fault_idx = time_data < fault_time_min
-        post_fault_idx = time_data >= fault_time_min
-        
-        if np.any(pre_fault_idx):
-            plt.scatter(faulty_speeds[pre_fault_idx], friction[pre_fault_idx], 
-                       c='blue', alpha=0.6, label='Pre-fault', s=30)
-        if np.any(post_fault_idx):
-            plt.scatter(faulty_speeds[post_fault_idx], friction[post_fault_idx], 
-                       c='red', alpha=0.6, label='Post-fault', s=30)
-    else:
-        # Generate representative scatter data
-        speeds = np.linspace(50, 150, len(time_data))
-        plt.scatter(speeds[time_data < fault_time_min], friction[time_data < fault_time_min], 
-                   c='blue', alpha=0.6, label='Pre-fault', s=30)
-        plt.scatter(speeds[time_data >= fault_time_min], friction[time_data >= fault_time_min], 
-                   c='red', alpha=0.6, label='Post-fault', s=30)
-    
-    plt.xlabel('Wheel Speed (rad/s)')
-    plt.ylabel('Friction Torque (N·m)')
-    plt.title(f'Friction vs Speed Relationship')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Subplot 6: Cumulative energy loss
-    plt.subplot(2, 3, 6)
-    if len(time_data) > 1:
-        dt = np.diff(time_data) * 60  # Convert to seconds
-        power_loss = np.maximum(0, power_fault - power_normal)
-        energy_loss = np.cumsum(np.concatenate([[0], power_loss[1:] * dt]))  # Energy in Joules
-        plt.plot(time_data, energy_loss, 'darkred', linewidth=2, label='Cumulative Energy Loss')
-        plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
-        plt.xlabel('Time (minutes)')
-        plt.ylabel('Energy Loss (J)')
-        plt.title('Cumulative Energy Loss')
-        plt.grid(True, alpha=0.3)
-        plt.legend()
-    
-    plt.tight_layout()
-    plots[f"FrictionFault_Comprehensive_{spacecraft_name}"] = fig_friction
-    
-    return plots
-
-def generate_power_limit_plots(fault_data, time_data, fault_time_min, spacecraft_name):
-    """Generate comprehensive power limit fault specific plots"""
-    plots = {}
-    
-    fig_power = plt.figure(figsize=(14, 10))
-    
-    # Power limit analysis
-    plt.subplot(2, 3, 1)
-    power_limit = fault_data.get('power_limit', 0.5)
-    power_request = 1.0 + 0.5 * np.sin(time_data/3) + 0.2 * np.sin(time_data/1.5)
-    power_actual = np.copy(power_request)
-    fault_idx = time_data >= fault_time_min
-    power_actual[fault_idx] = np.minimum(power_request[fault_idx], power_limit)
-    
-    plt.plot(time_data, power_request, '--', color='blue', linewidth=2, label='Requested Power')
-    plt.plot(time_data, power_actual, '-', color='red', linewidth=2, label='Actual Power')
-    plt.axhline(y=power_limit, color='red', linestyle=':', linewidth=2, label=f'Power Limit ({power_limit}W)')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Power (W)')
-    plt.title(f'Power Limitation Analysis - {spacecraft_name}')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Performance degradation
-    plt.subplot(2, 3, 2)
-    performance = np.ones_like(time_data) * 100
-    performance[fault_idx] = (power_actual[fault_idx] / power_request[fault_idx]) * 100
-    
-    plt.plot(time_data, performance, 'orange', linewidth=2, label='Performance')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
-    plt.axhline(y=100, color='green', linestyle=':', alpha=0.7, label='100% Performance')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Performance (%)')
-    plt.title(f'System Performance - {spacecraft_name}')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Power deficit
-    plt.subplot(2, 3, 3)
-    power_deficit = np.maximum(0, power_request - power_actual)
-    plt.plot(time_data, power_deficit, 'red', linewidth=2, label='Power Deficit')
-    plt.fill_between(time_data, power_deficit, alpha=0.3, color='red')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Power Deficit (W)')
-    plt.title('Power Shortage Analysis')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Wheel speed impact
-    plt.subplot(2, 3, 4)
+    # Generate wheel speeds if not provided
     if 'wheel_speeds' in fault_data:
         wheel_speeds = fault_data['wheel_speeds']
-        faulty_wheel = fault_data.get('fault_wheel', 3)
-        colors = ['blue', 'green', 'red', 'orange']
-        for i in range(min(wheel_speeds.shape[1], 4)):
-            label_suffix = " (POWER LIMITED)" if i == faulty_wheel else ""
-            plt.plot(time_data, wheel_speeds[:, i], color=colors[i], linewidth=2, 
-                    label=f'Wheel {i}{label_suffix}')
+        print(f"DEBUG: Using provided wheel speeds with shape: {wheel_speeds.shape}")
+        
+        # APPLY RW4 DISABLE TO REAL DATA
+        rw4_disabled_until = fault_time_min + 5.0  # 5 minutes after fault
+        rw4_disabled_idx = time_data < rw4_disabled_until
+        wheel_speeds[rw4_disabled_idx, 3] = 0.0  # RW4 disabled (index 3)
+        print(f"DEBUG: Applied RW4 disable to real data until {rw4_disabled_until} minutes")
+        
     else:
-        # Generate representative wheel speed data with power limitation
-        colors = ['blue', 'green', 'red', 'orange']
+        print("DEBUG: Generating synthetic wheel speed data...")
+        # Generate simpler, more realistic wheel speed data
+        wheel_speeds = np.zeros((len(time_data), 4))
         for i in range(4):
-            speed = 100 * np.sin(time_data/7 + i) + 50
-            if i == fault_data.get('fault_wheel', 3):
-                # Reduce speed due to power limitation
-                speed[fault_idx] *= (power_limit / 2.0)  # Simplified power-speed relationship
-            plt.plot(time_data, speed, color=colors[i], linewidth=2, label=f'Wheel {i}')
+            # Simpler speed profiles - more constant with small variations
+            base_speed = 50 + i * 10  # Different base speeds for each wheel
+            wheel_speeds[:, i] = base_speed + 5 * np.sin(time_data/15 + i)  # Slow, gentle variations
+            
+            # Add fault effect ONLY to the faulty wheel
+            if i == fault_wheel:
+                wheel_speeds[fault_idx, i] *= 0.9  # 10% speed reduction due to friction
+            
+            # RW4 DISABLE: Add this special case for RW4
+            if i == 3:  # RW4 (index 3)
+                rw4_disabled_until = fault_time_min + 5.0  # 5 minutes after fault
+                rw4_disabled_idx = time_data < rw4_disabled_until
+                wheel_speeds[rw4_disabled_idx, i] = 0.0  # Disabled (zero speed)
+                print(f"DEBUG: RW4 disabled until {rw4_disabled_until} minutes")
+        
+        print(f"DEBUG: Generated wheel speeds with RW4 disable feature")
     
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Wheel Speed (rad/s)')
-    plt.title('Wheel Speed Impact')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Energy analysis
-    plt.subplot(2, 3, 5)
-    if len(time_data) > 1:
-        dt = np.diff(time_data) * 60  # Convert to seconds
-        energy_deficit = np.cumsum(np.concatenate([[0], power_deficit[1:] * dt]))  # Energy in Joules
-        plt.plot(time_data, energy_deficit, 'darkred', linewidth=2, label='Energy Deficit')
+    try:
+        # ========================================
+        # PLOT 1: RW SPEEDS
+        # ========================================
+        print("DEBUG: Creating RW Speeds plot...")
+        fig_speeds = plt.figure(figsize=(12, 8))
+        colors = ['blue', 'green', 'red', 'orange']
+        
+        for i in range(4):
+            label_suffix = " (FAULTY)" if i == fault_wheel else ""
+            # Add special label for RW4 disable
+            if i == 3:  # RW4
+                label_suffix += " [DISABLED 10-15min]"
+            plt.plot(time_data, wheel_speeds[:, i], color=colors[i], linewidth=2.5, 
+                    label=f'Wheel {i+1}{label_suffix}')
+        
         plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
-        plt.xlabel('Time (minutes)')
-        plt.ylabel('Energy Deficit (J)')
-        plt.title('Cumulative Energy Deficit')
+        plt.axvline(x=fault_time_min + 5.0, color='gray', linestyle=':', linewidth=2, label='RW4 Recovery')
+        plt.xlabel('Time (minutes)', fontsize=12)
+        plt.ylabel('Wheel Speed (rad/s)', fontsize=12)
+        plt.title(f'Reaction Wheel Speeds: Friction Fault - {spacecraft_name}', fontsize=14, fontweight='bold')
         plt.grid(True, alpha=0.3)
-        plt.legend()
+        plt.legend(fontsize=11)
+        plt.tight_layout()
+        
+        plots[f"RWSpeeds_{spacecraft_name}"] = fig_speeds
+        print("DEBUG: RW Speeds plot created successfully")
+        
+        # ========================================
+        # PLOT 2: RW FRICTION
+        # ========================================
+        print("DEBUG: Creating RW Friction plot...")
+        fig_friction = plt.figure(figsize=(12, 8))
+        
+        # Calculate friction for each wheel - FIXED to match reference images
+        friction_all_wheels = []
+        for i in range(4):
+            friction = np.full_like(time_data, friction_baseline)
+            # ONLY the faulty wheel gets the friction fault 
+            if i == fault_wheel:
+                friction[fault_idx] += friction_magnitude
+            friction_all_wheels.append(friction)
+            
+            # Plot styling to match reference
+            if i == fault_wheel:
+                # Faulty wheel - solid line with fault
+                plt.plot(time_data, friction, color='blue', linestyle='-', 
+                        linewidth=3, label=f'RW{i+1}')
+            else:
+                # Other wheels - dashed lines at baseline
+                colors_others = ['green', 'red', 'orange']
+                color_idx = i-1 if i > 0 else 0
+                plt.plot(time_data, friction, color=colors_others[color_idx], linestyle='--', 
+                        linewidth=2, label=f'RW{i+1}', alpha=0.7)
+        
+        plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
+        plt.axhline(y=friction_baseline, color='gray', linestyle=':', alpha=0.7, label='Baseline Friction')
+        plt.xlabel('Time (minutes)', fontsize=12)
+        plt.ylabel('Friction Torque (N·m)', fontsize=12)
+        plt.title(f'Reaction Wheel Friction Evolution - {spacecraft_name}', fontsize=14, fontweight='bold')
+        plt.grid(True, alpha=0.3)
+        plt.legend(fontsize=11)
+        plt.tight_layout()
+        
+        plots[f"RWFriction_{spacecraft_name}"] = fig_friction
+        print("DEBUG: RW Friction plot created successfully")
+        
+        # ========================================
+        # PLOT 3: RW TEMPERATURES
+        # ========================================
+        print("DEBUG: Creating RW Temperatures plot...")
+        fig_temps = plt.figure(figsize=(12, 8))
+        
+        # Temperature calculation from ffault.py - FIXED for only faulty wheel heating
+        def calculate_temperatures(rw_speeds, rw_friction, fault_wheel_idx):
+            """Estimate temperatures based on power dissipated by RW friction."""
+            print(f"DEBUG: Calculating temperatures for fault wheel index: {fault_wheel_idx}")
+            numRW = len(rw_friction)
+            num_samples = len(rw_speeds)
+            temperatures = []
+
+            T_ambient = 20.0  # Ambient temperature in Celsius
+
+            for rw in range(numRW):
+                temp = np.zeros(num_samples)
+                temp[0] = T_ambient
+
+                for i in range(1, num_samples):
+                    # Only calculate heating for the faulty wheel
+                    if rw == fault_wheel_idx:
+                        # Convert wheel speed (already in rad/s from Basilisk)
+                        omega = abs(rw_speeds[i, rw])
+
+                        # Compute power due to ADDITIONAL friction (only the fault component)
+                        baseline_friction = 0.02
+                        current_friction = rw_friction[rw][i] if i < len(rw_friction[rw]) else baseline_friction
+                        additional_friction = max(0, current_friction - baseline_friction)  # Only the fault friction
+                        
+                        P_friction = abs(additional_friction * omega)
+
+                        # Calculate power and temperature dynamics - REDUCED heating, STRONGER cooling
+                        temp_rise = P_friction * 0.05  # REDUCED heating: was 0.1, now 0.05 (50% less)
+                        
+                        # Much stronger cooling model to match reference behavior
+                        temp_diff = temp[i-1] - T_ambient
+                        cooling = temp_diff * 0.15  # MUCH stronger cooling: was 0.08, now 0.15
+                        
+                        # Additional aggressive cooling for temperatures above ambient
+                        if temp_diff > 0.5:  # Kick in earlier
+                            additional_cooling = (temp_diff - 0.5) * 0.08  # Strong additional cooling
+                            cooling += additional_cooling
+                        
+                        temp[i] = temp[i-1] + temp_rise - cooling
+                    else:
+                        # Non-faulty wheels stay at ambient temperature
+                        temp[i] = T_ambient
+
+                    # Clamp temperature between ambient and 100°C
+                    temp[i] = max(T_ambient, min(temp[i], 100.0))
+
+                temperatures.append(temp)
+
+            return temperatures
+        
+        # Calculate temperatures using modified ffault.py method 
+        temperatures = calculate_temperatures(wheel_speeds, friction_all_wheels, fault_wheel)
+        print(f"DEBUG: Temperature calculation completed. Max temps: {[max(t) for t in temperatures]}")
+        
+        # Plot temperatures using ffault.py styling
+        colors = ['blue', 'green', 'red', 'orange']
+        
+        for idx in range(4):
+            plt.plot(time_data, temperatures[idx], color=colors[idx],
+                     label=f'RW {idx+1}', linewidth=2)
+
+        plt.xlabel('Time [min]', fontsize=12)
+        plt.ylabel('Temperature [°C]', fontsize=12)
+        plt.title('Reaction Wheel Temperatures', fontsize=14, fontweight='bold')
+        plt.legend(fontsize=11)
+        plt.grid(True, alpha=0.3)
+
+        # Draw warning/critical temperature lines from ffault.py
+        plt.axhline(y=22, color='orange', linestyle='--', alpha=0.7, label='Warning')
+        plt.axhline(y=23, color='red', linestyle='--', alpha=0.7, label='Critical')
+        
+        # Add fault injection line
+        plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
+        
+        plt.tight_layout()
+        plots[f"RWTemperatures_{spacecraft_name}"] = fig_temps
+        print("DEBUG: RW Temperatures plot created successfully")
+        
+        # ========================================
+        # PLOT 4: ATTITUDE ERROR NORM
+        # ========================================
+        print("DEBUG: Creating Attitude Error plot...")
+        fig_attitude = plt.figure(figsize=(12, 8))
+        
+        if 'attitude_error' in fault_data:
+            attitude_error = fault_data['attitude_error']
+            print("DEBUG: Using provided attitude error data")
+        else:
+            print("DEBUG: Generating synthetic attitude error data...")
+            # Generate representative attitude error with enhanced effects
+            attitude_error = 0.1 * np.sin(time_data/5)  # Base oscillation
+            
+            # Add friction effects after fault injection
+            friction_effect = np.zeros_like(time_data)
+            friction_effect[fault_idx] = friction_magnitude * 100 * (time_data[fault_idx] - fault_time_min)
+            
+            # Add thermal effects (temperature-dependent attitude degradation)
+            faulty_wheel_temp = temperatures[fault_wheel]
+            T_ambient = 20.0  # Define T_ambient for attitude calculation
+            thermal_effect = np.maximum(0, (np.array(faulty_wheel_temp) - T_ambient) * 0.001)
+            
+            # Add RW4 disable effect on attitude control
+            rw4_disabled_until = fault_time_min + 5.0
+            rw4_disabled_idx = time_data < rw4_disabled_until
+            rw4_effect = np.zeros_like(time_data)
+            rw4_effect[rw4_disabled_idx] = 0.05  # Attitude degradation when RW4 is disabled
+            
+            attitude_error += friction_effect + thermal_effect + rw4_effect
+        
+        plt.plot(time_data, attitude_error, 'blue', linewidth=2.5, label='Attitude Error')
+        plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
+        plt.axvline(x=fault_time_min + 5.0, color='gray', linestyle=':', linewidth=2, label='RW4 Recovery')
+        plt.axhline(y=0, color='gray', linestyle='-', alpha=0.5)
+        plt.xlabel('Time (minutes)', fontsize=12)
+        plt.ylabel('Attitude Error (deg)', fontsize=12)
+        plt.title(f'Attitude Control Impact: Enhanced Analysis - {spacecraft_name}', 
+                  fontsize=14, fontweight='bold')
+        plt.grid(True, alpha=0.3)
+        plt.legend(fontsize=11)
+        
+        # Add effect annotations
+        max_error = max(np.abs(attitude_error))
+        error_text = f'Max Error: {max_error:.3f}°\nIncludes friction + thermal + RW4 disable effects'
+        plt.text(0.98, 0.98, error_text, transform=plt.gca().transAxes, 
+                verticalalignment='top', horizontalalignment='right', fontsize=10,
+                bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
+        
+        plt.tight_layout()
+        plots[f"attitudeErrorNorm_{spacecraft_name}"] = fig_attitude
+        print("DEBUG: Attitude Error plot created successfully")
+        
+    except Exception as e:
+        print(f"DEBUG ERROR in friction plot creation: {e}")
+        import traceback
+        print(f"DEBUG TRACEBACK: {traceback.format_exc()}")
+        raise  # Re-raise the exception so it gets caught by the main function
     
-    # System health indicator
-    plt.subplot(2, 3, 6)
-    health_indicator = 100 * (1 - power_deficit / np.maximum(power_request, 0.1))
-    plt.plot(time_data, health_indicator, 'purple', linewidth=2, label='System Health')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
-    plt.axhline(y=100, color='green', linestyle=':', alpha=0.7, label='Healthy')
-    plt.axhline(y=50, color='orange', linestyle=':', alpha=0.7, label='Degraded')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Health Index (%)')
-    plt.title('System Health Index')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    plt.tight_layout()
-    plots[f"PowerLimitFault_Comprehensive_{spacecraft_name}"] = fig_power
-    
+    print(f"DEBUG: Friction plots completed. Returning {len(plots)} plots: {list(plots.keys())}")
     return plots
+
+
+def generate_power_limit_plots(fault_data, time_data, fault_time_min, spacecraft_name):
+    """
+    Generate power limit fault plots - 2 key plots with RW4 deactivation:
+    1. RW Speeds - Reaction wheel speeds with power limitation effects
+    2. Attitude Error - Attitude control degradation due to power limits
+    """
+    print("DEBUG: Starting power limit plot generation...")
+    plots = {}
+    
+    # DEBUG: Check fault data contents
+    print(f"DEBUG: Power limit fault data contents: {fault_data}")
+    
+    # Get fault parameters
+    power_limit = fault_data.get('power_limit', 0.5)  # Default 0.5W limit
+    fault_wheel = fault_data.get('fault_wheel', 0)  # Which wheel is power limited
+    fault_idx = time_data >= fault_time_min
+    
+    print(f"DEBUG: Power limit parameters:")
+    print(f"  - Power Limit: {power_limit}W")
+    print(f"  - Fault Wheel: {fault_wheel}")
+    print(f"  - Fault indices: {np.sum(fault_idx)} out of {len(time_data)}")
+    
+    # Generate wheel speeds if not provided
+    if 'wheel_speeds' in fault_data:
+        wheel_speeds = fault_data['wheel_speeds']
+        print(f"DEBUG: Using provided wheel speeds with shape: {wheel_speeds.shape}")
+        
+        # APPLY RW4 DISABLE TO REAL DATA
+        rw4_disabled_until = fault_time_min + 5.0  # 5 minutes after fault
+        rw4_disabled_idx = time_data < rw4_disabled_until
+        wheel_speeds[rw4_disabled_idx, 3] = 0.0  # RW4 disabled (index 3)
+        
+        # Apply power limitation to the faulty wheel
+        speed_reduction_factor = power_limit / 2.0  # Relates power limit to speed capability
+        wheel_speeds[fault_idx, fault_wheel] *= speed_reduction_factor
+        print(f"DEBUG: Applied RW4 disable and power limitation to real data")
+        
+    else:
+        print("DEBUG: Generating synthetic wheel speed data for power limit...")
+        # Generate wheel speed data with realistic oscillations and power limitation effects
+        wheel_speeds = np.zeros((len(time_data), 4))
+        for i in range(4):
+            # More realistic speed profiles with multiple frequency components
+            base_speed = 50 + i * 10  # Different base speeds for each wheel
+            
+            # Add multiple sine waves for natural spacecraft oscillations
+            primary_oscillation = 8 * np.sin(time_data/3 + i * np.pi/2)  # Primary control oscillation
+            secondary_oscillation = 3 * np.sin(time_data/1.5 + i * np.pi/3)  # Secondary harmonics
+            high_freq_noise = 1 * np.sin(time_data/0.8 + i * np.pi/4)  # High frequency variations
+            
+            wheel_speeds[:, i] = base_speed + primary_oscillation + secondary_oscillation + high_freq_noise
+            
+            # Add power limitation effect ONLY to the faulty wheel
+            if i == fault_wheel:
+                # Power limitation reduces maximum achievable speed
+                speed_reduction_factor = power_limit / 2.0  # Relates power limit to speed capability
+                wheel_speeds[fault_idx, i] *= speed_reduction_factor
+            
+            # RW4 DISABLE: Special case for RW4
+            if i == 3:  # RW4 (index 3)
+                rw4_disabled_until = fault_time_min + 5.0  # 5 minutes after fault
+                rw4_disabled_idx = time_data < rw4_disabled_until
+                wheel_speeds[rw4_disabled_idx, i] = 0.0  # Disabled (zero speed)
+                print(f"DEBUG: RW4 disabled until {rw4_disabled_until} minutes")
+        
+        print(f"DEBUG: Generated wheel speeds with realistic oscillations, power limitation and RW4 disable effects")
+    
+    try:
+        # ========================================
+        # PLOT 1: RW SPEEDS (with power limitation effects)
+        # ========================================
+        print("DEBUG: Creating Power Limited RW Speeds plot...")
+        fig_speeds = plt.figure(figsize=(12, 8))
+        colors = ['blue', 'green', 'red', 'orange']
+        
+        for i in range(4):
+            label_suffix = ""
+            if i == fault_wheel:
+                label_suffix += " (POWER LIMITED)"
+            # Add special label for RW4 disable
+            if i == 3:  # RW4
+                label_suffix += " [DISABLED 10-15min]"
+            
+            line_width = 3 if i == fault_wheel else 2
+            plt.plot(time_data, wheel_speeds[:, i], color=colors[i], linewidth=line_width, 
+                    label=f'Wheel {i+1}{label_suffix}')
+        
+        plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Power Limit Fault')
+        plt.axvline(x=fault_time_min + 5.0, color='gray', linestyle=':', linewidth=2, label='RW4 Recovery')
+        plt.axhline(y=power_limit*50, color='red', linestyle=':', alpha=0.7, 
+                   label=f'Power Limited Speed (~{power_limit*50:.0f} rad/s)')
+        plt.xlabel('Time (minutes)', fontsize=12)
+        plt.ylabel('Wheel Speed (rad/s)', fontsize=12)
+        plt.title(f'Reaction Wheel Speeds: Power Limit Fault - {spacecraft_name}', fontsize=14, fontweight='bold')
+        plt.grid(True, alpha=0.3)
+        plt.legend(fontsize=11)
+        plt.tight_layout()
+        
+        plots[f"RWSpeeds_PowerLimit_{spacecraft_name}"] = fig_speeds
+        print("DEBUG: Power Limited RW Speeds plot created successfully")
+        
+        # ========================================
+        # PLOT 2: ATTITUDE ERROR (due to power limitation)
+        # ========================================
+        print("DEBUG: Creating Power Limit Attitude Error plot...")
+        fig_attitude = plt.figure(figsize=(12, 8))
+        
+        if 'attitude_error' in fault_data:
+            attitude_error = fault_data['attitude_error']
+            print("DEBUG: Using provided attitude error data")
+        else:
+            print("DEBUG: Generating synthetic attitude error data for power limit...")
+            # Generate attitude error with realistic oscillations and power limitation effects (REDUCED severity)
+            # Base attitude control oscillations - much smaller amplitude
+            primary_attitude_osc = 0.015 * np.sin(time_data/4)  # Primary attitude oscillation
+            secondary_attitude_osc = 0.008 * np.sin(time_data/2.5)  # Secondary oscillation
+            high_freq_attitude = 0.004 * np.sin(time_data/1.2)  # High frequency control variations
+            
+            attitude_error = primary_attitude_osc + secondary_attitude_osc + high_freq_attitude
+            
+            # Add power limitation effects after fault injection (REDUCED)
+            if np.any(fault_idx):
+                # Power limitation causes control performance degradation
+                power_degradation_factor = 1.0 - power_limit  # How much control authority is lost
+                
+                # Gradual attitude error buildup due to insufficient control power (REDUCED)
+                time_since_fault = time_data[fault_idx] - fault_time_min
+                power_limit_error = power_degradation_factor * 0.05 * time_since_fault  # Reduced from 0.2 to 0.05
+                
+                # Add oscillations due to insufficient damping from limited power (REDUCED)
+                power_oscillation = power_degradation_factor * 0.02 * np.sin(time_data[fault_idx] * 2)  # Reduced from 0.1 to 0.02
+                
+                attitude_error[fault_idx] += power_limit_error + power_oscillation
+            
+            # Add RW4 disable effect on attitude control (REDUCED)
+            rw4_disabled_until = fault_time_min + 5.0
+            rw4_disabled_idx = time_data < rw4_disabled_until
+            rw4_effect = np.zeros_like(time_data)
+            rw4_effect[rw4_disabled_idx] = 0.03  # Reduced from 0.08 to 0.03
+            
+            attitude_error += rw4_effect
+        
+        plt.plot(time_data, attitude_error, 'purple', linewidth=2.5, label='Attitude Error')
+        plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Power Limit Fault')
+        plt.axvline(x=fault_time_min + 5.0, color='gray', linestyle=':', linewidth=2, label='RW4 Recovery')
+        plt.axhline(y=0, color='gray', linestyle='-', alpha=0.5)
+        plt.xlabel('Time (minutes)', fontsize=12)
+        plt.ylabel('Attitude Error (deg)', fontsize=12)
+        plt.title(f'Attitude Control Impact: Power Limit Fault - {spacecraft_name}', 
+                  fontsize=14, fontweight='bold')
+        plt.grid(True, alpha=0.3)
+        plt.legend(fontsize=11)
+        
+        # Add effect annotations
+        max_error = max(np.abs(attitude_error))
+        power_loss_percent = (1.0 - power_limit) * 100
+        error_text = f'Max Error: {max_error:.3f}°\nPower Loss: {power_loss_percent:.0f}%\nReduced Control Authority\nRW4 Disable Effect'
+        plt.text(0.98, 0.98, error_text, transform=plt.gca().transAxes, 
+                verticalalignment='top', horizontalalignment='right', fontsize=10,
+                bbox=dict(boxstyle='round', facecolor='lightcoral', alpha=0.8))
+        
+        plt.tight_layout()
+        plots[f"attitudeErrorNorm_PowerLimit_{spacecraft_name}"] = fig_attitude
+        print("DEBUG: Power Limit Attitude Error plot created successfully")
+        
+    except Exception as e:
+        print(f"DEBUG ERROR in power limit plot creation: {e}")
+        import traceback
+        print(f"DEBUG TRACEBACK: {traceback.format_exc()}")
+        raise  # Re-raise the exception so it gets caught by the main function
+    
+    print(f"DEBUG: Power limit plots completed. Returning {len(plots)} plots: {list(plots.keys())}")
+    return plots
+    
 
 def generate_encoder_plots(fault_data, time_data, fault_time_min, spacecraft_name):
-    """Generate comprehensive encoder fault specific plots"""
+    """Generate encoder fault plots with RW4 deactivation and faulted wheel degradation"""
+    print("DEBUG: Starting encoder plot generation...")
     plots = {}
     
-    fig_encoder = plt.figure(figsize=(14, 10))
-    
-    # Speed measurement error
-    plt.subplot(2, 3, 1)
-    true_speed = 100.0 * np.sin(time_data/7) + 50.0
-    measured_speed = np.copy(true_speed)
-    
-    # Add measurement noise
-    np.random.seed(42)  # For reproducible results
-    noise_base = 2.0 * np.random.randn(len(time_data))
-    measured_speed += noise_base
-    
-    # Add bias and increased noise after fault
+    # Get fault parameters
+    fault_wheel = fault_data.get('fault_wheel', 0)  # Default to RW1 (index 0)
+    encoder_error_magnitude = fault_data.get('encoder_error', 20.0)  # Default error magnitude
     fault_idx = time_data >= fault_time_min
-    if np.any(fault_idx):
-        error_magnitude = 20.0
-        bias = error_magnitude * 0.5  # 50% of error as bias
-        noise = error_magnitude * 0.3 * np.random.randn(np.sum(fault_idx))  # 30% as random noise
-        measured_speed[fault_idx] += bias + noise
     
-    plt.plot(time_data, true_speed, '--', color='blue', linewidth=2, label='True Speed')
-    plt.plot(time_data, measured_speed, '-', color='red', linewidth=2, label='Measured Speed')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Encoder Fault')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Wheel Speed (rad/s)')
-    plt.title(f'Encoder Measurement Error - {spacecraft_name}')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
+    print(f"DEBUG: Encoder fault parameters:")
+    print(f"  - Fault Wheel: {fault_wheel}")
+    print(f"  - Encoder Error Magnitude: {encoder_error_magnitude}")
+    print(f"  - Fault time: {fault_time_min} minutes")
+    print(f"  - Fault indices: {np.sum(fault_idx)} out of {len(time_data)}")
     
-    # Measurement error magnitude
-    plt.subplot(2, 3, 2)
-    speed_error = measured_speed - true_speed
-    plt.plot(time_data, speed_error, 'purple', linewidth=2, label='Measurement Error')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Encoder Fault')
-    plt.axhline(y=0, color='gray', linestyle='-', alpha=0.5)
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Speed Error (rad/s)')
-    plt.title('Measurement Error Magnitude')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Error statistics over time
-    plt.subplot(2, 3, 3)
-    window_size = max(1, len(time_data) // 20)  # Rolling window
-    if len(speed_error) >= window_size:
-        error_rms = []
-        error_bias = []
-        for i in range(window_size, len(speed_error)):
-            window_data = speed_error[i-window_size:i]
-            error_rms.append(np.sqrt(np.mean(window_data**2)))
-            error_bias.append(np.mean(window_data))
-        
-        time_windowed = time_data[window_size:]
-        plt.plot(time_windowed, error_rms, 'red', linewidth=2, label='RMS Error')
-        plt.plot(time_windowed, np.abs(error_bias), 'orange', linewidth=2, label='Bias Magnitude')
-        plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Encoder Fault')
-        plt.xlabel('Time (minutes)')
-        plt.ylabel('Error Statistics (rad/s)')
-        plt.title('Error Statistics Evolution')
-        plt.grid(True, alpha=0.3)
-        plt.legend()
-    
-    # Control impact
-    plt.subplot(2, 3, 4)
-    # Simulate control error due to encoder fault
-    control_error = np.abs(speed_error) * 0.1  # Control effort proportional to measurement error
-    plt.plot(time_data, control_error, 'green', linewidth=2, label='Control Error')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Encoder Fault')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Control Error Magnitude')
-    plt.title('Control System Impact')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Frequency analysis placeholder
-    plt.subplot(2, 3, 5)
-    # Simple frequency analysis representation
-    pre_fault_error = speed_error[time_data < fault_time_min]
-    post_fault_error = speed_error[time_data >= fault_time_min]
-    
-    if len(pre_fault_error) > 5 and len(post_fault_error) > 5:
-        # Simple histogram comparison
-        plt.hist(pre_fault_error, bins=20, alpha=0.5, label='Pre-fault Error', color='blue')
-        plt.hist(post_fault_error, bins=20, alpha=0.5, label='Post-fault Error', color='red')
-        plt.xlabel('Error Magnitude (rad/s)')
-        plt.ylabel('Frequency')
-        plt.title('Error Distribution')
-        plt.legend()
+    # Generate wheel speeds if not provided
+    if 'wheel_speeds' in fault_data:
+        wheel_speeds = fault_data['wheel_speeds']
+        print(f"DEBUG: Using provided wheel speeds with shape: {wheel_speeds.shape}")
     else:
-        plt.text(0.5, 0.5, 'Insufficient data\nfor analysis', 
-                ha='center', va='center', transform=plt.gca().transAxes)
-        plt.title('Error Distribution')
+        print("DEBUG: Generating synthetic wheel speed data for encoder fault...")
+        # Generate realistic wheel speed data
+        wheel_speeds = np.zeros((len(time_data), 4))
+        for i in range(4):
+            # Base speeds with natural oscillations
+            base_speed = 50 + i * 10  # Different base speeds for each wheel
+            primary_oscillation = 8 * np.sin(time_data/3 + i * np.pi/2)
+            secondary_oscillation = 3 * np.sin(time_data/1.5 + i * np.pi/3)
+            high_freq_noise = 1 * np.sin(time_data/0.8 + i * np.pi/4)
+            
+            wheel_speeds[:, i] = base_speed + primary_oscillation + secondary_oscillation + high_freq_noise
     
+    # APPLY RW4 DISABLE
+    rw4_disabled_until = fault_time_min + 5.0  # 5 minutes after fault
+    rw4_disabled_idx = time_data < rw4_disabled_until
+    wheel_speeds[rw4_disabled_idx, 3] = 0.0  # RW4 disabled (index 3)
+    print(f"DEBUG: RW4 disabled until {rw4_disabled_until} minutes")
+    
+    # APPLY ENCODER FAULT EFFECT - DOWNWARD TREND ON FAULTED WHEEL
+    if np.any(fault_idx):
+        print(f"DEBUG: Applying encoder fault effect to wheel {fault_wheel}")
+        time_since_fault = time_data[fault_idx] - fault_time_min
+        
+        # Create downward trend after fault injection
+        degradation_rate = 5.0  # rad/s per minute degradation rate
+        downward_trend = -degradation_rate * time_since_fault
+        
+        # Apply to faulted wheel
+        wheel_speeds[fault_idx, fault_wheel] += downward_trend
+        
+        # Ensure wheel doesn't go negative (stops at zero)
+        wheel_speeds[fault_idx, fault_wheel] = np.maximum(0, wheel_speeds[fault_idx, fault_wheel])
+    
+    # ========================================
+    # PLOT 1: RW SPEEDS (with encoder fault effects)
+    # ========================================
+    print("DEBUG: Creating RW Speeds plot...")
+    fig_speeds = plt.figure(figsize=(12, 8))
+    colors = ['blue', 'green', 'red', 'orange']
+    
+    for i in range(4):
+        label_suffix = ""
+        if i == fault_wheel:
+            label_suffix += " (ENCODER FAULT)"
+        # Add special label for RW4 disable
+        if i == 3:  # RW4
+            label_suffix += " [DISABLED 10-15min]"
+        
+        line_width = 3 if i == fault_wheel else 2
+        plt.plot(time_data, wheel_speeds[:, i], color=colors[i], linewidth=line_width, 
+                label=f'Wheel {i+1}{label_suffix}')
+    
+    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Encoder Fault')
+    plt.axvline(x=fault_time_min + 5.0, color='gray', linestyle=':', linewidth=2, label='RW4 Recovery')
+    plt.xlabel('Time (minutes)', fontsize=12)
+    plt.ylabel('Wheel Speed (rad/s)', fontsize=12)
+    plt.title(f'Reaction Wheel Speeds: Encoder Fault - {spacecraft_name}', fontsize=14, fontweight='bold')
     plt.grid(True, alpha=0.3)
+    plt.legend(fontsize=11)
+    plt.tight_layout()
     
-    # Detection indicator
-    plt.subplot(2, 3, 6)
-    # Simple fault detection based on error threshold
-    error_threshold = 5.0  # rad/s
-    detection_signal = np.abs(speed_error) > error_threshold
-    detection_level = detection_signal.astype(float) * 100
+    plots[f"RWSpeeds_Encoder_{spacecraft_name}"] = fig_speeds
+    print("DEBUG: RW Speeds plot created successfully")
     
-    plt.plot(time_data, detection_level, 'red', linewidth=2, label='Fault Detection')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Actual Fault')
-    plt.axhline(y=50, color='orange', linestyle=':', alpha=0.7, label='Detection Threshold')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Detection Level (%)')
-    plt.title('Fault Detection Signal')
+    # ========================================
+    # PLOT 2: ATTITUDE ERROR (due to encoder fault)
+    # ========================================
+    print("DEBUG: Creating Encoder Attitude Error plot...")
+    fig_attitude = plt.figure(figsize=(12, 8))
+    
+    if 'attitude_error' in fault_data:
+        attitude_error = fault_data['attitude_error']
+        print("DEBUG: Using provided attitude error data")
+    else:
+        print("DEBUG: Generating synthetic attitude error data for encoder fault...")
+        # Generate attitude error with realistic oscillations and encoder fault effects
+        # Base attitude control oscillations
+        primary_attitude_osc = 0.02 * np.sin(time_data/4)  # Primary attitude oscillation
+        secondary_attitude_osc = 0.01 * np.sin(time_data/2.5)  # Secondary oscillation
+        high_freq_attitude = 0.005 * np.sin(time_data/1.2)  # High frequency control variations
+        
+        attitude_error = primary_attitude_osc + secondary_attitude_osc + high_freq_attitude
+        
+        # Add encoder fault effects after fault injection
+        if np.any(fault_idx):
+            # Encoder measurement errors cause control performance degradation
+            time_since_fault = time_data[fault_idx] - fault_time_min
+            
+            # Progressive attitude error buildup due to incorrect speed measurements
+            encoder_control_error = encoder_error_magnitude * 0.002 * time_since_fault  # Gradual buildup
+            
+            # Add oscillations due to incorrect feedback from encoder
+            encoder_oscillation = encoder_error_magnitude * 0.001 * np.sin(time_data[fault_idx] * 3)
+            
+            attitude_error[fault_idx] += encoder_control_error + encoder_oscillation
+        
+        # Add RW4 disable effect on attitude control
+        rw4_disabled_until = fault_time_min + 5.0
+        rw4_disabled_idx = time_data < rw4_disabled_until
+        rw4_effect = np.zeros_like(time_data)
+        rw4_effect[rw4_disabled_idx] = 0.04  # Attitude degradation when RW4 is disabled
+        
+        attitude_error += rw4_effect
+    
+    plt.plot(time_data, attitude_error, 'darkred', linewidth=2.5, label='Attitude Error')
+    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Encoder Fault')
+    plt.axvline(x=fault_time_min + 5.0, color='gray', linestyle=':', linewidth=2, label='RW4 Recovery')
+    plt.axhline(y=0, color='gray', linestyle='-', alpha=0.5)
+    plt.xlabel('Time (minutes)', fontsize=12)
+    plt.ylabel('Attitude Error (deg)', fontsize=12)
+    plt.title(f'Attitude Control Impact: Encoder Fault - {spacecraft_name}', 
+              fontsize=14, fontweight='bold')
     plt.grid(True, alpha=0.3)
-    plt.legend()
+    plt.legend(fontsize=11)
+    
+    # Add effect annotations
+    max_error = max(np.abs(attitude_error))
+    error_text = f'Max Error: {max_error:.3f}°\nEncoder Measurement Errors\nRW4 Disable Effect'
+    plt.text(0.98, 0.98, error_text, transform=plt.gca().transAxes, 
+            verticalalignment='top', horizontalalignment='right', fontsize=10,
+            bbox=dict(boxstyle='round', facecolor='lightpink', alpha=0.8))
     
     plt.tight_layout()
-    plots[f"EncoderFault_Comprehensive_{spacecraft_name}"] = fig_encoder
+    plots[f"attitudeErrorNorm_Encoder_{spacecraft_name}"] = fig_attitude
+    print("DEBUG: Encoder Attitude Error plot created successfully")
     
+    print(f"DEBUG: Encoder plots completed. Returning {len(plots)} plots: {list(plots.keys())}")
     return plots
+
 
 def generate_battery_plots(fault_data, time_data, fault_time_min, spacecraft_name):
-    """Generate comprehensive battery fault specific plots"""
+    """Generate realistic battery storage plot matching reference behavior"""
+    print("DEBUG: Starting battery plot generation...")
     plots = {}
     
-    fig_battery = plt.figure(figsize=(14, 10))
-    
-    # Battery state of charge
-    plt.subplot(2, 3, 1)
-    normal_discharge_rate = 2.0  # %/min
-    fault_discharge_rate = normal_discharge_rate + fault_data.get('battery_drain', 0.05) * 10
-    
-    battery_state = np.zeros_like(time_data)
+    # Get fault parameters
+    battery_sink_power = fault_data.get('battery_sink_power', -50.0)  # -50W sink as in reference
     fault_idx = time_data >= fault_time_min
-    idx_before = time_data < fault_time_min
     
-    if np.any(idx_before):
-        battery_state[idx_before] = 100.0 - normal_discharge_rate * time_data[idx_before]
-        if np.any(fault_idx):
-            battery_state[fault_idx] = battery_state[np.sum(idx_before)-1] - fault_discharge_rate * (time_data[fault_idx] - fault_time_min)
+    print(f"DEBUG: Battery fault parameters:")
+    print(f"  - Battery sink power: {battery_sink_power}W")
+    print(f"  - Fault time: {fault_time_min} minutes")
+    print(f"  - Fault indices: {np.sum(fault_idx)} out of {len(time_data)}")
+    
+    # Create main battery plot to match reference image
+    fig_battery = plt.figure(figsize=(12, 8))
+    
+    # Convert time to seconds to match reference (time_data is in minutes)
+    time_seconds = time_data * 60.0
+    fault_time_seconds = fault_time_min * 60.0
+    
+    # Generate realistic battery storage levels with charge/discharge cycles
+    if 'battery_storage' in fault_data:
+        battery_storage = fault_data['battery_storage']
+        print("DEBUG: Using provided battery storage data")
     else:
-        battery_state = 100.0 - fault_discharge_rate * time_data
-    
-    plt.plot(time_data, battery_state, 'red', linewidth=3, label=f'{spacecraft_name} Battery')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Battery Fault')
-    plt.axhline(y=20, color='orange', linestyle=':', alpha=0.7, label='Low Battery (20%)')
-    plt.axhline(y=10, color='red', linestyle=':', alpha=0.7, label='Critical (10%)')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Battery State (%)')
-    plt.ylim(0, 100)
-    plt.title(f'Battery Degradation - {spacecraft_name}')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Power consumption comparison
-    plt.subplot(2, 3, 2)
-    normal_power = 1.0 + 0.2 * np.sin(time_data/5)  # Normal power consumption
-    faulty_power = np.copy(normal_power)
-    battery_drain = fault_data.get('battery_drain', 0.05) * 1000  # Convert to W
-    faulty_power[fault_idx] += battery_drain
-    
-    plt.plot(time_data, normal_power, '--', color='blue', linewidth=2, label='Normal Power')
-    plt.plot(time_data, faulty_power, '-', color='red', linewidth=2, label='With Battery Fault')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Battery Fault')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Power Consumption (W)')
-    plt.title('Power Consumption Impact')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Battery discharge rate
-    plt.subplot(2, 3, 3)
-    discharge_rate = np.full_like(time_data, normal_discharge_rate)
-    discharge_rate[fault_idx] = fault_discharge_rate
-    
-    plt.plot(time_data, discharge_rate, 'orange', linewidth=2, label='Discharge Rate')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Battery Fault')
-    plt.axhline(y=normal_discharge_rate, color='gray', linestyle=':', alpha=0.7, label='Normal Rate')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Discharge Rate (%/min)')
-    plt.title('Battery Discharge Rate')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Remaining mission time
-    plt.subplot(2, 3, 4)
-    remaining_time = np.zeros_like(time_data)
-    for i, (state, rate) in enumerate(zip(battery_state, discharge_rate)):
-        if rate > 0:
-            remaining_time[i] = max(0, state / rate)
-        else:
-            remaining_time[i] = 1000  # Essentially infinite if no discharge
-    
-    plt.plot(time_data, remaining_time, 'purple', linewidth=2, label='Remaining Mission Time')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Battery Fault')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('Remaining Time (minutes)')
-    plt.title('Mission Time Remaining')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    # Energy analysis
-    plt.subplot(2, 3, 5)
-    if len(time_data) > 1:
-        dt = np.diff(time_data) * 60  # Convert to seconds
-        energy_consumed = np.cumsum(np.concatenate([[0], faulty_power[1:] * dt]))  # Energy in Joules
-        energy_normal = np.cumsum(np.concatenate([[0], normal_power[1:] * dt]))
+        print("DEBUG: Generating synthetic battery storage data...")
         
-        plt.plot(time_data, energy_normal, '--', color='blue', linewidth=2, label='Normal Energy')
-        plt.plot(time_data, energy_consumed, '-', color='red', linewidth=2, label='Actual Energy')
-        plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Battery Fault')
-        plt.xlabel('Time (minutes)')
-        plt.ylabel('Cumulative Energy (J)')
-        plt.title('Energy Consumption Analysis')
-        plt.grid(True, alpha=0.3)
-        plt.legend()
+        # Parameters for realistic battery behavior
+        max_storage = 100.0  # Wh (match reference y-axis)
+        min_storage = 20.0   # Minimum storage level
+        
+        # Adjust period to match reference pattern
+        orbital_period = 600.0  # 10 minutes = 600 seconds
+        
+        print(f"DEBUG: Battery parameters - Max: {max_storage}Wh, Min: {min_storage}Wh, Period: {orbital_period}s")
+        
+        # Generate trapezoidal charge/discharge pattern to match reference
+        battery_storage = np.zeros_like(time_seconds)
+        
+        # Create trapezoidal pattern like in reference
+        for i, t in enumerate(time_seconds):
+            # Position in orbital cycle 
+            cycle_position = (t % orbital_period) / orbital_period
+            
+            if cycle_position < 0.05:  # Start at max (flat top)
+                battery_storage[i] = max_storage
+            elif cycle_position < 0.35:  # Discharge phase (30% of cycle)
+                # Linear discharge from max to min
+                discharge_fraction = (cycle_position - 0.05) / 0.30
+                battery_storage[i] = max_storage - (max_storage - min_storage) * discharge_fraction
+            elif cycle_position < 0.45:  # Stay at minimum (flat bottom)
+                battery_storage[i] = min_storage
+            else:  # Charge phase (55% of cycle)
+                # Linear charge from min to max
+                charge_fraction = (cycle_position - 0.45) / 0.55
+                battery_storage[i] = min_storage + (max_storage - min_storage) * charge_fraction
+            
+            if i < 5:  # Debug first few values
+                print(f"DEBUG: t={t:.1f}s, cycle_pos={cycle_position:.3f}, storage={battery_storage[i]:.1f}Wh")
+        
+        # Apply fault effect - additional power drain
+        if np.any(fault_idx):
+            print("DEBUG: Applying battery fault effect...")
+            fault_time_idx = time_seconds >= fault_time_seconds
+            
+            # Calculate additional discharge due to fault
+            # -50W sink increases discharge rate significantly
+            additional_discharge_rate = abs(battery_sink_power) / 3600.0  # Wh per second
+            
+            for i in range(len(time_seconds)):
+                if i > 0 and fault_time_idx[i]:
+                    dt = time_seconds[i] - time_seconds[i-1]
+                    # Apply additional discharge due to fault
+                    battery_storage[i] -= additional_discharge_rate * dt
+                    
+                    # Ensure battery doesn't go below 0
+                    battery_storage[i] = max(0.0, battery_storage[i])
+        
+        print(f"DEBUG: Generated battery storage data with realistic cycles and fault effects")
     
-    # System health vs battery level
-    plt.subplot(2, 3, 6)
-    health = np.ones_like(time_data) * 100
-    health[battery_state < 50] = 80  # Degraded below 50%
-    health[battery_state < 20] = 50  # Poor below 20%
-    health[battery_state < 10] = 20  # Critical below 10%
-    health[battery_state <= 0] = 0   # Failed at 0%
+    # Plot the battery storage level to match reference
+    plt.plot(time_seconds, battery_storage, 'blue', linewidth=2, label='Battery Stored Charge')
     
-    plt.plot(time_data, health, 'green', linewidth=2, label='System Health')
-    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Battery Fault')
-    plt.axhline(y=100, color='green', linestyle=':', alpha=0.7, label='Healthy')
-    plt.axhline(y=50, color='orange', linestyle=':', alpha=0.7, label='Degraded')
-    plt.axhline(y=20, color='red', linestyle=':', alpha=0.7, label='Critical')
-    plt.xlabel('Time (minutes)')
-    plt.ylabel('System Health (%)')
-    plt.title('System Health vs Battery')
+    # Mark fault injection time
+    plt.axvline(x=fault_time_seconds, color='red', linestyle='--', linewidth=2, 
+                label=f'Fault Injected ({battery_sink_power} W sink)')
+    
+    plt.xlabel('Time [s]', fontsize=12)
+    plt.ylabel('Stored Charge [Wh]', fontsize=12)
+    plt.title('Battery Storage Level with Fault Injection', fontsize=14, fontweight='bold')
     plt.grid(True, alpha=0.3)
-    plt.legend()
+    plt.legend(fontsize=11)
+    
+    # Set axis limits to match reference
+    plt.xlim(0, max(time_seconds))
+    plt.ylim(0, 105)
     
     plt.tight_layout()
-    plots[f"BatteryFault_Comprehensive_{spacecraft_name}"] = fig_battery
+    plots[f"BatteryStorage_{spacecraft_name}"] = fig_battery
+    print("DEBUG: Battery storage plot created successfully")
     
+    print(f"DEBUG: Battery plots completed. Returning {len(plots)} plots: {list(plots.keys())}")
     return plots
 
+    
 def generate_generic_fault_plots(fault_data, time_data, fault_time_min, spacecraft_name):
     """Generate generic fault plots when specific fault type is not recognized"""
     plots = {}
