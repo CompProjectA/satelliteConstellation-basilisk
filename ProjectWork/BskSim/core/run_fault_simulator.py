@@ -107,25 +107,8 @@ def check_file_structure():
     
     return True
 
-def create_minimal_missing_files(project_root):
-    """Create minimal versions of missing files to prevent import errors"""
+
     
-    # Create minimal __init__.py files if they don't exist
-    init_files = [
-        'gui_tab/__init__.py',
-        'faults/__init__.py'
-    ]
-    
-    for init_file in init_files:
-        init_path = os.path.join(project_root, init_file)
-        if not os.path.exists(init_path):
-            try:
-                os.makedirs(os.path.dirname(init_path), exist_ok=True)
-                with open(init_path, 'w') as f:
-                    f.write('# Automatically generated __init__.py\n')
-                print(f"Created: {init_path}")
-            except Exception as e:
-                print(f"Could not create {init_path}: {e}")
 
 def main():
     """Main function to run the simulator"""
@@ -141,11 +124,10 @@ def main():
         print("\nSome essential files are missing.")
         proceed = input("Do you want to proceed anyway? (y/n): ")
         if proceed.lower() != 'y':
-            print("Exiting. Please ensure all required files are present.")
+            print("Exiting. Please ensure al required files are present.")
             return
     
-    # Create minimal missing files
-    create_minimal_missing_files(project_root)
+    
     
     # Check requirements
     print("\nChecking dependencies...")
