@@ -239,7 +239,9 @@ def run_custom_simulation(config):
         print(f"Simulation Duration: {config.simulation_time} minutes ({config.simulation_time * 60:.0f} seconds)")
         print(f"Number of Spacecraft: {len(config.spacecraft_list)}")
         
-        # Proper time conversion
+                
+                # Proper time conversion - convert minutes to nanoseconds
+        # Proper time conversion using Basilisk macro
         simulationTime = macros.min2nano(config.simulation_time)
         
         print(f"Time Conversion:")
@@ -370,7 +372,7 @@ def run_custom_simulation(config):
         print(f"Total spacecraft with faults: {fault_spacecraft_count}")
                     
        
-        
+                
         # IMPROVED VISUALIZATION SETUP
         viz = None
         if config.save_binary and vizSupport.vizFound:
@@ -403,25 +405,46 @@ def run_custom_simulation(config):
             print(f"Binary output: {binary_filename}_UnityViz.bin")
             
             try:
-                # Enable visualization for multiple spacecraft
+                # First, try the alternative approach with separate viz task
+                # Calculate appropriate recording interval
+                total_sim_seconds = config.simulation_time * 60.0
+                desired_data_points = 1000  # Adjust this based on desired granularity
+                recording_interval_sec = max(1.0, total_sim_seconds / desired_data_points)
+                
+                print(f"Vizard recording setup:")
+                print(f"  - Total simulation: {total_sim_seconds} seconds")
+                print(f"  - Recording interval: {recording_interval_sec} seconds")
+                print(f"  - Expected data points: {int(total_sim_seconds / recording_interval_sec)}")
+                
+                # Create a separate task for Vizard recording at lower frequency
+                vizTaskName = "vizTask"
+                vizTimeStep = macros.sec2nano(recording_interval_sec)  # Record at lower frequency
+                
+                # Add visualization task
+                dynProcess.addTask(scSim.CreateNewTask(vizTaskName, vizTimeStep))
+                
+                # Enable visualization with the new task
                 viz = vizSupport.enableUnityVisualization(
                     scSim,
-                    simTaskName,
-                    sc_objects,  # Pass all spacecraft objects 
+                    vizTaskName,  # Use the new viz task instead of simTask
+                    sc_objects,
                     saveFile=binary_full_path,
-                    liveStream=False  # Don't slow down the simulation
+                    liveStream=False
                 )
-                print("Vizard visualization enabled")
                 
-                # IMPROVED: Configure visualization settings for better quality
+                print("Vizard visualization enabled with optimized recording rate")
+                
+                # Try to set additional settings if they exist
                 if hasattr(viz, 'settings'):
-                    viz.settings.showSpacecraftLabels = True  # Show spacecraft names
-                    viz.settings.orbitLinesOn = 1  # Enable orbit lines
-                    viz.settings.spacecraftSizeMultiplier = 8.0  # Make spacecraft larger for visibility
-                    viz.settings.orbitLinesOn = True  # Ensure orbit lines are on
-                    viz.settings.spacecraftCSOn = True  # Show coordinate system
-                    viz.settings.showCelestialBodyLabels = True  # Show body labels
-                    print("Improved Vizard settings: labels=True, orbitLines=True, size=8x, coordSys=True")
+                    try:
+                        viz.settings.showSpacecraftLabels = True
+                        viz.settings.orbitLinesOn = 1
+                        viz.settings.spacecraftSizeMultiplier = 8.0
+                        viz.settings.spacecraftCSOn = True
+                        viz.settings.showCelestialBodyLabels = True
+                        print("Applied improved Vizard display settings")
+                    except AttributeError:
+                        print("Some Vizard settings not available, using defaults")
                 
                 # IMPROVED: Add target locations with better visibility and connections
                 target_added = False
@@ -569,22 +592,25 @@ def run_custom_simulation(config):
         print("\n" + "-"*50)
         print("SIMULATION TIME SETUP")
         print("-"*50)
-        
+
+        # Ensure we're using the correct time conversion
+        simulationTime = macros.min2nano(config.simulation_time)
         print(f"Final simulation time: {simulationTime} nanoseconds")
         print(f"Equivalent to: {simulationTime/1e9:.0f} seconds")
         print(f"Equivalent to: {simulationTime/1e9/60:.1f} minutes")
-        
+
         # Initialize and run the simulation
         print("\n" + "-"*50)
         print("RUNNING SIMULATION")
         print("-"*50)
-        
+
         print("Initializing simulation...")
         scSim.InitializeSimulation()
-        
+
+        # CRITICAL: Use ConfigureStopTime with the exact nanosecond value
         print(f"Setting stop time to {simulationTime} ns...")
-        scSim.ConfigureStopTime(simulationTime)
-        
+        scSim.ConfigureStopTime(simulationTime)  # This should work correctly
+                
         print(f"Starting simulation for {config.simulation_time} minutes ({config.simulation_time * 60:.0f} seconds)...")
         start_time = datetime.now()
         
@@ -611,14 +637,6 @@ def run_custom_simulation(config):
             print(f"   Executed: {actual_sim_minutes:.2f} minutes")
         else:
             print(f"Simulation time matches request")
-
-
-
-
-
-
-
-
 
     # Generate plots using the centralized plots module
     figureList = {}
@@ -877,7 +895,7 @@ def run_custom_simulation(config):
     print("\n" + "="*60)
     print("SIMULATION COMPLETED SUCCESSFULLY")
     print("="*60)
-    print(f"Simulation Duration: {config.simulation_time} minutes ({config.simulation_time * 60:.0f} seconds)")
+    print(f"Duration: {config.simulation_time} minutes ({config.simulation_time * 60:.0f} seconds)")
     print(f"IMPROVEMENTS: Higher altitudes, Target visibility, Better camera positioning")
     
     return scenario, viz, figureList, output_dir

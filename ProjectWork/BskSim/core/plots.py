@@ -9,9 +9,9 @@ FIXED: Enhanced plotting functionality for all fault types with detailed analysi
 import os
 import sys
 import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
+import matplotlib.pyplot as plt
 
 # Import Basilisk utilities
 try:
@@ -843,8 +843,24 @@ def generate_constellation_plots(spacecraft_list, time_data, planet_mu):
     # Plot spacecraft orbits
     colors = ['red', 'green', 'blue', 'orange', 'purple', 'brown', 'pink', 'cyan']
     for i, sc in enumerate(spacecraft_list):
-        # Get orbital parameters
-        orbit_radius = np.linalg.norm(sc.hub.r_CN_NInit) / 1000.0  # Convert to km
+        # Get orbital parameters - FIX: Convert to numpy array and handle list format
+        if hasattr(sc.hub.r_CN_NInit, '__len__'):
+            # If it's a list of lists, flatten it
+            if isinstance(sc.hub.r_CN_NInit, list) and len(sc.hub.r_CN_NInit) > 0:
+                if isinstance(sc.hub.r_CN_NInit[0], list):
+                    # It's a list of lists like [[x], [y], [z]]
+                    pos_array = np.array([sc.hub.r_CN_NInit[0][0], 
+                                         sc.hub.r_CN_NInit[1][0], 
+                                         sc.hub.r_CN_NInit[2][0]])
+                else:
+                    # It's a simple list [x, y, z]
+                    pos_array = np.array(sc.hub.r_CN_NInit)
+            else:
+                pos_array = np.array(sc.hub.r_CN_NInit)
+        else:
+            pos_array = np.array([sc.hub.r_CN_NInit])
+            
+        orbit_radius = np.linalg.norm(pos_array) / 1000.0  # Convert to km
         
         # Generate orbit path (simplified circular)
         angles = np.linspace(0, 2*np.pi, 100)
@@ -856,9 +872,9 @@ def generate_constellation_plots(spacecraft_list, time_data, planet_mu):
         ax1.plot(orbit_x, orbit_y, orbit_z, color=color, alpha=0.7, label=f'{sc.ModelTag}')
         
         # Mark current position
-        current_x = sc.hub.r_CN_NInit[0] / 1000.0
-        current_y = sc.hub.r_CN_NInit[1] / 1000.0 
-        current_z = sc.hub.r_CN_NInit[2] / 1000.0
+        current_x = pos_array[0] / 1000.0
+        current_y = pos_array[1] / 1000.0 
+        current_z = pos_array[2] / 1000.0
         ax1.scatter(current_x, current_y, current_z, s=100, color=color)
     
     ax1.set_xlabel('X (km)')
@@ -873,7 +889,21 @@ def generate_constellation_plots(spacecraft_list, time_data, planet_mu):
     spacecraft_names = []
     
     for sc in spacecraft_list:
-        radius = np.linalg.norm(sc.hub.r_CN_NInit) / 1000.0
+        # FIX: Handle the position data format properly
+        if hasattr(sc.hub.r_CN_NInit, '__len__'):
+            if isinstance(sc.hub.r_CN_NInit, list) and len(sc.hub.r_CN_NInit) > 0:
+                if isinstance(sc.hub.r_CN_NInit[0], list):
+                    pos_array = np.array([sc.hub.r_CN_NInit[0][0], 
+                                         sc.hub.r_CN_NInit[1][0], 
+                                         sc.hub.r_CN_NInit[2][0]])
+                else:
+                    pos_array = np.array(sc.hub.r_CN_NInit)
+            else:
+                pos_array = np.array(sc.hub.r_CN_NInit)
+        else:
+            pos_array = np.array([sc.hub.r_CN_NInit])
+            
+        radius = np.linalg.norm(pos_array) / 1000.0
         orbital_radii.append(radius)
         spacecraft_names.append(sc.ModelTag)
     
@@ -901,8 +931,20 @@ def generate_constellation_plots(spacecraft_list, time_data, planet_mu):
     
     # Plot approximate ground tracks
     for i, sc in enumerate(spacecraft_list):
-        # Simplified ground track calculation
-        position = sc.hub.r_CN_NInit
+        # Simplified ground track calculation - FIX position handling
+        if hasattr(sc.hub.r_CN_NInit, '__len__'):
+            if isinstance(sc.hub.r_CN_NInit, list) and len(sc.hub.r_CN_NInit) > 0:
+                if isinstance(sc.hub.r_CN_NInit[0], list):
+                    position = np.array([sc.hub.r_CN_NInit[0][0], 
+                                       sc.hub.r_CN_NInit[1][0], 
+                                       sc.hub.r_CN_NInit[2][0]])
+                else:
+                    position = np.array(sc.hub.r_CN_NInit)
+            else:
+                position = np.array(sc.hub.r_CN_NInit)
+        else:
+            position = np.array([sc.hub.r_CN_NInit])
+            
         lat = np.arcsin(position[2] / np.linalg.norm(position)) * 180/np.pi
         lon = np.arctan2(position[1], position[0]) * 180/np.pi
         
@@ -916,7 +958,21 @@ def generate_constellation_plots(spacecraft_list, time_data, planet_mu):
     
     periods = []
     for sc in spacecraft_list:
-        radius = np.linalg.norm(sc.hub.r_CN_NInit)  # meters
+        # FIX: Handle position format
+        if hasattr(sc.hub.r_CN_NInit, '__len__'):
+            if isinstance(sc.hub.r_CN_NInit, list) and len(sc.hub.r_CN_NInit) > 0:
+                if isinstance(sc.hub.r_CN_NInit[0], list):
+                    position = np.array([sc.hub.r_CN_NInit[0][0], 
+                                       sc.hub.r_CN_NInit[1][0], 
+                                       sc.hub.r_CN_NInit[2][0]])
+                else:
+                    position = np.array(sc.hub.r_CN_NInit)
+            else:
+                position = np.array(sc.hub.r_CN_NInit)
+        else:
+            position = np.array([sc.hub.r_CN_NInit])
+            
+        radius = np.linalg.norm(position)  # meters
         period = 2 * np.pi * np.sqrt(radius**3 / planet_mu)  # seconds
         period_minutes = period / 60.0
         periods.append(period_minutes)
@@ -956,8 +1012,35 @@ def generate_inter_satellite_distance_plots(spacecraft_list, time_data, planet_m
     for i in range(n_spacecraft):
         for j in range(n_spacecraft):
             if i != j:
-                pos1 = np.array(spacecraft_list[i].hub.r_CN_NInit)
-                pos2 = np.array(spacecraft_list[j].hub.r_CN_NInit)
+                # FIX: Handle position format properly
+                # Get position for spacecraft i
+                if hasattr(spacecraft_list[i].hub.r_CN_NInit, '__len__'):
+                    if isinstance(spacecraft_list[i].hub.r_CN_NInit, list) and len(spacecraft_list[i].hub.r_CN_NInit) > 0:
+                        if isinstance(spacecraft_list[i].hub.r_CN_NInit[0], list):
+                            pos1 = np.array([spacecraft_list[i].hub.r_CN_NInit[0][0], 
+                                           spacecraft_list[i].hub.r_CN_NInit[1][0], 
+                                           spacecraft_list[i].hub.r_CN_NInit[2][0]])
+                        else:
+                            pos1 = np.array(spacecraft_list[i].hub.r_CN_NInit)
+                    else:
+                        pos1 = np.array(spacecraft_list[i].hub.r_CN_NInit)
+                else:
+                    pos1 = np.array([spacecraft_list[i].hub.r_CN_NInit])
+                
+                # Get position for spacecraft j
+                if hasattr(spacecraft_list[j].hub.r_CN_NInit, '__len__'):
+                    if isinstance(spacecraft_list[j].hub.r_CN_NInit, list) and len(spacecraft_list[j].hub.r_CN_NInit) > 0:
+                        if isinstance(spacecraft_list[j].hub.r_CN_NInit[0], list):
+                            pos2 = np.array([spacecraft_list[j].hub.r_CN_NInit[0][0], 
+                                           spacecraft_list[j].hub.r_CN_NInit[1][0], 
+                                           spacecraft_list[j].hub.r_CN_NInit[2][0]])
+                        else:
+                            pos2 = np.array(spacecraft_list[j].hub.r_CN_NInit)
+                    else:
+                        pos2 = np.array(spacecraft_list[j].hub.r_CN_NInit)
+                else:
+                    pos2 = np.array([spacecraft_list[j].hub.r_CN_NInit])
+                
                 distance = np.linalg.norm(pos2 - pos1) / 1000.0  # Convert to km
                 distance_matrix[i, j] = distance
     
@@ -987,8 +1070,36 @@ def generate_inter_satellite_distance_plots(spacecraft_list, time_data, planet_m
             sc1 = spacecraft_list[i]
             sc2 = spacecraft_list[j]
             
-            r1 = np.linalg.norm(sc1.hub.r_CN_NInit)
-            r2 = np.linalg.norm(sc2.hub.r_CN_NInit)
+            # Get radii - FIX position handling
+            if hasattr(sc1.hub.r_CN_NInit, '__len__'):
+                if isinstance(sc1.hub.r_CN_NInit, list) and len(sc1.hub.r_CN_NInit) > 0:
+                    if isinstance(sc1.hub.r_CN_NInit[0], list):
+                        pos1 = np.array([sc1.hub.r_CN_NInit[0][0], 
+                                       sc1.hub.r_CN_NInit[1][0], 
+                                       sc1.hub.r_CN_NInit[2][0]])
+                    else:
+                        pos1 = np.array(sc1.hub.r_CN_NInit)
+                else:
+                    pos1 = np.array(sc1.hub.r_CN_NInit)
+            else:
+                pos1 = np.array([sc1.hub.r_CN_NInit])
+                
+            r1 = np.linalg.norm(pos1)
+            
+            if hasattr(sc2.hub.r_CN_NInit, '__len__'):
+                if isinstance(sc2.hub.r_CN_NInit, list) and len(sc2.hub.r_CN_NInit) > 0:
+                    if isinstance(sc2.hub.r_CN_NInit[0], list):
+                        pos2 = np.array([sc2.hub.r_CN_NInit[0][0], 
+                                       sc2.hub.r_CN_NInit[1][0], 
+                                       sc2.hub.r_CN_NInit[2][0]])
+                    else:
+                        pos2 = np.array(sc2.hub.r_CN_NInit)
+                else:
+                    pos2 = np.array(sc2.hub.r_CN_NInit)
+            else:
+                pos2 = np.array([sc2.hub.r_CN_NInit])
+                
+            r2 = np.linalg.norm(pos2)
             
             # Simplified distance calculation assuming circular orbits
             period1 = 2 * np.pi * np.sqrt(r1**3 / planet_mu) / 60.0  # minutes

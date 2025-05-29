@@ -1,0 +1,181 @@
+SPACECRAFT CONSTELLATION SIMULATION SUMMARY
+==================================================
+
+Date: 2025-05-29 13:40:01
+
+IMPROVEMENTS APPLIED:
+  ✓ Higher satellite altitudes for better target coverage
+  ✓ Improved target visibility at 50km altitude
+  ✓ Better camera positioning for target viewing
+  ✓ Spacecraft size increased 8x for visibility
+  ✓ Target range increased to 2000km for visibility
+  ✓ Orbit lines enabled for all spacecraft
+
+TIME CONFIGURATION:
+  - Requested duration: 30.0 minutes (1800 seconds)
+  - Nanoseconds: 1800000000000 ns
+  - Actual duration: 30.00 minutes (1800 seconds)
+  - Time accuracy: GOOD
+  - Wall-clock time: 1.08 seconds
+
+CONSTELLATION CONFIGURATION:
+  - Number of spacecraft: 11
+  - Active camera: Satellite1
+  - Spacecraft with faults: 2
+
+Spacecraft 1: Satellite1
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+    - Arg. of Periapsis: 30.0°
+    - True Anomaly: 0.0°
+    - Orbital period: 96.5 minutes
+  Fault: DISABLED
+
+Spacecraft 2: Satellite2
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+    - Arg. of Periapsis: 30.0°
+    - True Anomaly: 90.0°
+    - Orbital period: 96.5 minutes
+  Fault: DISABLED
+
+Spacecraft 3: Satellite3
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+    - Arg. of Periapsis: 30.0°
+    - True Anomaly: 180.0°
+    - Orbital period: 96.5 minutes
+  Fault: ENABLED
+    - Type: friction
+    - Magnitude: 0.0005
+    - Wheel: 3
+    - Injection time: 15.0 minutes (900 seconds)
+
+Spacecraft 4: Satellite4
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+    - Arg. of Periapsis: 30.0°
+    - True Anomaly: 270.0°
+    - Orbital period: 96.5 minutes
+  Fault: ENABLED
+    - Type: power_limit
+    - Magnitude: 0.0005
+    - Wheel: 3
+    - Injection time: 15.0 minutes (900 seconds)
+
+Spacecraft 5: DefaultOrbit_Sat1
+  Orbit:
+    - Semi-major axis: 7571 km
+    - Altitude: 1200.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+    - Arg. of Periapsis: 0.0°
+    - True Anomaly: 0.0°
+    - Orbital period: 109.3 minutes
+  Fault: DISABLED
+
+Spacecraft 6: MEONavigation_Sat1
+  Orbit:
+    - Semi-major axis: 7571 km
+    - Altitude: 1200.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 60.0°
+    - Arg. of Periapsis: 0.0°
+    - True Anomaly: 0.0°
+    - Orbital period: 109.3 minutes
+  Fault: DISABLED
+
+Spacecraft 7: MEONavigation_Sat2
+  Orbit:
+    - Semi-major axis: 7571 km
+    - Altitude: 1200.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 60.0°
+    - Arg. of Periapsis: 0.0°
+    - True Anomaly: 60.0°
+    - Orbital period: 109.3 minutes
+  Fault: DISABLED
+
+Spacecraft 8: MEONavigation_Sat3
+  Orbit:
+    - Semi-major axis: 7571 km
+    - Altitude: 1200.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 60.0°
+    - Arg. of Periapsis: 0.0°
+    - True Anomaly: 120.0°
+    - Orbital period: 109.3 minutes
+  Fault: DISABLED
+
+Spacecraft 9: MEONavigation_Sat4
+  Orbit:
+    - Semi-major axis: 7571 km
+    - Altitude: 1200.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 60.0°
+    - Arg. of Periapsis: 0.0°
+    - True Anomaly: 180.0°
+    - Orbital period: 109.3 minutes
+  Fault: DISABLED
+
+Spacecraft 10: MEONavigation_Sat5
+  Orbit:
+    - Semi-major axis: 7571 km
+    - Altitude: 1200.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 60.0°
+    - Arg. of Periapsis: 0.0°
+    - True Anomaly: 240.0°
+    - Orbital period: 109.3 minutes
+  Fault: DISABLED
+
+Spacecraft 11: MEONavigation_Sat6
+  Orbit:
+    - Semi-major axis: 7571 km
+    - Altitude: 1200.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 60.0°
+    - Arg. of Periapsis: 0.0°
+    - True Anomaly: 300.0°
+    - Orbital period: 109.3 minutes
+  Fault: DISABLED
+
+OUTPUT CONFIGURATION:
+  - Results directory: D:\Sem01 2025\Computing Technology Project A\Github\satelliteConstellation-basilisk\ProjectWork\BskSim\logs\sim_results_20250529_133954
+  - Plots generated: 0
+  - Binary file: D:\Sem01 2025\Computing Technology Project A\Github\satelliteConstellation-basilisk\ProjectWork\BskSim\Vizfile\_VizFiles\spacecraft_viz_UnityViz.bin (2.80 MB)
+
+IMPROVED VIZARD FEATURES:
+1. Open Vizard application
+2. Load binary file: D:\Sem01 2025\Computing Technology Project A\Github\satelliteConstellation-basilisk\ProjectWork\BskSim\Vizfile\_VizFiles\spacecraft_viz_UnityViz.bin
+3. You should now see:
+   ✓ Spacecraft names labeled
+   ✓ Orbit lines visible
+   ✓ Target markers at 50km altitude (better visibility)
+   ✓ Larger spacecraft (8x size)
+   ✓ Camera optimized for target viewing
+   ✓ Higher satellite altitudes for better coverage
+4. Simulation duration: 1800 seconds

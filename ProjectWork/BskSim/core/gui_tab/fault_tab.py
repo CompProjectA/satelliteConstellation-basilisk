@@ -27,7 +27,6 @@ class FaultTab(BaseTab):
         # Create the tab UI
         self.create_tab_ui()
 
-
     def get_active_satellite_index(self):
         """
         Get the index of the currently selected satellite in the fault tab
@@ -51,14 +50,38 @@ class FaultTab(BaseTab):
         if 0 <= index < len(self.satellites):
             self.fault_satellite_combo.current(index)
             self.load_fault_config(index)
-            
+                    
     def create_tab_ui(self):
         """Create the Fault Configuration tab UI"""
-        # Satellite selection at the top
-        select_frame = ttk.Frame(self.parent_frame)
-        select_frame.pack(fill=tk.X, pady=(0, 10))
+        # Create a notebook for sub-tabs
+        self.fault_notebook = ttk.Notebook(self.parent_frame)
+        self.fault_notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Create frames for sub-tabs
+        config_frame = ttk.Frame(self.fault_notebook)
+        summary_frame = ttk.Frame(self.fault_notebook)
+        
+        # Add sub-tabs
+        self.fault_notebook.add(config_frame, text="Fault Configuration")
+        self.fault_notebook.add(summary_frame, text="Fault Summary")
+        
+        # Create fault configuration content
+        self._create_fault_config_tab(config_frame)
+        
+        # Create fault summary content
+        self._create_fault_summary_tab(summary_frame)
+        
+        # Load fault configuration for the first satellite
+        if self.satellites:
+            self.load_fault_config(0)
+            self.update_fault_summary()
 
-      
+    def _create_fault_config_tab(self, parent):
+        """Create the fault configuration sub-tab content"""
+        # Satellite selection at the top
+        select_frame = ttk.Frame(parent)
+        select_frame.pack(fill=tk.X, pady=(0, 10))
+        
         ttk.Label(select_frame, text="Select Satellite:").pack(side=tk.LEFT)
         
         self.fault_satellite_var = tk.StringVar()
@@ -77,17 +100,14 @@ class FaultTab(BaseTab):
         self.fault_status_label.pack(side=tk.RIGHT)
         
         # Main fault configuration
-        fault_config_frame = ttk.LabelFrame(self.parent_frame, text="Fault Configuration", padding=10)
+        fault_config_frame = ttk.LabelFrame(parent, text="Fault Configuration", padding=10)
         fault_config_frame.pack(fill=tk.BOTH, expand=True)
-        
-       
-    
         
         # Enable fault checkbox
         self.fault_enabled_var = tk.BooleanVar(value=False)
         enable_check = ttk.Checkbutton(fault_config_frame, text="Enable Fault", 
-                                      variable=self.fault_enabled_var,
-                                      command=self.update_fault_config)
+                                    variable=self.fault_enabled_var,
+                                    command=self.update_fault_config)
         enable_check.pack(anchor=tk.W, pady=5)
         
         # Fault type selection
@@ -109,16 +129,16 @@ class FaultTab(BaseTab):
         
         for text, value in fault_types:
             ttk.Radiobutton(fault_type_frame, text=text, value=value, 
-                           variable=self.fault_type_var,
-                           command=self.update_fault_config).pack(side=tk.LEFT, padx=5)
+                        variable=self.fault_type_var,
+                        command=self.update_fault_config).pack(side=tk.LEFT, padx=5)
         
         # Fault description 
         self.fault_description_frame = ttk.LabelFrame(fault_config_frame, text="Fault Description", padding=10)
         self.fault_description_frame.pack(fill=tk.X, pady=5)
         
         self.fault_description_label = ttk.Label(self.fault_description_frame, 
-                                               text="Select a fault type to see its description",
-                                               wraplength=500, justify=tk.LEFT)
+                                            text="Select a fault type to see its description",
+                                            wraplength=500, justify=tk.LEFT)
         self.fault_description_label.pack(fill=tk.X, pady=5)
         
         # Fault parameters
@@ -136,8 +156,6 @@ class FaultTab(BaseTab):
         # Periodic fault section
         periodic_frame = ttk.LabelFrame(fault_config_frame, text="Periodic Fault", padding=10)
         periodic_frame.pack(fill=tk.X, pady=5)
-        
-        
         
         # Enable periodic fault
         self.periodic_enabled_var = tk.BooleanVar(value=False)
@@ -186,23 +204,110 @@ class FaultTab(BaseTab):
         
         # Update button
         update_btn = ttk.Button(button_frame, text="Apply Fault Configuration", 
-                               command=self.apply_fault_config)
+                            command=self.apply_fault_config)
         update_btn.pack(side=tk.LEFT, padx=5)
         
         # Apply to all satellites button
         apply_all_btn = ttk.Button(button_frame, text="Apply to All Satellites", 
-                                 command=self.apply_to_all_satellites)
+                                command=self.apply_to_all_satellites)
         apply_all_btn.pack(side=tk.RIGHT, padx=5)
+
+    def _create_fault_summary_tab(self, parent):
+        """Create the fault summary sub-tab content"""
+        # Main frame
+        main_frame = ttk.Frame(parent)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Load fault configuration for the first satellite
-        if self.satellites:
-            self.load_fault_config(0)
+        # Title and description
+        title_frame = ttk.Frame(main_frame)
+        title_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(title_frame, text="Fault Summary Overview", 
+                font=('Segoe UI', 12, 'bold')).pack(side=tk.LEFT)
+        
+        ttk.Label(title_frame, text="View all configured faults across the constellation", 
+                style="Info.TLabel").pack(side=tk.LEFT, padx=(20, 0))
+        
+        # Summary controls
+        control_frame = ttk.Frame(main_frame)
+        control_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Button(control_frame, text="Refresh Summary", 
+                command=self.update_fault_summary).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(control_frame, text="Clear All Faults", 
+                command=self.clear_all_faults).pack(side=tk.LEFT, padx=5)
+        
+        # Statistics
+        stats_frame = ttk.LabelFrame(control_frame, text="Statistics", padding=5)
+        stats_frame.pack(side=tk.RIGHT, padx=10)
+        
+        self.fault_stats_label = ttk.Label(stats_frame, text="Total: 0 satellites | Faults: 0 enabled")
+        self.fault_stats_label.pack()
+        
+        # Create treeview for fault summary
+        tree_frame = ttk.LabelFrame(main_frame, text="Satellite Fault Status", padding=10)
+        tree_frame.pack(fill=tk.BOTH, expand=True)
+        
+        columns = ('Satellite', 'Fault Status', 'Type', 'Wheel', 'Time (min)', 'Magnitude', 'Periodic')
+        self.fault_summary_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15)
+        
+        # Define column headings
+        self.fault_summary_tree.heading('Satellite', text='Satellite')
+        self.fault_summary_tree.heading('Fault Status', text='Status')
+        self.fault_summary_tree.heading('Type', text='Fault Type')
+        self.fault_summary_tree.heading('Wheel', text='Wheel')
+        self.fault_summary_tree.heading('Time (min)', text='Time')
+        self.fault_summary_tree.heading('Magnitude', text='Magnitude')
+        self.fault_summary_tree.heading('Periodic', text='Periodic')
+        
+        # Set column widths
+        self.fault_summary_tree.column('Satellite', width=150)
+        self.fault_summary_tree.column('Fault Status', width=100)
+        self.fault_summary_tree.column('Type', width=120)
+        self.fault_summary_tree.column('Wheel', width=80)
+        self.fault_summary_tree.column('Time (min)', width=100)
+        self.fault_summary_tree.column('Magnitude', width=120)
+        self.fault_summary_tree.column('Periodic', width=100)
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.fault_summary_tree.yview)
+        self.fault_summary_tree.configure(yscrollcommand=scrollbar.set)
+        
+        self.fault_summary_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    
+    def clear_all_faults(self):
+        """Clear all faults from all satellites"""
+        if not messagebox.askyesno("Clear All Faults", 
+                                  "Are you sure you want to disable all faults on all satellites?"):
+            return
+        
+        # Clear faults on all satellites
+        for satellite in self.satellites:
+            fault = satellite["fault"]
+            fault["enabled"] = False
+            fault["periodic"]["enabled"] = False
+        
+        # Update UI
+        self.load_fault_config(self.fault_satellite_combo.current())
+        self.update_fault_summary()
+        
+        # Update constellation tab
+        try:
+            self.parent_app.constellation_tab.update_satellite_listbox()
+        except:
+            pass
+        
+        self.parent_app.add_log("Cleared all faults from all satellites")
+        messagebox.showinfo("Success", "All faults have been disabled")
             
     def update_satellite_dropdown(self):
         """Update the satellite dropdown with current satellites"""
         self.fault_satellite_combo['values'] = [sat['name'] for sat in self.satellites]
         if self.satellites:
             self.fault_satellite_combo.current(0)
+        
             
     def on_fault_satellite_changed(self, event):
         """Handle fault satellite selection change"""
@@ -258,6 +363,7 @@ class FaultTab(BaseTab):
         
         # Update fault status
         self.update_fault_status()
+        self.update_fault_summary()
         
     def update_fault_description(self):
         """Update the fault description based on selected fault type"""
@@ -334,8 +440,6 @@ class FaultTab(BaseTab):
         
         ttk.Label(time_frame, text="Fault Time (min):").pack(side=tk.LEFT)
         ttk.Entry(time_frame, textvariable=self.fault_time, width=10).pack(side=tk.LEFT, padx=5)
-
-    
         
     def create_encoder_params(self):
         """Create encoder fault parameter widgets"""
@@ -424,6 +528,7 @@ class FaultTab(BaseTab):
             
         self.parent_app.add_log(f"Applied fault configuration to all satellites")
         messagebox.showinfo("Success", "Fault configuration applied to all satellites")
+        self.update_fault_summary()
         
     def apply_fault_config(self):
         """Apply the fault configuration to the selected satellite"""
@@ -460,3 +565,74 @@ class FaultTab(BaseTab):
                 pass
             
             self.parent_app.add_log(f"Applied fault configuration to {sat_name}")
+            self.update_fault_summary()
+
+    def update_fault_summary(self):
+        """Update the fault summary table showing all satellites and their faults"""
+        # Check if the summary tree exists yet
+        if not hasattr(self, 'fault_summary_tree'):
+            return
+            
+        # Clear existing items
+        for item in self.fault_summary_tree.get_children():
+            self.fault_summary_tree.delete(item)
+        
+        # Count statistics
+        total_satellites = len(self.satellites)
+        enabled_faults = 0
+        
+        # Add each satellite's fault configuration
+        for sat in self.satellites:
+            fault = sat["fault"]
+            
+            if fault["enabled"]:
+                enabled_faults += 1
+            
+            # Determine status
+            if fault["enabled"]:
+                status = "ENABLED"
+                status_color = 'red'
+            else:
+                status = "Disabled"
+                status_color = 'gray'
+            
+            # Format magnitude based on fault type
+            magnitude_str = str(fault["magnitude"])
+            if fault["type"] == "friction":
+                magnitude_str = f"{fault['magnitude']} N·m"
+            elif fault["type"] == "power_limit":
+                magnitude_str = f"{fault['magnitude']} W"
+            elif fault["type"] == "battery":
+                magnitude_str = f"{fault['magnitude']} kW"
+            elif fault["type"] == "encoder":
+                magnitude_str = "N/A"
+            
+            # Periodic status
+            periodic_str = "No"
+            if fault["periodic"]["enabled"]:
+                periodic_str = f"Yes ({fault['periodic']['interval']}s)"
+            
+            # Insert row
+            item = self.fault_summary_tree.insert('', 'end', values=(
+                sat["name"],
+                status,
+                fault["type"].replace('_', ' ').title(),
+                f"Wheel {fault['wheel']}",
+                f"{fault['time']} min",
+                magnitude_str,
+                periodic_str
+            ))
+            
+            # Color-code the status
+            if fault["enabled"]:
+                self.fault_summary_tree.item(item, tags=('enabled',))
+            else:
+                self.fault_summary_tree.item(item, tags=('disabled',))
+        
+        # Configure tags for coloring
+        self.fault_summary_tree.tag_configure('enabled', foreground='darkred', font=('Segoe UI', 10, 'bold'))
+        self.fault_summary_tree.tag_configure('disabled', foreground='gray')
+        
+        # Update statistics if it exists
+        if hasattr(self, 'fault_stats_label'):
+            self.fault_stats_label.config(text=f"Total: {total_satellites} satellites | Faults: {enabled_faults} enabled")
