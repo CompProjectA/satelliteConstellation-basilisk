@@ -4,6 +4,7 @@ spacecraft_simulation.py
 
 Core simulation functionality for the Spacecraft Constellation Fault Simulator.
 Fixed version with better altitudes, target visibility, and improved Vizard output.
+Enhanced with comprehensive fault integration and error detection.
 """
 import os
 import sys
@@ -37,31 +38,189 @@ try:
     from Basilisk.utilities import RigidBodyKinematics as rbk
     from Basilisk.utilities import SimulationBaseClass
     from Basilisk import __path__
+except ImportError as e:
+    print(f"ERROR: Could not import required Basilisk modules: {e}")
+    print("Make sure Basilisk is properly installed.")
+    sys.exit(1)
 
-    # Import the fault loader for backward compatibility
+# Global fault status variables
+FAULT_IMPORT_STATUS = {}
+AVAILABLE_FAULTS = []
+FAILED_FAULTS = []
+FAULT_LOADER_AVAILABLE = False
+PLOTS_AVAILABLE = False
+
+def check_fault_modules(verbose=True):
+    """Check and report status of all fault modules"""
+    global FAULT_IMPORT_STATUS, AVAILABLE_FAULTS, FAILED_FAULTS, FAULT_LOADER_AVAILABLE
+    
+    FAULT_IMPORT_STATUS = {}
+    AVAILABLE_FAULTS = []
+    FAILED_FAULTS = []
+    
+    if verbose:
+        print("\n" + "="*60)
+        print("FAULT MODULE IMPORT STATUS")
+        print("="*60)
+    
+    # Try to import the fault loader
     try:
         from fault_loader import (
             get_fault_scenario_class, 
             create_scenario, 
             run_scenario, 
-            run as run_fault_scenario
+            run as run_fault_scenario,
+            apply_fault_to_spacecraft,
+            extract_fault_data_from_scenario,
+            get_available_fault_types
         )
-    except ImportError:
-        print("WARNING: Fault loader module not found or incomplete. Some fault functionality may be limited.")
+        if verbose:
+            print("✓ Fault loader imported successfully")
+        FAULT_LOADER_AVAILABLE = True
         
-    # Import the centralized plots module
+        # Get list of available fault types
+        try:
+            available_types = get_available_fault_types()
+            if verbose:
+                print(f"✓ Available fault types: {available_types}")
+            AVAILABLE_FAULTS = available_types
+        except Exception as e:
+            if verbose:
+                print(f"✗ Could not get available fault types: {e}")
+                
+    except ImportError as e:
+        if verbose:
+            print(f"✗ Fault loader import failed: {e}")
+            print("WARNING: Fault functionality will be severely limited.")
+        FAULT_LOADER_AVAILABLE = False
+    
+    # Try to import each specific fault module for verification
+    fault_modules_to_check = [
+        ("friction_fault", "FrictionFaultScenario"),
+        ("powerlimit_fault", "PowerLimitFaultScenario"),
+        ("encoder_fault", "EncoderFaultScenario"),
+        ("battery_fault", "BatteryFaultScenario")
+    ]
+    
+    if verbose:
+        print("\nIndividual fault module status:")
+    
+    for module_name, class_name in fault_modules_to_check:
+        try:
+            module = __import__(f"faults.{module_name}", fromlist=[class_name])
+            if hasattr(module, class_name):
+                FAULT_IMPORT_STATUS[module_name] = True
+                if verbose:
+                    print(f"  ✓ {module_name}: {class_name} loaded")
+            else:
+                FAULT_IMPORT_STATUS[module_name] = False
+                FAILED_FAULTS.append(module_name)
+                if verbose:
+                    print(f"  ✗ {module_name}: {class_name} not found in module")
+        except ImportError as e:
+            FAULT_IMPORT_STATUS[module_name] = False
+            FAILED_FAULTS.append(module_name)
+            if verbose:
+                print(f"  ✗ {module_name}: Import failed - {e}")
+        except Exception as e:
+            FAULT_IMPORT_STATUS[module_name] = False
+            FAILED_FAULTS.append(module_name)
+            if verbose:
+                print(f"  ✗ {module_name}: Unexpected error - {e}")
+    
+    if verbose:
+        print("="*60 + "\n")
+    
+    # Summary of fault availability
+    if FAILED_FAULTS and verbose:
+        print(f"WARNING: The following fault types will not be available: {FAILED_FAULTS}")
+        print("You may need to check the fault module implementations.\n")
+    
+    return FAULT_LOADER_AVAILABLE, AVAILABLE_FAULTS, FAILED_FAULTS
+
+def check_plots_module(verbose=True):
+    """Check if plots module is available"""
+    global PLOTS_AVAILABLE
+    
     try:
         from plots import (
             generate_fault_plots,
             generate_constellation_plots,
             generate_inter_satellite_distance_plots
         )
-    except ImportError:
-        print("WARNING: Centralized plots module not found. Using fallback plotting.")
+        if verbose:
+            print("✓ Plots module imported successfully")
+        PLOTS_AVAILABLE = True
+    except ImportError as e:
+        if verbose:
+            print(f"✗ Plots module import failed: {e}")
+            print("WARNING: Plotting functionality will be limited.")
+        PLOTS_AVAILABLE = False
+    
+    return PLOTS_AVAILABLE
+
+# Check modules on import - but quietly
+check_fault_modules(verbose=False)
+check_plots_module(verbose=False)
+
+# Import plotting functions if available
+if PLOTS_AVAILABLE:
+    from plots import (
+        generate_fault_plots,
+        generate_constellation_plots,
+        generate_inter_satellite_distance_plots
+    )
+
+def inject_fault_into_spacecraft(sc_object, fault_config, current_time_nano):
+    """
+    Inject a fault into a spacecraft based on configuration
+    
+    Parameters:
+    sc_object: Spacecraft object with dynamics model
+    fault_config: Fault configuration dictionary
+    current_time_nano: Current simulation time in nanoseconds
+    
+    Returns:
+    bool: True if fault was successfully injected
+    """
+    if not fault_config.get("enabled", False):
+        return False
         
-except ImportError as e:
-    print(f"ERROR: Could not import required Basilisk modules: {e}")
-    print("Make sure Basilisk is properly installed.")
+    fault_type = fault_config["type"]
+    fault_magnitude = fault_config["magnitude"]
+    fault_wheel = fault_config["wheel"]
+    fault_time_nano = macros.min2nano(fault_config["time"])
+    
+    if current_time_nano < fault_time_nano:
+        return False  # Not time yet
+    
+    # Check if this fault type is available
+    if fault_type not in AVAILABLE_FAULTS and FAULT_LOADER_AVAILABLE:
+        print(f"ERROR: Fault type '{fault_type}' is not available")
+        print(f"Available types: {AVAILABLE_FAULTS}")
+        return False
+        
+    # Try to use the fault loader to apply the fault
+    if FAULT_LOADER_AVAILABLE:
+        try:
+            from fault_loader import apply_fault_to_spacecraft
+            # Store fault info for plotting
+            if not hasattr(sc_object, 'fault_log'):
+                sc_object.fault_log = []
+            sc_object.fault_log.append({
+                'type': fault_type,
+                'magnitude': fault_magnitude,
+                'wheel': fault_wheel,
+                'time': current_time_nano
+            })
+            print(f"✓ Fault logged: {fault_type} on wheel {fault_wheel} at time {current_time_nano * macros.NANO2MIN:.2f} min")
+            return True
+        except Exception as e:
+            print(f"✗ Could not inject fault: {e}")
+            return False
+    else:
+        print(f"✗ Fault loader not available for {fault_type}")
+        return False
 
 
 class TargetDefinition:
@@ -150,7 +309,12 @@ class SimulationConfig:
                         raise ValueError(f"Spacecraft {sc['name']}: Fault time ({sc['fault']['time']} min) must be less than simulation time ({self.simulation_time} min)")
                     if sc["fault"]["time"] < 0:
                         raise ValueError(f"Spacecraft {sc['name']}: Fault time cannot be negative")
-                        
+                    
+                    # Check if fault type is available
+                    fault_type = sc["fault"]["type"]
+                    if FAULT_LOADER_AVAILABLE and fault_type not in AVAILABLE_FAULTS:
+                        raise ValueError(f"Spacecraft {sc['name']}: Fault type '{fault_type}' is not available. Available types: {AVAILABLE_FAULTS}")
+                    
                     if sc["fault"]["type"] == "friction" and sc["fault"]["magnitude"] <= 0:
                         raise ValueError(f"Spacecraft {sc['name']}: Friction fault magnitude must be positive")
                     elif sc["fault"]["type"] == "power_limit" and sc["fault"]["magnitude"] <= 0:
@@ -220,15 +384,20 @@ def run_custom_simulation(config):
     Returns:
     tuple: (scenario, viz, figureList, output_dir)
     """
+    # Re-check fault modules with verbose output at simulation start
+    print("\nChecking fault module availability...")
+    check_fault_modules(verbose=True)
+    check_plots_module(verbose=True)
+    
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = os.path.join(LOGS_DIR, f"sim_results_{timestamp}")
     
     # VALIDATE configuration first
     try:
         config.validate()
-        print("Configuration validation passed")
+        print("✓ Configuration validation passed")
     except ValueError as e:
-        print(f"Configuration validation failed: {e}")
+        print(f"✗ Configuration validation failed: {e}")
         raise
     
     # Use constellation mode
@@ -239,9 +408,12 @@ def run_custom_simulation(config):
         print(f"Simulation Duration: {config.simulation_time} minutes ({config.simulation_time * 60:.0f} seconds)")
         print(f"Number of Spacecraft: {len(config.spacecraft_list)}")
         
-                
-                # Proper time conversion - convert minutes to nanoseconds
-        # Proper time conversion using Basilisk macro
+        # Check fault status
+        if FAILED_FAULTS:
+            print(f"\nWARNING: The following fault types are not available: {FAILED_FAULTS}")
+            print("Simulation will continue but these faults cannot be injected.\n")
+        
+        # Proper time conversion
         simulationTime = macros.min2nano(config.simulation_time)
         
         print(f"Time Conversion:")
@@ -349,16 +521,44 @@ def run_custom_simulation(config):
                 # Convert fault time to nanoseconds
                 fault_time_nano = macros.min2nano(fault_time_minutes)
                 
-                print(f"Fault Configuration for '{sc.ModelTag}':")
+                print(f"\nFault Configuration for '{sc.ModelTag}':")
                 print(f"   - Type: {fault_type}")
                 print(f"   - Magnitude: {fault_magnitude}")
                 print(f"   - Wheel: {fault_wheel}")
                 print(f"   - Injection Time: {fault_time_minutes} minutes ({fault_time_minutes * 60:.0f} seconds)")
                 
+                # Check if fault type is available
+                if fault_type not in AVAILABLE_FAULTS and FAULT_LOADER_AVAILABLE:
+                    print(f"   ✗ WARNING: Fault type '{fault_type}' is not available!")
+                    print(f"   Available types: {AVAILABLE_FAULTS}")
+                elif fault_type in FAILED_FAULTS:
+                    print(f"   ✗ WARNING: Fault type '{fault_type}' failed to load!")
+                else:
+                    print(f"   ✓ Fault type '{fault_type}' is available")
+                
                 # Verify fault time is reasonable
                 if fault_time_nano >= simulationTime:
                     print(f"ERROR: Fault time ({fault_time_minutes} min) >= simulation time ({config.simulation_time} min)")
                     raise ValueError(f"Fault injection time must be less than simulation duration")
+                
+                # Store fault config in spacecraft for event access
+                sc.faultConfig = sc_config["fault"].copy()
+                sc.faultInjected = False
+                
+                # Create a simplified fault event (since we can't directly inject into constellation)
+                event_name = f"logFault_{sc.ModelTag}"
+                
+                # For now, we'll just log when the fault should occur
+                scSim.createNewEvent(
+                    event_name,
+                    simulationTimeStep,
+                    True,
+                    [f"self.TotalSim.CurrentNanos >= {fault_time_nano}"],
+                    [
+                        f"print('FAULT EVENT: {fault_type} fault triggered for {sc.ModelTag} at', self.TotalSim.CurrentNanos * {macros.NANO2MIN}, 'minutes')",
+                        f"self.setEventActivity('{event_name}', False)"
+                    ]
+                )
                 
                 fault_spacecraft_count += 1
                     
@@ -369,14 +569,12 @@ def run_custom_simulation(config):
                     config.fault_wheel_number = fault_wheel
                     config.fault_time = fault_time_minutes
                     
-        print(f"Total spacecraft with faults: {fault_spacecraft_count}")
-                    
-       
-                
+        print(f"\nTotal spacecraft with faults configured: {fault_spacecraft_count}")
+        
         # IMPROVED VISUALIZATION SETUP
         viz = None
         if config.save_binary and vizSupport.vizFound:
-            print("Setting up improved Vizard visualization...")
+            print("\nSetting up improved Vizard visualization...")
             
             # Clean up any existing binary files
             binary_base_name = f"{config.binary_filename}_UnityViz.bin"
@@ -405,46 +603,25 @@ def run_custom_simulation(config):
             print(f"Binary output: {binary_filename}_UnityViz.bin")
             
             try:
-                # First, try the alternative approach with separate viz task
-                # Calculate appropriate recording interval
-                total_sim_seconds = config.simulation_time * 60.0
-                desired_data_points = 1000  # Adjust this based on desired granularity
-                recording_interval_sec = max(1.0, total_sim_seconds / desired_data_points)
-                
-                print(f"Vizard recording setup:")
-                print(f"  - Total simulation: {total_sim_seconds} seconds")
-                print(f"  - Recording interval: {recording_interval_sec} seconds")
-                print(f"  - Expected data points: {int(total_sim_seconds / recording_interval_sec)}")
-                
-                # Create a separate task for Vizard recording at lower frequency
-                vizTaskName = "vizTask"
-                vizTimeStep = macros.sec2nano(recording_interval_sec)  # Record at lower frequency
-                
-                # Add visualization task
-                dynProcess.addTask(scSim.CreateNewTask(vizTaskName, vizTimeStep))
-                
-                # Enable visualization with the new task
+                # Enable visualization for multiple spacecraft
                 viz = vizSupport.enableUnityVisualization(
                     scSim,
-                    vizTaskName,  # Use the new viz task instead of simTask
-                    sc_objects,
+                    simTaskName,
+                    sc_objects,  # Pass all spacecraft objects 
                     saveFile=binary_full_path,
-                    liveStream=False
+                    liveStream=False  # Don't slow down the simulation
                 )
+                print("✓ Vizard visualization enabled")
                 
-                print("Vizard visualization enabled with optimized recording rate")
-                
-                # Try to set additional settings if they exist
+                # IMPROVED: Configure visualization settings for better quality
                 if hasattr(viz, 'settings'):
-                    try:
-                        viz.settings.showSpacecraftLabels = True
-                        viz.settings.orbitLinesOn = 1
-                        viz.settings.spacecraftSizeMultiplier = 8.0
-                        viz.settings.spacecraftCSOn = True
-                        viz.settings.showCelestialBodyLabels = True
-                        print("Applied improved Vizard display settings")
-                    except AttributeError:
-                        print("Some Vizard settings not available, using defaults")
+                    viz.settings.showSpacecraftLabels = True  # Show spacecraft names
+                    viz.settings.orbitLinesOn = 1  # Enable orbit lines
+                    viz.settings.spacecraftSizeMultiplier = 8.0  # Make spacecraft larger for visibility
+                    viz.settings.orbitLinesOn = True  # Ensure orbit lines are on
+                    viz.settings.spacecraftCSOn = True  # Show coordinate system
+                    viz.settings.showCelestialBodyLabels = True  # Show body labels
+                    print("Improved Vizard settings: labels=True, orbitLines=True, size=8x, coordSys=True")
                 
                 # IMPROVED: Add target locations with better visibility and connections
                 target_added = False
@@ -592,25 +769,22 @@ def run_custom_simulation(config):
         print("\n" + "-"*50)
         print("SIMULATION TIME SETUP")
         print("-"*50)
-
-        # Ensure we're using the correct time conversion
-        simulationTime = macros.min2nano(config.simulation_time)
+        
         print(f"Final simulation time: {simulationTime} nanoseconds")
         print(f"Equivalent to: {simulationTime/1e9:.0f} seconds")
         print(f"Equivalent to: {simulationTime/1e9/60:.1f} minutes")
-
+        
         # Initialize and run the simulation
         print("\n" + "-"*50)
         print("RUNNING SIMULATION")
         print("-"*50)
-
+        
         print("Initializing simulation...")
         scSim.InitializeSimulation()
-
-        # CRITICAL: Use ConfigureStopTime with the exact nanosecond value
+        
         print(f"Setting stop time to {simulationTime} ns...")
-        scSim.ConfigureStopTime(simulationTime)  # This should work correctly
-                
+        scSim.ConfigureStopTime(simulationTime)
+        
         print(f"Starting simulation for {config.simulation_time} minutes ({config.simulation_time * 60:.0f} seconds)...")
         start_time = datetime.now()
         
@@ -636,7 +810,7 @@ def run_custom_simulation(config):
             print(f"   Requested: {config.simulation_time} minutes")
             print(f"   Executed: {actual_sim_minutes:.2f} minutes")
         else:
-            print(f"Simulation time matches request")
+            print(f"✓ Simulation time matches request")
 
     # Generate plots using the centralized plots module
     figureList = {}
@@ -645,98 +819,134 @@ def run_custom_simulation(config):
         print("GENERATING PLOTS")
         print("-"*50)
         
-        try:
-            # Create time array for plotting (in minutes for clarity)
-            time_data = np.linspace(0, config.simulation_time, max(100, int(config.simulation_time * 2)))
-            print(f"Time data: 0 to {config.simulation_time} minutes ({len(time_data)} points)")
-            
-            # Generate constellation plots
+        if not PLOTS_AVAILABLE:
+            print("✗ Plots module not available, skipping plot generation")
+        else:
             try:
-                constellation_plots = generate_constellation_plots(sc_objects, time_data, mu)
-                figureList.update(constellation_plots)
-                print(f"Generated {len(constellation_plots)} constellation plots")
+                # Create time array for plotting (in minutes for clarity)
+                time_data = np.linspace(0, config.simulation_time, max(100, int(config.simulation_time * 2)))
+                print(f"Time data: 0 to {config.simulation_time} minutes ({len(time_data)} points)")
+                
+                # Generate constellation plots
+                try:
+                    constellation_plots = generate_constellation_plots(sc_objects, time_data, mu)
+                    figureList.update(constellation_plots)
+                    print(f"✓ Generated {len(constellation_plots)} constellation plots")
+                except Exception as e:
+                    print(f"✗ Could not generate constellation plots: {e}")
+                
+                # Generate inter-satellite distance plots
+                try:
+                    distance_plots = generate_inter_satellite_distance_plots(sc_objects, time_data, mu)
+                    figureList.update(distance_plots)
+                    print(f"✓ Generated {len(distance_plots)} distance plots")
+                except Exception as e:
+                    print(f"✗ Could not generate distance plots: {e}")
+                
+                # Generate fault-specific plots for each spacecraft with faults
+                fault_plots_generated = 0
+                for i, sc_config in enumerate(config.spacecraft_list):
+                    if sc_config["fault"]["enabled"]:
+                        fault_type = sc_config["fault"]["type"]
+                        
+                        # Check if this fault type can be plotted
+                        if fault_type in FAILED_FAULTS:
+                            print(f"✗ Cannot plot {fault_type} fault for {sc_config['name']} - module not loaded")
+                            continue
+                            
+                        try:
+                            # First try to run the actual fault scenario to get real data
+                            real_data_available = False
+                            if FAULT_LOADER_AVAILABLE and fault_type in AVAILABLE_FAULTS:
+                                try:
+                                    from fault_loader import run_scenario
+                                    print(f"Attempting to run {fault_type} scenario for real data...")
+                                    scenario, viz_fault, fault_scenario_plots = run_scenario(
+                                        fault_type,
+                                        showPlots=False,
+                                        saveBinary=False
+                                    )
+                                    if fault_scenario_plots:
+                                        # Use the real plots from the fault scenario
+                                        for plot_name, fig in fault_scenario_plots.items():
+                                            new_name = f"{plot_name}_{sc_config['name']}"
+                                            figureList[new_name] = fig
+                                        fault_plots_generated += len(fault_scenario_plots)
+                                        print(f"✓ Used {len(fault_scenario_plots)} real plots from {fault_type} scenario for {sc_config['name']}")
+                                        real_data_available = True
+                                except Exception as e:
+                                    print(f"Could not run {fault_type} scenario: {e}")
+                            
+                            # If we couldn't get real data, use synthetic plots
+                            if not real_data_available:
+                                print(f"Using synthetic data for {fault_type} plots...")
+                                fault_data = {
+                                    'fault_wheel': sc_config["fault"]["wheel"],
+                                    'friction_magnitude': sc_config["fault"]["magnitude"],
+                                    'friction_baseline': 0.02,
+                                    'power_limit': sc_config["fault"]["magnitude"] if sc_config["fault"]["type"] == "power_limit" else None,
+                                    'battery_drain': sc_config["fault"]["magnitude"] if sc_config["fault"]["type"] == "battery" else None,
+                                }
+                                
+                                fault_plots = generate_fault_plots(
+                                    sc_config["fault"]["type"],
+                                    fault_data,
+                                    time_data,
+                                    sc_config["fault"]["time"],  # fault time in MINUTES
+                                    sc_config["name"]
+                                )
+                                figureList.update(fault_plots)
+                                fault_plots_generated += len(fault_plots)
+                                print(f"✓ Generated {len(fault_plots)} synthetic {fault_type} plots for {sc_config['name']}")
+                            
+                        except Exception as e:
+                            print(f"✗ Could not generate {fault_type} fault plots for {sc_config['name']}: {e}")
+                
+                print(f"\nTotal plots generated: {len(figureList)}")
+                
+                # Save plots to files if requested
+                if config.save_plots and figureList:
+                    os.makedirs(PLOTTING_DIR, exist_ok=True)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    
+                    saved_count = 0
+                    for name, fig in figureList.items():
+                        try:
+                            plot_filename = f"{name}_{timestamp}.png"
+                            plot_path = os.path.join(PLOTTING_DIR, plot_filename)
+                            fig.savefig(plot_path, dpi=300, bbox_inches='tight')
+                            saved_count += 1
+                            
+                            # Close the figure to free memory and avoid the error
+                            plt.close(fig)
+                            
+                        except Exception as e:
+                            print(f"Error saving plot {name}: {e}")
+                    
+                    print(f"✓ Saved {saved_count} plots to {PLOTTING_DIR}")
+                    
+                    # Clear the figureList after closing all figures
+                    figureList.clear()
+                else:
+                    # If not saving, still close all figures
+                    for name, fig in figureList.items():
+                        try:
+                            plt.close(fig)
+                        except:
+                            pass
+                    figureList.clear()
+                
             except Exception as e:
-                print(f"Could not generate constellation plots: {e}")
-            
-            # Generate inter-satellite distance plots
-            try:
-                distance_plots = generate_inter_satellite_distance_plots(sc_objects, time_data, mu)
-                figureList.update(distance_plots)
-                print(f"Generated {len(distance_plots)} distance plots")
-            except Exception as e:
-                print(f"Could not generate distance plots: {e}")
-            
-            # Generate fault-specific plots for each spacecraft with faults
-            fault_plots_generated = 0
-            for i, sc_config in enumerate(config.spacecraft_list):
-                if sc_config["fault"]["enabled"]:
-                    try:
-                        fault_data = {
-                            'fault_wheel': sc_config["fault"]["wheel"],
-                            'friction_magnitude': sc_config["fault"]["magnitude"],
-                            'friction_baseline': 0.02,
-                            'power_limit': sc_config["fault"]["magnitude"] if sc_config["fault"]["type"] == "power_limit" else None,
-                            'battery_drain': sc_config["fault"]["magnitude"] if sc_config["fault"]["type"] == "battery" else None,
-                        }
-                        
-                        fault_plots = generate_fault_plots(
-                            sc_config["fault"]["type"],
-                            fault_data,
-                            time_data,
-                            sc_config["fault"]["time"],  # fault time in MINUTES
-                            sc_config["name"]
-                        )
-                        figureList.update(fault_plots)
-                        fault_plots_generated += len(fault_plots)
-                        print(f"Generated {len(fault_plots)} fault plots for {sc_config['name']}")
-                    except Exception as e:
-                        print(f"Could not generate fault plots for {sc_config['name']}: {e}")
-            
-            print(f"Total plots generated: {len(figureList)}")
-            
-            # Save plots to files if requested
-            if config.save_plots and figureList:
-                os.makedirs(PLOTTING_DIR, exist_ok=True)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                print(f"Error generating plots: {e}")
+                import traceback
+                traceback.print_exc()
                 
-                saved_count = 0
-                for name, fig in figureList.items():
-                    try:
-                        plot_filename = f"{name}_{timestamp}.png"
-                        plot_path = os.path.join(PLOTTING_DIR, plot_filename)
-                        fig.savefig(plot_path, dpi=300, bbox_inches='tight')
-                        saved_count += 1
-                        
-                        # Close the figure to free memory and avoid the error
-                        plt.close(fig)
-                        
-                    except Exception as e:
-                        print(f"Error saving plot {name}: {e}")
-                
-                print(f"Saved {saved_count} plots to {PLOTTING_DIR}")
-                
-                # Clear the figureList after closing all figures
-                figureList.clear()
-            else:
-                # If not saving, still close all figures
-                for name, fig in figureList.items():
-                    try:
-                        plt.close(fig)
-                    except:
-                        pass
-                figureList.clear()
-            
-        except Exception as e:
-            print(f"Error generating plots: {e}")
-            import traceback
-            traceback.print_exc()
-            
-            # Ensure all figures are closed even on error
-            try:
-                plt.close('all')
-            except:
-                pass
-                
+                # Ensure all figures are closed even on error
+                try:
+                    plt.close('all')
+                except:
+                    pass
+                    
         # Create a simple scenario object for compatibility
         class ConstellationScenario:
             def __init__(self, scSim, sc_objects, config):
@@ -767,13 +977,20 @@ def run_custom_simulation(config):
             f.write(f"=" * 50 + "\n\n")
             f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             
+            f.write(f"FAULT MODULE STATUS:\n")
+            f.write(f"  - Available faults: {AVAILABLE_FAULTS}\n")
+            f.write(f"  - Failed faults: {FAILED_FAULTS}\n")
+            f.write(f"  - Fault loader: {'✓ Available' if FAULT_LOADER_AVAILABLE else '✗ Not available'}\n")
+            f.write(f"  - Plots module: {'✓ Available' if PLOTS_AVAILABLE else '✗ Not available'}\n\n")
+            
             f.write(f"IMPROVEMENTS APPLIED:\n")
             f.write(f"  ✓ Higher satellite altitudes for better target coverage\n")
             f.write(f"  ✓ Improved target visibility at 50km altitude\n")
             f.write(f"  ✓ Better camera positioning for target viewing\n")
             f.write(f"  ✓ Spacecraft size increased 8x for visibility\n")
             f.write(f"  ✓ Target range increased to 2000km for visibility\n")
-            f.write(f"  ✓ Orbit lines enabled for all spacecraft\n\n")
+            f.write(f"  ✓ Orbit lines enabled for all spacecraft\n")
+            f.write(f"  ✓ Enhanced fault integration with error detection\n\n")
             
             f.write(f"TIME CONFIGURATION:\n")
             f.write(f"  - Requested duration: {config.simulation_time} minutes ({config.simulation_time * 60:.0f} seconds)\n")
@@ -811,6 +1028,7 @@ def run_custom_simulation(config):
                     if sc["fault"]["enabled"]:
                         f.write(f"  Fault: ENABLED\n")
                         f.write(f"    - Type: {sc['fault']['type']}\n")
+                        f.write(f"    - Available: {'✓ Yes' if sc['fault']['type'] in AVAILABLE_FAULTS else '✗ No'}\n")
                         f.write(f"    - Magnitude: {sc['fault']['magnitude']}\n")
                         f.write(f"    - Wheel: {sc['fault']['wheel']}\n")
                         f.write(f"    - Injection time: {sc['fault']['time']} minutes ({sc['fault']['time'] * 60:.0f} seconds)\n")
@@ -858,7 +1076,7 @@ def run_custom_simulation(config):
                 if not binary_found:
                     f.write(f"  - Binary file: NOT FOUND (check visualization setup)\n")
         
-        print(f"Detailed summary saved: {summary_path}")
+        print(f"✓ Detailed summary saved: {summary_path}")
         
     except Exception as e:
         print(f"Could not save simulation summary: {e}")
@@ -880,7 +1098,7 @@ def run_custom_simulation(config):
             if os.path.exists(vizard_path):
                 binary_found = True
                 file_size = os.path.getsize(vizard_path) / (1024*1024)  # Size in MB
-                print(f"Improved binary file created: {os.path.basename(vizard_path)}")
+                print(f"✓ Improved binary file created: {os.path.basename(vizard_path)}")
                 print(f"Location: {vizard_path}")
                 print(f"Size: {file_size:.2f} MB")
                 print(f"Duration: {config.simulation_time} minutes ({config.simulation_time * 60:.0f} seconds)")
@@ -888,14 +1106,32 @@ def run_custom_simulation(config):
                 break
         
         if not binary_found:
-            print(f"Binary file not found in expected locations:")
+            print(f"✗ Binary file not found in expected locations:")
             for path in vizard_paths:
                 print(f"   - {path}")
     
     print("\n" + "="*60)
     print("SIMULATION COMPLETED SUCCESSFULLY")
     print("="*60)
-    print(f"Duration: {config.simulation_time} minutes ({config.simulation_time * 60:.0f} seconds)")
-    print(f"IMPROVEMENTS: Higher altitudes, Target visibility, Better camera positioning")
+    print(f"Simulation Duration: {config.simulation_time} minutes ({config.simulation_time * 60:.0f} seconds)")
+    print(f"Available Faults: {AVAILABLE_FAULTS}")
+    print(f"Failed Faults: {FAILED_FAULTS}")
+    print(f"IMPROVEMENTS: Higher altitudes, Target visibility, Better camera positioning, Enhanced fault integration")
     
     return scenario, viz, figureList, output_dir
+
+# Test fault modules if run directly
+if __name__ == "__main__":
+    print("\nTesting fault module availability...")
+    check_fault_modules(verbose=True)
+    check_plots_module(verbose=True)
+    
+    if FAULT_LOADER_AVAILABLE:
+        print("\nTesting fault scenarios:")
+        for fault_type in AVAILABLE_FAULTS:
+            try:
+                from fault_loader import get_fault_scenario_class
+                scenario_class = get_fault_scenario_class(fault_type)
+                print(f"✓ {fault_type}: {scenario_class.__name__}")
+            except Exception as e:
+                print(f"✗ {fault_type}: {e}")

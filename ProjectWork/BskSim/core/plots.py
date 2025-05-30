@@ -23,18 +23,25 @@ def generate_fault_plots(fault_type, fault_data, time_data, fault_time_min, spac
     """
     Generate plots specific to the fault type using real data
     
-    Parameters:
-    fault_type (str): Type of fault ('friction', 'power_limit', 'encoder', 'battery')
-    fault_data (dict): Dictionary containing fault-specific data
-    time_data (array): Time array in minutes
-    fault_time_min (float): Time when fault was injected in minutes
-    spacecraft_name (str): Name of the spacecraft
-    
-    Returns:
-    dict: Dictionary of matplotlib Figure objects
+    Enhanced to handle both simple fault_data dictionaries and 
+    full fault scenario objects
     """
     plots = {}
     
+    # Check if fault_data is actually a scenario object
+    if hasattr(fault_data, 'pull_outputs'):
+        # This is a full scenario - extract its plots
+        try:
+            scenario_plots = fault_data.pull_outputs(showPlots=False)
+            # Rename plots to include spacecraft name
+            for plot_name, fig in scenario_plots.items():
+                new_name = f"{plot_name}_{spacecraft_name}"
+                plots[new_name] = fig
+            return plots
+        except Exception as e:
+            print(f"Could not extract plots from scenario: {e}")
+    
+    # Otherwise, use the existing plotting functions
     try:
         if fault_type == "friction":
             plots.update(generate_friction_plots(fault_data, time_data, fault_time_min, spacecraft_name))
@@ -49,10 +56,10 @@ def generate_fault_plots(fault_type, fault_data, time_data, fault_time_min, spac
             plots.update(generate_generic_fault_plots(fault_data, time_data, fault_time_min, spacecraft_name))
     except Exception as e:
         print(f"Error generating {fault_type} plots: {e}")
-        # Generate fallback plots
         plots.update(generate_generic_fault_plots(fault_data, time_data, fault_time_min, spacecraft_name))
     
     return plots
+
 
 def generate_friction_plots(fault_data, time_data, fault_time_min, spacecraft_name):
     """

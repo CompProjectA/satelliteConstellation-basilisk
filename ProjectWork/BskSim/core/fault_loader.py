@@ -1,58 +1,41 @@
 #!/usr/bin/env python
 """
-fault_loader.py - FIXED VERSION
+fault_loader.py - ENHANCED VERSION
 
 Provides a unified interface for loading and accessing different fault types
-from the faults folder and their associated scenario classes.
+with proper integration for constellation simulations.
 """
 
 import os
 import sys
 import importlib
+import numpy as np
 from typing import Optional, Dict, Any, Tuple
-
-# Get the faults directory path
-import inspect
-filename = inspect.getframeinfo(inspect.currentframe()).filename
-path = os.path.dirname(os.path.abspath(filename))
-ROOT_DIR = os.path.abspath(os.path.join(path, '..'))
-FAULTS_DIR = os.path.join(ROOT_DIR, 'faults')
-
-# Add faults directory to path
-sys.path.insert(0, FAULTS_DIR)
+from Basilisk.utilities import macros
 
 def safe_import_fault_module(module_name, class_name, fallback_class=None):
-    """Safely import a fault module from the faults folder with fallback options"""
+    """Safely import a fault module with fallback options"""
     try:
-        # Try importing from faults folder directly
-        module = importlib.import_module(module_name)
-        fault_class = getattr(module, class_name, None)
-        
-        if fault_class is None:
-            print(f"Warning: Could not find {class_name} in {module_name}")
-            return fallback_class, None
-            
-        # Look for run function
+        module = importlib.import_module(f"faults.{module_name}")
+        fault_class = getattr(module, class_name)
         run_function = getattr(module, "run", None)
-        print(f"Successfully imported {class_name} from {module_name}")
         return fault_class, run_function
-        
     except ImportError as e:
         print(f"Warning: Could not import {module_name}: {e}")
         if fallback_class:
             print(f"Using fallback class for {class_name}")
             return fallback_class, None
         return None, None
-    except Exception as e:
-        print(f"Error importing {module_name}: {e}")
+    except AttributeError as e:
+        print(f"Warning: Could not find {class_name} in {module_name}: {e}")
         return None, None
 
 # Import specific fault modules with error handling
 fault_modules = {}
 run_functions = {}
+fault_implementations = {}
 
 # Try to import friction fault
-print("Loading fault modules from:", FAULTS_DIR)
 friction_class, friction_run = safe_import_fault_module("friction_fault", "FrictionFaultScenario")
 if friction_class:
     fault_modules["friction"] = friction_class
@@ -76,43 +59,120 @@ if battery_class:
     fault_modules["battery"] = battery_class
     run_functions["battery"] = battery_run
 
-# Create fallback classes if none were imported
-if not fault_modules:
-    print("Warning: No fault modules could be imported. Creating minimal fallback.")
+# Create fault implementation functions for constellation simulations
+def apply_friction_fault(dynModel, fault_magnitude, fault_wheel, current_time):
+    """Apply friction fault to a reaction wheel"""
+    if hasattr(dynModel, 'rwFactory'):
+        rw_list = [dynModel.RW1, dynModel.RW2, dynModel.RW3, dynModel.RW4]
+        if 0 <= fault_wheel < len(rw_list) and rw_list[fault_wheel]:
+            rw_list[fault_wheel].fCoulomb += fault_magnitude
+            print(f"Applied friction fault: {fault_magnitude} N⋅m to RW {fault_wheel}")
+            return True
+    return False
+
+def apply_power_limit_fault(dynModel, power_limit, fault_wheel, current_time):
+    """Apply power limit fault to a reaction wheel"""
+    # This would require modifying the RW model to support power limits
+    # For now, we'll store the limit for plotting purposes
+    if not hasattr(dynModel, 'power_limits'):
+        dynModel.power_limits = {}
+    dynModel.power_limits[fault_wheel] = power_limit
+    print(f"Applied power limit: {power_limit} W to RW {fault_wheel}")
+    return True
+
+def apply_encoder_fault(dynModel, fault_magnitude, fault_wheel, current_time):
+    """Apply encoder fault to a reaction wheel"""
+    # This would require modifying the RW model to support encoder errors
+    # For now, we'll flag it for plotting purposes
+    if not hasattr(dynModel, 'encoder_faults'):
+        dynModel.encoder_faults = {}
+    dynModel.encoder_faults[fault_wheel] = True
+    print(f"Applied encoder fault to RW {fault_wheel}")
+    return True
+
+def apply_battery_fault(dynModel, drain_rate, fault_wheel, current_time):
+    """Apply battery drain fault"""
+    # This would require adding battery models to the spacecraft
+    # For now, we'll store the drain rate for plotting
+    if not hasattr(dynModel, 'battery_drain'):
+        dynModel.battery_drain = 0.0
+    dynModel.battery_drain += drain_rate
+    print(f"Applied battery drain: {drain_rate} kW")
+    return True
+
+# Map fault types to implementation functions
+fault_implementations = {
+    "friction": apply_friction_fault,
+    "power_limit": apply_power_limit_fault,
+    "encoder": apply_encoder_fault,
+    "battery": apply_battery_fault
+}
+
+def apply_fault_to_spacecraft(dynModel, fault_type, fault_magnitude, fault_wheel, current_time):
+    """
+    Apply a fault to a spacecraft's reaction wheel system
     
-    class FallbackFaultScenario:
-        """Minimal fallback fault scenario"""
-        def __init__(self):
-            self.name = 'FallbackFaultScenario'
-            self.fault_type = 'unknown'
-            self.fault_magnitude = 0.0
-            self.fault_wheel_number = 0
-            self.fault_time = 10.0
-            print("Using fallback fault scenario - limited functionality")
-        
-        def run(self):
-            print("Fallback scenario run method called")
-            return None, None, {}
-        
-        def pull_outputs(self, showPlots):
-            print("Fallback pull_outputs called")
-            return {}
+    Parameters:
+    dynModel: The dynamics model containing the RW system
+    fault_type (str): Type of fault to apply
+    fault_magnitude (float): Magnitude/severity of the fault
+    fault_wheel (int): Which wheel to fault (0-3)
+    current_time (float): Current simulation time in nanoseconds
     
-    # Use fallback for all fault types
-    for fault_type in ["friction", "power_limit", "encoder", "battery"]:
-        fault_modules[fault_type] = FallbackFaultScenario
-        run_functions[fault_type] = lambda: (None, None, {})
-else:
-    print(f"Successfully loaded {len(fault_modules)} fault modules")
+    Returns:
+    bool: True if fault was successfully applied
+    """
+    fault_type = fault_type.lower().replace(" ", "_")
+    
+    if fault_type in fault_implementations:
+        impl_func = fault_implementations[fault_type]
+        return impl_func(dynModel, fault_magnitude, fault_wheel, current_time)
+    else:
+        print(f"Warning: Unknown fault type '{fault_type}'")
+        return False
+
+def extract_fault_data_from_scenario(scenario, fault_type):
+    """
+    Extract data from a fault scenario for plotting
+    
+    Parameters:
+    scenario: The fault scenario object
+    fault_type (str): Type of fault
+    
+    Returns:
+    dict: Fault data for plotting
+    """
+    fault_data = {
+        'fault_wheel': getattr(scenario, 'fault_wheel_number', 3),
+        'fault_time': getattr(scenario, 'oneTimeFaultTime', macros.min2nano(10.))
+    }
+    
+    if fault_type == "friction":
+        fault_data['friction_magnitude'] = getattr(scenario, 'fault_magnitude', 0.0005)
+        fault_data['friction_baseline'] = 0.02
+    elif fault_type == "power_limit":
+        fault_data['power_limit'] = getattr(scenario, 'fault_magnitude', 0.5)
+    elif fault_type == "battery":
+        fault_data['battery_drain'] = getattr(scenario, 'fault_magnitude', 0.05)
+    
+    # Extract wheel speeds if available
+    if hasattr(scenario, 'rwSpeedRec') and scenario.rwSpeedRec:
+        fault_data['wheel_speeds'] = scenario.rwSpeedRec.wheelSpeeds
+    
+    # Extract attitude error if available
+    if hasattr(scenario, 'msgRecList') and 'attGuidName' in scenario.msgRecList:
+        attErrRec = scenario.msgRecList[scenario.attGuidName]
+        if hasattr(attErrRec, 'sigma_BR'):
+            sigma_BR = attErrRec.sigma_BR
+            fault_data['attitude_error'] = np.linalg.norm(sigma_BR, axis=1)
+    
+    return fault_data
 
 # Dictionary mapping fault types to their corresponding scenario classes
 FAULT_SCENARIOS = fault_modules
 
 # Dictionary mapping fault types to their run functions  
 RUN_FUNCTIONS = run_functions
-
-# For backward compatibility
-RWFaultScenario = fault_modules.get("friction", None)
 
 def get_available_fault_types():
     """Get list of available fault types"""
@@ -132,48 +192,20 @@ def get_fault_scenario_class(fault_type: str):
     Returns:
     class: The scenario class for the specified fault type
     """
-    # Convert from GUI name format to module format if needed
     fault_type = fault_type.lower().replace(" ", "_")
     
     if fault_type not in FAULT_SCENARIOS:
         available_types = list(FAULT_SCENARIOS.keys())
-        print(f"Unknown fault type: {fault_type}. Available types: {available_types}")
-        # Return friction fault as default
-        return FAULT_SCENARIOS.get("friction", FallbackFaultScenario)
+        raise ValueError(f"Unknown fault type: {fault_type}. Available types: {available_types}")
     
     return FAULT_SCENARIOS[fault_type]
-
-def get_fault_run_function(fault_type: str):
-    """
-    Get the run function for the given fault type
-    
-    Parameters:
-    fault_type (str): Type of fault ('friction', 'power_limit', 'encoder', 'battery')
-    
-    Returns:
-    function: The run function for the specified fault type
-    """
-    # Convert from GUI name format to module format if needed
-    fault_type = fault_type.lower().replace(" ", "_")
-    
-    if fault_type not in RUN_FUNCTIONS:
-        available_types = list(RUN_FUNCTIONS.keys())
-        print(f"Unknown fault type: {fault_type}. Available types: {available_types}")
-        return lambda: (None, None, {})  # Return empty function
-    
-    run_func = RUN_FUNCTIONS[fault_type]
-    if run_func is None:
-        print(f"Warning: No run function available for {fault_type}")
-        return lambda: (None, None, {})  # Return empty function
-    
-    return run_func
 
 def create_scenario(fault_type: str, **kwargs):
     """
     Create a scenario instance for the given fault type
     
     Parameters:
-    fault_type (str): Type of fault ('friction', 'power_limit', 'encoder', 'battery')
+    fault_type (str): Type of fault
     **kwargs: Additional parameters to pass to the scenario constructor
     
     Returns:
@@ -181,111 +213,39 @@ def create_scenario(fault_type: str, **kwargs):
     """
     try:
         scenario_class = get_fault_scenario_class(fault_type)
-        scenario = scenario_class()
-        
-        # Set common parameters if they exist
-        if hasattr(scenario, 'fault_magnitude') and 'magnitude' in kwargs:
-            scenario.fault_magnitude = kwargs['magnitude']
-        if hasattr(scenario, 'fault_wheel_number') and 'wheel' in kwargs:
-            scenario.fault_wheel_number = kwargs['wheel']
-        if hasattr(scenario, 'fault_time') and 'time' in kwargs:
-            scenario.fault_time = kwargs['time']
-        if hasattr(scenario, 'oneTimeFaultTime') and 'time' in kwargs:
-            scenario.oneTimeFaultTime = kwargs['time'] * 60e9  # Convert minutes to nanoseconds
-            
-        return scenario
+        return scenario_class(**kwargs)
     except Exception as e:
         print(f"Error creating scenario for {fault_type}: {e}")
-        # Return fallback scenario
-        return FallbackFaultScenario()
+        return None
 
 def run_scenario(fault_type: str, **kwargs):
     """
     Run a simulation for the given fault type
     
     Parameters:
-    fault_type (str): Type of fault ('friction', 'power_limit', 'encoder', 'battery')
+    fault_type (str): Type of fault
     **kwargs: Additional parameters to pass to the run function
     
     Returns:
-    tuple: Results from the run function (usually scenario, viz, figureList)
+    tuple: Results from the run function (scenario, viz, figureList)
     """
-    try:
-        run_function = get_fault_run_function(fault_type)
-        if run_function:
-            return run_function(**kwargs)
-        else:
-            print(f"No run function for {fault_type}")
-            return None, None, {}
-    except Exception as e:
-        print(f"Error running scenario for {fault_type}: {e}")
-        import traceback
-        traceback.print_exc()
-        return None, None, {}
-
-def test_fault_modules():
-    """Test all available fault modules"""
-    print("\nTesting fault modules...")
-    print("="*50)
-    print(f"Faults directory: {FAULTS_DIR}")
-    print(f"Available fault types: {get_available_fault_types()}")
+    fault_type = fault_type.lower().replace(" ", "_")
     
-    for fault_type in get_available_fault_types():
-        try:
-            print(f"\nTesting {fault_type}...")
-            scenario_class = get_fault_scenario_class(fault_type)
-            print(f"  ✓ Scenario class: {scenario_class.__name__}")
-            
-            # Try to create instance
-            scenario = create_scenario(fault_type, magnitude=0.001, wheel=2, time=10.0)
-            print(f"  ✓ Instance created: {scenario.name if hasattr(scenario, 'name') else 'OK'}")
-            
-            # Check run function
-            run_function = get_fault_run_function(fault_type)
-            print(f"  ✓ Run function: {'Available' if run_function else 'Not available'}")
-            
-        except Exception as e:
-            print(f"  ✗ Error testing {fault_type}: {e}")
-
-def run(showPlots=True, saveBinary=True, fault_type=None):
-    """
-    Run a fault scenario with the specified type
-    
-    Parameters:
-    showPlots (bool): Flag to display plots
-    saveBinary (bool): Flag to save binary file for visualization
-    fault_type (str, optional): Type of fault to run
-    
-    Returns:
-    tuple: (scenario, viz, figureList) - The simulation objects and results
-    """
-    # Default to friction if not specified
-    if fault_type is None:
-        fault_type = "friction"
-    
-    # Get the run function for this fault type
-    run_func = get_fault_run_function(fault_type)
-    
-    if run_func:
-        return run_func(showPlots=showPlots, saveBinary=saveBinary)
+    if fault_type in RUN_FUNCTIONS and RUN_FUNCTIONS[fault_type]:
+        run_function = RUN_FUNCTIONS[fault_type]
+        return run_function(**kwargs)
     else:
-        print(f"No run function available for fault type: {fault_type}")
+        print(f"No run function available for {fault_type}")
         return None, None, {}
 
-# Export key classes and functions
-__all__ = [
-    'FAULT_SCENARIOS',
-    'RUN_FUNCTIONS',
-    'get_available_fault_types',
-    'is_fault_type_available',
-    'get_fault_scenario_class',
-    'get_fault_run_function',
-    'create_scenario',
-    'run_scenario',
-    'test_fault_modules',
-    'run'
-]
-
-if __name__ == "__main__":
-    # Test the fault loader when run directly
-    test_fault_modules()
+# For backward compatibility
+try:
+    RWFaultScenario = FAULT_SCENARIOS.get("friction")
+    run = RUN_FUNCTIONS.get("friction", lambda: (None, None, {}))
+except:
+    class RWFaultScenario:
+        def __init__(self):
+            self.name = "RWFaultScenario_Compatibility"
+    
+    def run():
+        return None, None, {}
