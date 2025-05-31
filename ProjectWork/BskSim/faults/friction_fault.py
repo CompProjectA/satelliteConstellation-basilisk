@@ -585,7 +585,7 @@ class scenario_AddRWFault(BSKSim, BSKScenario):
             RW_friction.append(np.delete(self.rwLogs[i].u_f, 0, 0))
 
         # Estimate RW temperatures based on speed and friction
-        RW_temperatures = self.calculate_temperatures(RW_speeds, RW_friction)
+        self.no_cooling, self.with_cooling = self.calculate_temperatures(RW_speeds, RW_friction)
 
         # Plotting section
         BSK_plt.clear_all_plots()
@@ -597,7 +597,8 @@ class scenario_AddRWFault(BSKSim, BSKScenario):
         BSK_plt.plot_attitude_error(timeData, sigma_BR)
 
         # Plot temperatures
-        self.plot_rw_temperatures(timeData, RW_temperatures, numRW)
+        self.plot_rw_temperature(timeData, self.no_cooling, numRW)
+        self.plot_rw_C_temperature(timeData, self.with_cooling, numRW)
 
         # Return or show/save figures
         figureList = {}
@@ -605,44 +606,44 @@ class scenario_AddRWFault(BSKSim, BSKScenario):
             BSK_plt.show_all_plots()
         else:
             fileName = os.path.basename(os.path.splitext(__file__)[0])
-            figureNames = ["RWSpeeds", "RWFriction", "RWTemperatures","attitudeErrorNorm" ]
+            figureNames = ["RWSpeeds", "RWFriction","RWTemperatures(c)","RWTemperatures","attitudeErrorNorm" ]
             figureList = BSK_plt.save_all_plots(fileName, figureNames)
 
         return figureList
 
     def calculate_temperatures(self, rw_speeds, rw_friction):
-        """Estimate temperatures based on power dissipated by RW friction."""
+        """Estimate temperatures with and without cooling based on RW friction."""
         numRW = len(rw_friction)
         num_samples = len(rw_speeds)
-        temperatures = []
+        no_cooling = []
+        with_cooling = []
 
-        T_ambient = 20.0  # Ambient temperature in Celsius
+        T_ambient = 10.0  # Ambient temperature in Celsius
 
         for rw in range(numRW):
-            temp = np.zeros(num_samples)
-            temp[0] = T_ambient
+            temp_nc = np.zeros(num_samples)
+            temp_c = np.zeros(num_samples)
+            temp_nc[0] = T_ambient
+            temp_c[0] = T_ambient
 
             for i in range(1, num_samples):
-                # Convert RPM to rad/s
-                omega = rw_speeds[i, rw] * 2 * np.pi / 60 # power = torque × angular velocity
-
-                # Compute power due to friction (P = torque × angular speed)
+                omega = rw_speeds[i, rw] * 2 * np.pi / 60
                 P_friction = abs(rw_friction[rw][i] * omega) if i < len(rw_friction[rw]) else 0
+                temp_rise = P_friction * 0.2
+                cooling = 0.005 * (temp_c[i-1] - T_ambient)  # Arbitrary cooling term
 
-                # Estimate temperature increase and cooling
-                temp_rise = P_friction * 0.1  # Arbitrary scaling factor for heating
-                cooling = (temp[i-1] - T_ambient) * 0.05  # Simplified cooling
+                temp_nc[i] = temp_nc[i-1] + temp_rise
+                temp_c[i] = temp_c[i-1] + (temp_rise) - cooling
 
-                temp[i] = temp[i-1] + temp_rise - cooling
+            no_cooling.append(temp_nc)
+            with_cooling.append(temp_c)
 
-                # Clamp temperature between ambient and 100°C
-                temp[i] = max(T_ambient, min(temp[i], 100.0))
+        return no_cooling, with_cooling
 
-            temperatures.append(temp)
 
-        return temperatures
 
-    def plot_rw_temperatures(self, timeData, RW_temperatures, numRW):
+
+    def plot_rw_temperature(self, timeData, RW_temperatures, numRW):
         """Generate plot of RW temperatures over time."""
         plt.figure()
         colors = ['blue', 'green', 'red', 'cyan']
@@ -653,13 +654,31 @@ class scenario_AddRWFault(BSKSim, BSKScenario):
 
         plt.xlabel('Time [min]')
         plt.ylabel('Temperature [°C]')
-        plt.title('Reaction Wheel Temperatures')
+        plt.title('Reaction Wheel Temperatures(Without Cooling)')
         plt.legend()
         plt.grid(True, alpha=0.3)
 
         # Draw warning/critical temperature lines
-        plt.axhline(y=22, color='orange', linestyle='--', alpha=0.7, label='Warning')
-        plt.axhline(y=23, color='red', linestyle='--', alpha=0.7, label='Critical')
+        plt.axhline(y=30, color='orange', linestyle='--', alpha=0.7, label='Warning')
+        plt.tight_layout()
+
+    def plot_rw_C_temperature(self, timeData, RW_temperatures, numRW):
+        """Generate plot of RW temperatures over time."""
+        plt.figure()
+        colors = ['blue', 'green', 'red', 'cyan']
+
+        for idx in range(numRW):
+            plt.plot(timeData, RW_temperatures[idx], color=colors[idx],
+                     label=f'RW {idx+1}', linewidth=2)
+
+        plt.xlabel('Time [min]')
+        plt.ylabel('Temperature [°C]')
+        plt.title('Reaction Wheel Temperatures(With Cooling)')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+
+        # Draw warning/critical temperature lines
+        plt.axhline(y=30, color='orange', linestyle='--', alpha=0.7, label='Warning')
         plt.tight_layout()
 
     def runScenario(self):
