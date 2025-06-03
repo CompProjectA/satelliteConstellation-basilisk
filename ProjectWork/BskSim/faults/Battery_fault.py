@@ -386,8 +386,8 @@ class BatteryFaultScenario(BSKSim, BSKScenario):
         sinkViz .powerNodeUsageInMsg = sinkReader
 
         # now show all three panels on the same row
-        gsList.append([batteryPanel])
-        #gsList.append([batteryPanel, solarViz, sinkViz])
+        #gsList.append([batteryPanel])
+        gsList.append([batteryPanel, solarViz, sinkViz])
     
         
 

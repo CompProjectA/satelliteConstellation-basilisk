@@ -116,7 +116,6 @@ from Basilisk.simulation import simplePowerSink
 
 
 
-
 def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, planetCase):
     
 
@@ -146,13 +145,14 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
     scObject = spacecraft.Spacecraft()
     scObject.ModelTag = "bskSat"
 
-     
     cameraLocation = [0.0, 2.0, 0.0]
 
     targets = [ {"name": "Tokyo",          "lat":  35.68,   "lon": 139.77,   "color": "green"},
                 {"name": "Sri Lanka",      "lat":   6.9271, "lon":  79.8612, "color": "orange"},
                 {"name": "Central Africa", "lat":   1.5333, "lon":  17.6667, "color": "purple"}
     ]
+
+
     
     # Create and configure the battery
     battery = simpleBattery.SimpleBattery()
@@ -160,12 +160,8 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
     battery.storageCapacity   = 100.0 
     battery.storedCharge_Init = 50.0 
     scSim.AddModelToTask(simTaskName, battery)
-    #for camara
-    batteryReader = messaging.PowerStorageStatusMsgReader()
-    batteryReader.subscribeTo(battery.batPowerOutMsg)      # listen for battery status
-    scSim.batteryReader = batteryReader  
-    
-    print(dir(battery))
+ 
+  
 
     # Power Consumption 
     # Primary power sink (10 W)
@@ -177,26 +173,76 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
     # hook the sink into the battery
     battery.addPowerNodeToModel(powerSink.nodePowerOutMsg)
 
+    # 2) Secondary (fault-injection) load
+    powerSinkFault = simplePowerSink.SimplePowerSink()
+    powerSinkFault.ModelTag    = "powerSinkFault"
+    powerSinkFault.nodePowerOut = 0.0     # start off
+    scSim.AddModelToTask(simTaskName, powerSinkFault)
+    battery.addPowerNodeToModel(powerSinkFault.nodePowerOutMsg)
+   
 
+
+################################################################################################
+  
+    # expose sink so your event can see it
     scSim.powerSink = powerSink
-    # compute the 1 min 
-    faultTime = macros.min2nano(60.0)
+
+    # expose for events
+    scSim.powerSinkFault = powerSinkFault
+
+    # 1) record the battery status
+    battRec = battery.batPowerOutMsg.recorder(simulationTimeStep)
+    # expose to scSim
+    scSim.battRec = battRec
+    scSim.AddModelToTask(simTaskName, battRec)
+
+    faultTime = macros.min2nano(5.0)
+
+    # 2) compute the 20% threshold
+    safeThresh = battery.storageCapacity * 0.2
+
+    # 3) create the safe‐mode event, only firing once there's at least one sample:
+    cond = (
+        f"(len(self.battRec.storageLevel) > 0) and "
+        f"(self.battRec.storageLevel[-1] <= {safeThresh})"
+    )
+    scSim.createNewEvent(
+        "batterySafeMode",          # event name
+        simulationTimeStep,         # check interval
+        True,                       # enabled immediately
+        [cond],                     # guarded condition
+        [
+            "print('*** ENTERING SAFE MODE: SOC ≤ 20% ***')",
+            "self.powerSink.nodePowerOut = 0.0",
+            "self.powerSinkFault.nodePowerOut = 0.0",
+            "self.setEventActivity('batterySafeMode', False)"
+        ]
+    )
+
 
     scSim.createNewEvent(
-        "powerSinkFault",        
+        "powerSinkFaultEvent",        
         simulationTimeStep,               # how often to check
         True,                   
         [f"self.TotalSim.CurrentNanos >= {faultTime}"],   # condition
         [
         # start drawing 10 W 
-        "self.powerSink.nodePowerOut = -0.05",
+        "self.powerSinkFault.nodePowerOut = -0.05",
         # disable this event so it only fires once
-        "self.setEventActivity('powerSinkFault', False)"
+        "self.setEventActivity('powerSinkFaultEvent', False)"
         ]
     )
 
+
+#################################################################################################
+
     
     
+
+    
+
+    
+
 
 
     # Solar Panel
@@ -207,8 +253,7 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
     scSim.AddModelToTask(simTaskName, solarPanel)
     battery.addPowerNodeToModel(solarPanel.nodePowerOutMsg)  
     
-   
-    
+
 
     
     rawSun = np.array([-1.0, -10.0, -1.0])
@@ -218,9 +263,15 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
     sunMsg = messaging.SpicePlanetStateMsg().write(sunMsgData)
     solarPanel.sunInMsg.subscribeTo(sunMsg)
     
+  
+    # 1) make & add the recorder
+    battRec = battery.batPowerOutMsg.recorder(simulationTimeStep)
+    scSim.AddModelToTask(simTaskName, battRec)
 
-    
-    
+    # 2) list its public attrs
+    print(">>> battRec attrs:", [a for a in dir(battRec) if not a.startswith("_")])
+
+        
  
 
     # Visualization Setup 
@@ -249,28 +300,56 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
         vizSupport.toRGBA255("green")
     )
 
+    batteryPanel.thresholds = vizSupport.vizInterface.IntVector([0])
+    batteryPanel.color      = vizSupport.vizInterface.IntVector(
+        vizSupport.toRGBA255("red") +   # SOC ≤ 20% → red
+        vizSupport.toRGBA255("green")   # SOC > 20% → green
+    )
     
+
+
 
     solarViz = vizSupport.vizInterface.GenericStorage()
     solarViz.label           = "Solar Power"
     solarViz.units           = "W"
     solarViz.minValue        = 0.0
     solarViz.maxValue        = 20.0    # set to a bit above your expected peak
-    solarViz.useStorageLevel = False  # raw watts
 
-    
-    solarReader = messaging.PowerNodeUsageMsgReader()
+    solarViz.useStorageLevel = False  
+    solarReader = messaging.PowerNodeUsageMsgReader()  # Change to match the correct message type
     solarReader.subscribeTo(solarPanel.nodePowerOutMsg)
-
-    
-    solarViz.storageUnitStateInMsg = solarReader
+    solarViz.powerNodeUsageInMsg = solarReader
     solarViz.this.disown()
+    scSim.solarReader = solarReader
 
 
+    sinkReader = messaging.PowerNodeUsageMsgReader()
+    sinkReader.subscribeTo(powerSink.nodePowerOutMsg)
+    scSim.sinkReader = sinkReader   
+
+    sinkViz = vizSupport.vizInterface.GenericStorage()
+    sinkViz.label           = "Power Sink"
+    sinkViz.units           = "W"
+    sinkViz.minValue        = -0.15
+    sinkViz.maxValue        =  0.0
+    sinkViz.useStorageLevel = True
+    sinkViz.powerNodeUsageInMsg = sinkReader
+    sinkViz.this.disown()
+        
+
+
+    scSim.solarReader = solarReader
+    scSim.sinkReader  = sinkReader
+
+    solarViz.powerNodeUsageInMsg = solarReader
+    sinkViz .powerNodeUsageInMsg = sinkReader
+
+    # now show all three panels on the same row
+    gsList.append([batteryPanel])
    
     
 
-    gsList.append([batteryPanel])
+   
   
  
     ##################################################### 
@@ -313,7 +392,7 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
         oe.e = 1.0 - rLEO / oe.a
         oe.i = 0.0 * macros.D2R
     else:                   # LEO case, default case 0
-        oe.a = (6371e3 + 1700e3)
+        oe.a = rLEO
         oe.e = 0.0001
         oe.i = 33.3 * macros.D2R
     oe.Omega = 48.2 * macros.D2R
@@ -334,9 +413,9 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
     P = 2. * np.pi / n
     
     if useSphericalHarmonics:
-        simulationTime = macros.sec2nano(3. * P)
+        simulationTime = macros.sec2nano(2. * P)
     else:
-        simulationTime = macros.sec2nano(3 * P)
+        simulationTime = macros.sec2nano(2 * P)
 
     #
     #   Setup data logging before the simulation is initialized
@@ -350,8 +429,9 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
     dataLog = scObject.scStateOutMsg.recorder(samplingTime)
     scSim.AddModelToTask(simTaskName, dataLog)
 
-    # Battery state logger
-    batteryLog = battery.batPowerOutMsg.recorder(samplingTime)
+   
+    # record the battery’s storage-level and net-power messages every time step
+    batteryLog = battery.batPowerOutMsg.recorder(simulationTimeStep)
     scSim.AddModelToTask(simTaskName, batteryLog)
 
     
@@ -365,7 +445,7 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
         viz=vizSupport.enableUnityVisualization(scSim, simTaskName, scObject
                                             , liveStream=True
                                             , genericStorageList=gsList
-                                            , saveFile=fileName
+                                           
                                             ) 
 
 
@@ -374,29 +454,30 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
                                             spacecraftName=scObject.ModelTag,
                                             showGenericStoragePanel=True)
         
-
+        
+        
         
 
+        bodyName = planetCase.lower()   # 'earth' or 'mars'
+        earthRadius = 6371000.0
+
         for tgt in targets:
-            lat = tgt["lat"]
-            lon = tgt["lon"]
-            color = tgt.get("color", "red")
-            alt = 0.0
-            radius = 6371000.0 + alt
-            lat_rad = lat * macros.D2R
-            lon_rad = lon * macros.D2R
-            x = radius * np.cos(lat_rad) * np.cos(lon_rad)
-            y = radius * np.cos(lat_rad) * np.sin(lon_rad)
-            z = radius * np.sin(lat_rad)
+            lat_r = tgt["lat"] * macros.D2R
+            lon_r = tgt["lon"] * macros.D2R
+            x = earthRadius * np.cos(lat_r) * np.cos(lon_r)
+            y = earthRadius * np.cos(lat_r) * np.sin(lon_r)
+            z = earthRadius * np.sin(lat_r)
             location_position = [x, y, z]
 
             vizSupport.addLocation(
-               viz,
-                stationName=tgt["name"],
-                parentBodyName="earth",
-                r_GP_P=location_position,
-                color=color
+                viz,
+                stationName   = tgt["name"],
+                parentBodyName= bodyName,
+                r_GP_P        = location_position,
+                color         = tgt["color"],
+                range         = 2000e3 
             )
+        
 
         # mount one camera on your sat 
         vizSupport.createStandardCamera(
@@ -406,8 +487,7 @@ def run(show_plots, liveStream, timeStep, orbitCase, useSphericalHarmonics, plan
             displayName     = "BatteryCam",
             fieldOfView     = 30 * macros.D2R,
             pointingVector_B= [0.0, 0.0, 0.0],  # look forward in +X
-            position_B      = cameraLocation,
-            
+            position_B      = cameraLocation
            
         )
         
