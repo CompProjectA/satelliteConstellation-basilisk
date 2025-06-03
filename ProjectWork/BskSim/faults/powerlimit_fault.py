@@ -414,4 +414,8 @@ if __name__ == "__main__":
         fault_time_min=15.0, 
         showPlots=True
     )
+<<<<<<< HEAD
     print(f"Test completed with {len(test_plots)} plots")
+=======
+    print(f"Test completed with {len(test_plots)} plots")
+>>>>>>> 95223ed3728b42f73f3b69b313df8a213f31c1af

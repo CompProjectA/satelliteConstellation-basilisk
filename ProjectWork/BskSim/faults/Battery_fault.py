@@ -253,7 +253,59 @@ def run(show_plots=False, liveStream=False, timeStep=1.0, orbitCase='LEO',
             vizSupport.toRGBA255("green")
         )
 
+<<<<<<< HEAD
         gsList.append([batteryPanel])
+=======
+        batteryPanel.thresholds = vizSupport.vizInterface.IntVector([0])
+        batteryPanel.color      = vizSupport.vizInterface.IntVector(
+            vizSupport.toRGBA255("red") +   # SOC ≤ 20% → red
+            vizSupport.toRGBA255("green")   # SOC > 20% → green
+        )
+        
+
+
+
+        solarViz = vizSupport.vizInterface.GenericStorage()
+        solarViz.label           = "Solar Power"
+        solarViz.units           = "W"
+        solarViz.minValue        = 0.0
+        solarViz.maxValue        = 20.0    # set to a bit above your expected peak
+
+        solarViz.useStorageLevel = False  
+        solarReader = messaging.PowerNodeUsageMsgReader()  # Change to match the correct message type
+        solarReader.subscribeTo(solarPanel.nodePowerOutMsg)
+        solarViz.powerNodeUsageInMsg = solarReader
+        solarViz.this.disown()
+        scSim.solarReader = solarReader
+
+
+        sinkReader = messaging.PowerNodeUsageMsgReader()
+        sinkReader.subscribeTo(powerSink.nodePowerOutMsg)
+        scSim.sinkReader = sinkReader   
+
+        sinkViz = vizSupport.vizInterface.GenericStorage()
+        sinkViz.label           = "Power Sink"
+        sinkViz.units           = "W"
+        sinkViz.minValue        = -0.15
+        sinkViz.maxValue        =  0.0
+        sinkViz.useStorageLevel = True
+        sinkViz.powerNodeUsageInMsg = sinkReader
+        sinkViz.this.disown()
+            
+
+
+        scSim.solarReader = solarReader
+        scSim.sinkReader  = sinkReader
+
+        solarViz.powerNodeUsageInMsg = solarReader
+        sinkViz .powerNodeUsageInMsg = sinkReader
+
+        # now show all three panels on the same row
+        #gsList.append([batteryPanel])
+        gsList.append([batteryPanel, solarViz, sinkViz])
+    
+        
+>>>>>>> 95223ed3728b42f73f3b69b313df8a213f31c1af
 
     # Add spacecraft object to the simulation process
     scSim.AddModelToTask(simTaskName, scObject)
