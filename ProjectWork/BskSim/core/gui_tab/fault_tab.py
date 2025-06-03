@@ -26,6 +26,9 @@ class FaultTab(BaseTab):
         
         # Create the tab UI
         self.create_tab_ui()
+        
+        # ADD THIS: Bind fault type change after UI is created
+        self.fault_type_var.trace('w', self.on_fault_type_change)
 
     def get_active_satellite_index(self):
         """
@@ -50,6 +53,30 @@ class FaultTab(BaseTab):
         if 0 <= index < len(self.satellites):
             self.fault_satellite_combo.current(index)
             self.load_fault_config(index)
+            
+    # ADD THIS NEW METHOD
+    def on_fault_type_change(self, *args):
+        """Handle fault type change to update default magnitudes"""
+        fault_type = self.fault_type_var.get()
+        
+        # Default magnitudes per fault type
+        DEFAULT_FAULT_MAGNITUDES = {
+            "friction": 0.0005,    # N⋅m
+            "power_limit": 0.5,    # W
+            "encoder": 20.0,       # %
+            "battery": 50.0        # W
+        }
+        
+        # If the current magnitude is still the old default, update it
+        current_magnitude = self.fault_mag.get()
+        if abs(current_magnitude - 0.0005) < 1e-6 or fault_type != "friction":
+            if fault_type in DEFAULT_FAULT_MAGNITUDES:
+                new_magnitude = DEFAULT_FAULT_MAGNITUDES[fault_type]
+                self.fault_mag.set(new_magnitude)
+                
+                # Log the change if not loading from existing config
+                if hasattr(self, '_loading_config') and not self._loading_config:
+                    self.parent_app.add_log(f"Updated {fault_type} fault magnitude to {new_magnitude}")
                     
     def create_tab_ui(self):
         """Create the Fault Configuration tab UI"""
@@ -320,6 +347,9 @@ class FaultTab(BaseTab):
     def load_fault_config(self, index):
         """Load fault configuration for the specified satellite"""
         if 0 <= index < len(self.satellites):
+            # ADD THIS: Set flag to prevent magnitude change logging when loading
+            self._loading_config = True
+            
             fault = self.satellites[index]["fault"]
             
             self.fault_enabled_var.set(fault["enabled"])
@@ -336,6 +366,9 @@ class FaultTab(BaseTab):
             
             self.update_fault_config()
             self.update_fault_status()
+            
+            # ADD THIS: Clear loading flag
+            self._loading_config = False
             
     def update_fault_config(self):
         """Update the fault configuration UI based on selections"""
@@ -399,7 +432,9 @@ class FaultTab(BaseTab):
         mag_frame = ttk.Frame(self.params_frame)
         mag_frame.pack(fill=tk.X, pady=2)
         
-        ttk.Label(mag_frame, text="Magnitude:").pack(side=tk.LEFT)
+        # UPDATED: Store reference to magnitude label
+        self.fault_mag_label = ttk.Label(mag_frame, text="Magnitude (N·m):")
+        self.fault_mag_label.pack(side=tk.LEFT)
         ttk.Entry(mag_frame, textvariable=self.fault_mag, width=10).pack(side=tk.LEFT, padx=5)
         ttk.Label(mag_frame, text="(friction torque in N·m)", style="Info.TLabel").pack(side=tk.LEFT, padx=5)
         
@@ -423,7 +458,9 @@ class FaultTab(BaseTab):
         limit_frame = ttk.Frame(self.params_frame)
         limit_frame.pack(fill=tk.X, pady=2)
         
-        ttk.Label(limit_frame, text="Power Limit (W):").pack(side=tk.LEFT)
+        # UPDATED: Store reference to magnitude label
+        self.fault_mag_label = ttk.Label(limit_frame, text="Power Limit (W):")
+        self.fault_mag_label.pack(side=tk.LEFT)
         ttk.Entry(limit_frame, textvariable=self.fault_mag, width=10).pack(side=tk.LEFT, padx=5)
         ttk.Label(limit_frame, text="(maximum power in Watts)", style="Info.TLabel").pack(side=tk.LEFT, padx=5)
         
@@ -443,6 +480,15 @@ class FaultTab(BaseTab):
         
     def create_encoder_params(self):
         """Create encoder fault parameter widgets"""
+        # UPDATED: Add magnitude field for encoder
+        mag_frame = ttk.Frame(self.params_frame)
+        mag_frame.pack(fill=tk.X, pady=2)
+        
+        self.fault_mag_label = ttk.Label(mag_frame, text="Error Magnitude (%):")
+        self.fault_mag_label.pack(side=tk.LEFT)
+        ttk.Entry(mag_frame, textvariable=self.fault_mag, width=10).pack(side=tk.LEFT, padx=5)
+        ttk.Label(mag_frame, text="(encoder error percentage)", style="Info.TLabel").pack(side=tk.LEFT, padx=5)
+        
         # Wheel
         wheel_frame = ttk.Frame(self.params_frame)
         wheel_frame.pack(fill=tk.X, pady=2)
@@ -467,9 +513,11 @@ class FaultTab(BaseTab):
         drain_frame = ttk.Frame(self.params_frame)
         drain_frame.pack(fill=tk.X, pady=2)
         
-        ttk.Label(drain_frame, text="Power Drain (kW):").pack(side=tk.LEFT)
+        # UPDATED: Store reference to magnitude label and correct unit
+        self.fault_mag_label = ttk.Label(drain_frame, text="Power Drain (W):")
+        self.fault_mag_label.pack(side=tk.LEFT)
         ttk.Entry(drain_frame, textvariable=self.fault_mag, width=10).pack(side=tk.LEFT, padx=5)
-        ttk.Label(drain_frame, text="(additional power drain in kW)", style="Info.TLabel").pack(side=tk.LEFT, padx=5)
+        ttk.Label(drain_frame, text="(additional power drain in Watts)", style="Info.TLabel").pack(side=tk.LEFT, padx=5)
         
         # Time
         time_frame = ttk.Frame(self.params_frame)
@@ -543,17 +591,57 @@ class FaultTab(BaseTab):
         if sat_index >= 0:
             fault = self.satellites[sat_index]["fault"]
             
-            fault["enabled"] = self.fault_enabled_var.get()
-            fault["type"] = self.fault_type_var.get()
-            fault["magnitude"] = self.fault_mag.get()
-            fault["wheel"] = self.fault_wheel.get()
-            fault["time"] = self.fault_time.get()
+            # Get current values from GUI
+            fault_enabled = self.fault_enabled_var.get()
+            fault_type = self.fault_type_var.get()
+            fault_magnitude = self.fault_mag.get()
+            fault_wheel = self.fault_wheel.get()
+            fault_time = self.fault_time.get()
             
+            # ADD THIS: Default magnitudes per fault type
+            DEFAULT_FAULT_MAGNITUDES = {
+                "friction": 0.0005,    # N·m - this is fine as is
+                "power_limit": 0.5,    # W - realistic power limit
+                "encoder": 20.0,       # % - noticeable encoder error
+                "battery": 50.0        # W - significant battery drain
+            }
+            
+            # ADD THIS: Scale fault magnitude if it's still the default 0.0005
+            # Only override if the magnitude is exactly 0.0005 (the GUI default)
+            # This prevents overriding user-specified custom values
+            if abs(fault_magnitude - 0.0005) < 1e-6 and fault_type in DEFAULT_FAULT_MAGNITUDES:
+                scaled_magnitude = DEFAULT_FAULT_MAGNITUDES[fault_type]
+                if fault_type != "friction":  # Don't log for friction since 0.0005 is correct
+                    self.parent_app.add_log(f"Scaling {fault_type} fault magnitude from {fault_magnitude} to {scaled_magnitude}")
+                fault_magnitude = scaled_magnitude
+                # Update the GUI display to show the new value
+                self.fault_mag.set(fault_magnitude)
+            
+            # Apply fault configuration
+            fault["enabled"] = fault_enabled
+            fault["type"] = fault_type
+            fault["magnitude"] = fault_magnitude
+            fault["wheel"] = fault_wheel
+            fault["time"] = fault_time
+            
+            # Apply periodic fault configuration
             periodic = fault["periodic"]
             periodic["enabled"] = self.periodic_enabled_var.get()
             periodic["interval"] = self.periodic_interval_var.get()
-            periodic["magnitude"] = self.periodic_magnitude_var.get()
-            periodic["wheel"] = self.periodic_wheel_var.get()
+            periodic_magnitude = self.periodic_magnitude_var.get()
+            periodic_wheel = self.periodic_wheel_var.get()
+            
+            # ADD THIS: Also scale periodic fault magnitude if needed
+            if abs(periodic_magnitude - 0.1) < 1e-6 and fault_type in DEFAULT_FAULT_MAGNITUDES:
+                # Use 20% of the main fault magnitude as default for periodic
+                scaled_periodic = DEFAULT_FAULT_MAGNITUDES[fault_type] * 0.2
+                periodic_magnitude = scaled_periodic
+                self.periodic_magnitude_var.set(periodic_magnitude)
+                if periodic["enabled"]:
+                    self.parent_app.add_log(f"Scaled periodic {fault_type} magnitude to {scaled_periodic}")
+            
+            periodic["magnitude"] = periodic_magnitude
+            periodic["wheel"] = periodic_wheel
             
             # Update fault status
             self.update_fault_status()
@@ -564,7 +652,15 @@ class FaultTab(BaseTab):
             except:
                 pass
             
-            self.parent_app.add_log(f"Applied fault configuration to {sat_name}")
+            # Log the configuration with actual values
+            if fault_enabled:
+                self.parent_app.add_log(
+                    f"Applied {fault_type} fault to {sat_name}: "
+                    f"magnitude={fault_magnitude}, wheel={fault_wheel}, time={fault_time}min"
+                )
+            else:
+                self.parent_app.add_log(f"Disabled fault for {sat_name}")
+                
             self.update_fault_summary()
 
     def update_fault_summary(self):
@@ -603,9 +699,9 @@ class FaultTab(BaseTab):
             elif fault["type"] == "power_limit":
                 magnitude_str = f"{fault['magnitude']} W"
             elif fault["type"] == "battery":
-                magnitude_str = f"{fault['magnitude']} kW"
+                magnitude_str = f"{fault['magnitude']} W"  # UPDATED: Changed from kW to W
             elif fault["type"] == "encoder":
-                magnitude_str = "N/A"
+                magnitude_str = f"{fault['magnitude']}%"  # UPDATED: Show percentage
             
             # Periodic status
             periodic_str = "No"

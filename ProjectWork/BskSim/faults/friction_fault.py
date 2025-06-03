@@ -1,484 +1,11 @@
-
 #!/usr/bin/env python
 """
-friction_fault.py
+FIXED: friction_fault.py - With BSK_Plotting integration and GUI parameters
 
-A Basilisk scenario that simulates spacecraft dynamics with friction faults
-in the reaction wheels and properly saves binary files for Vizard visualization.
-
-ENHANCED: Comprehensive plotting functionality for friction fault analysis.
+This integrates your friction.py code with BSK_Plotting support and GUI parameters.
+Based on your working friction.py pattern but with GUI compatibility.
 """
-import inspect
-import os
-import sys
-import numpy as np
-import matplotlib.pyplot as plt
 
-from Basilisk.utilities import (orbitalMotion, macros, vizSupport)
-
-# Set paths
-filename = inspect.getframeinfo(inspect.currentframe()).filename
-path = os.path.dirname(os.path.abspath(filename))
-ROOT_DIR = os.path.abspath(os.path.join(path, '..'))
-MODELS_DIR = os.path.join(ROOT_DIR, 'models')
-VIZ_DIR = os.path.join(ROOT_DIR, 'Vizfile')
-
-sys.path.extend([ROOT_DIR, MODELS_DIR])
-
-# Import BSK modules
-try:
-    from BSK_masters import BSKSim, BSKScenario
-    import BSK_Dynamics, BSK_Fsw
-except ImportError as e:
-    print(f"ERROR: Could not import required modules: {e}")
-    sys.exit(1)
-
-class FrictionFaultScenario(BSKSim, BSKScenario):
-    """
-    Scenario for simulating friction faults in reaction wheels.
-    Inherits from BSKSim and BSKScenario for Basilisk simulation framework.
-    ENHANCED: Comprehensive plotting functionality.
-    """
-    def __init__(self):
-        super(FrictionFaultScenario, self).__init__()
-        self.name = 'FrictionFaultScenario'
-        self.msgRecList = {}
-        self.sNavTransName = "sNavTransMsg"
-        self.attGuidName = "attGuidMsg"
-
-        self.cameraLocation = [0.0, 2.0, 0.0]
-
-        self.targets = [
-            {"name": "Melbourne", "lat": -37.8136, "lon": 144.9631, "color": "red"},
-            {"name": "New York", "lat": 40.71, "lon": -74.00, "color": "blue"},
-            {"name": "Tokyo", "lat": 35.68, "lon": 139.77, "color": "green"},
-            {"name": "London", "lat": 51.51, "lon": -0.13, "color": "yellow"}
-        ]
-
-        self.set_DynModel(BSK_Dynamics)
-        self.set_FswModel(BSK_Fsw)
-
-        self.configure_initial_conditions()
-        self.log_outputs()
-
-        self.oneTimeRWFaultFlag = 1
-        self.repeatRWFaultFlag = 1
-        self.oneTimeFaultTime = macros.min2nano(10.)
-        self.fault_magnitude = 0.0005
-        self.fault_wheel_number = 3
-        self.DynModels = self.get_DynModel()
-        self.DynModels.RWFaultLog = []
-
-    def configure_initial_conditions(self):
-        """Configure orbit and attitude initial conditions"""
-        oe = orbitalMotion.ClassicElements()
-        oe.a = 10000000.0
-        oe.e = 0.01
-        oe.i = 33.3 * macros.D2R
-        oe.Omega = 48.2 * macros.D2R
-        oe.omega = 347.8 * macros.D2R
-        oe.f = 85.3 * macros.D2R
-
-        DynModel = self.get_DynModel()
-        mu = DynModel.gravFactory.gravBodies['earth'].mu
-        rN, vN = orbitalMotion.elem2rv(mu, oe)
-        orbitalMotion.rv2elem(mu, rN, vN)
-        DynModel.scObject.hub.r_CN_NInit = rN
-        DynModel.scObject.hub.v_CN_NInit = vN
-        DynModel.scObject.hub.sigma_BNInit = [[0.1], [0.2], [-0.3]]
-        DynModel.scObject.hub.omega_BN_BInit = [[0.001], [-0.01], [0.03]]
-
-    def log_outputs(self):
-        """Configure message logging for analysis"""
-        FswModel = self.get_FswModel()
-        DynModel = self.get_DynModel()
-        samplingTime = FswModel.processTasksTimeStep
-
-        self.rwSpeedRec = DynModel.rwStateEffector.rwSpeedOutMsg.recorder(samplingTime)
-        self.AddModelToTask(DynModel.taskName, self.rwSpeedRec)
-
-        self.rwLogs = []
-        for item in range(4):
-            self.rwLogs.append(DynModel.rwStateEffector.rwOutMsgs[item].recorder(samplingTime))
-            self.AddModelToTask(DynModel.taskName, self.rwLogs[item])
-            
-        # FSW controller outputs
-        self.msgRecList[self.attGuidName] = FswModel.attGuidMsg.recorder(samplingTime)
-        self.AddModelToTask(DynModel.taskName, self.msgRecList[self.attGuidName])
-
-    def pull_outputs(self, showPlots):
-        """
-        ENHANCED: Generate comprehensive friction fault plots
-        """
-        print("Generating friction fault analysis plots...")
-        
-        # Get attitude error data
-        attErrRec = self.msgRecList[self.attGuidName]
-        sigma_BR = np.delete(attErrRec.sigma_BR, 0, 0)
-        omega_BR_B = np.delete(attErrRec.omega_BR_B, 0, 0)
-        timeData = np.delete(attErrRec.times(), 0, 0) * macros.NANO2MIN
-
-        # Get RW data
-        num_RW = 4
-        RW_speeds = np.delete(self.rwSpeedRec.wheelSpeeds[:, range(num_RW)], 0, 0)
-        
-        # Get friction data
-        RW_friction = []
-        for i in range(num_RW):
-            try:
-                friction_data = np.delete(self.rwLogs[i].u_f, 0, 0)
-                RW_friction.append(friction_data)
-            except:
-                # Create placeholder friction data if not available
-                RW_friction.append(np.zeros_like(timeData))
-        
-        # Calculate fault time in minutes
-        fault_time_min = self.oneTimeFaultTime * macros.NANO2MIN
-        
-        # Print diagnostic information
-        print("Initial RW Speeds:", RW_speeds[0] if len(RW_speeds) > 0 else "No data")
-        print("Final RW Speeds:", RW_speeds[-1] if len(RW_speeds) > 0 else "No data")
-        print("Initial Attitude Error:", np.linalg.norm(sigma_BR[0]) if len(sigma_BR) > 0 else "No data")
-        print("Final Attitude Error:", np.linalg.norm(sigma_BR[-1]) if len(sigma_BR) > 0 else "No data")
-        print(f"Friction fault time: {fault_time_min:.2f} minutes")
-        print(f"Faulty wheel: {self.fault_wheel_number}")
-        print(f"Fault magnitude: {self.fault_magnitude} N⋅m")
-
-        # Clear previous plots
-        plt.close('all')
-        
-        # Create comprehensive friction fault plots
-        figureList = {}
-        
-        # Figure 1: Attitude Control Analysis
-        fig1 = plt.figure(figsize=(12, 8))
-        
-        # Attitude error norm
-        plt.subplot(2, 2, 1)
-        attitude_error_norm = np.linalg.norm(sigma_BR, axis=1)
-        plt.plot(timeData, attitude_error_norm, 'b-', linewidth=2, label="Attitude Error Norm")
-        plt.axvline(fault_time_min, linestyle="--", color="red", linewidth=2, label="Friction Fault")
-        plt.xlabel("Time (min)")
-        plt.ylabel("Attitude Error Norm")
-        plt.title(f"Attitude Error (Friction Fault, RW {self.fault_wheel_number})")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Individual attitude error components
-        plt.subplot(2, 2, 2)
-        for i in range(3):
-            plt.plot(timeData, sigma_BR[:, i], label=f"σ_{i+1}")
-        plt.axvline(fault_time_min, linestyle="--", color="red", linewidth=2, label="Friction Fault")
-        plt.xlabel("Time (min)")
-        plt.ylabel("Attitude Error Components")
-        plt.title("Attitude Error Components")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Angular velocity error
-        plt.subplot(2, 2, 3)
-        omega_norm = np.linalg.norm(omega_BR_B, axis=1)
-        plt.plot(timeData, omega_norm, 'g-', linewidth=2, label="Angular Velocity Error")
-        plt.axvline(fault_time_min, linestyle="--", color="red", linewidth=2, label="Friction Fault")
-        plt.xlabel("Time (min)")
-        plt.ylabel("Angular Velocity Error (rad/s)")
-        plt.title("Angular Velocity Error")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Rate of attitude error change
-        plt.subplot(2, 2, 4)
-        if len(attitude_error_norm) > 1:
-            error_rate = np.diff(attitude_error_norm) / np.diff(timeData)
-            error_rate_time = timeData[1:]
-            plt.plot(error_rate_time, error_rate, 'purple', linewidth=2, label="Error Rate")
-            plt.axvline(fault_time_min, linestyle="--", color="red", linewidth=2, label="Friction Fault")
-            plt.xlabel("Time (min)")
-            plt.ylabel("Attitude Error Rate (1/min)")
-            plt.title("Rate of Attitude Error Change")
-            plt.legend()
-            plt.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        figureList["FrictionFault_AttitudeAnalysis"] = fig1
-        
-        # Figure 2: Reaction Wheel Analysis
-        fig2 = plt.figure(figsize=(12, 8))
-        
-        # All wheel speeds
-        plt.subplot(2, 2, 1)
-        colors = ['blue', 'green', 'red', 'orange']
-        for i in range(num_RW):
-            label_suffix = " (FAULTY)" if i == self.fault_wheel_number else ""
-            plt.plot(timeData, RW_speeds[:, i], color=colors[i], linewidth=2, 
-                    label=f"RW {i}{label_suffix}")
-        plt.axvline(fault_time_min, linestyle="--", color="black", linewidth=2, label="Friction Fault")
-        plt.xlabel("Time (min)")
-        plt.ylabel("RW Speed (rad/s)")
-        plt.title("Reaction Wheel Speeds")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Normalized wheel speeds for comparison
-        plt.subplot(2, 2, 2)
-        # Normalize by initial values to show relative changes
-        initial_speeds = RW_speeds[0, :] if len(RW_speeds) > 0 else np.ones(num_RW)
-        initial_speeds[initial_speeds == 0] = 1  # Avoid division by zero
-        RW_speeds_norm = RW_speeds / initial_speeds[np.newaxis, :]
-        
-        for i in range(num_RW):
-            label_suffix = " (FAULTY)" if i == self.fault_wheel_number else ""
-            plt.plot(timeData, RW_speeds_norm[:, i], color=colors[i], linewidth=2, 
-                    label=f"RW {i} Norm{label_suffix}")
-        plt.axvline(fault_time_min, linestyle="--", color="black", linewidth=2, label="Friction Fault")
-        plt.xlabel("Time (min)")
-        plt.ylabel("Normalized RW Speed")
-        plt.title("Normalized Reaction Wheel Speeds")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Focus on faulty wheel
-        plt.subplot(2, 2, 3)
-        plt.plot(timeData, RW_speeds[:, self.fault_wheel_number], 'red', linewidth=3, 
-                label=f"Faulty RW {self.fault_wheel_number}")
-        # Show the effect of increased friction
-        fault_indices = timeData >= fault_time_min
-        if np.any(fault_indices):
-            # Simulate reduced speed due to friction
-            pre_fault_speed = RW_speeds[timeData < fault_time_min, self.fault_wheel_number]
-            if len(pre_fault_speed) > 0:
-                avg_pre_fault = np.mean(pre_fault_speed[-10:]) if len(pre_fault_speed) >= 10 else np.mean(pre_fault_speed)
-                friction_effect = avg_pre_fault * (1 - self.fault_magnitude * 100)  # Simplified friction effect
-                plt.axhline(friction_effect, linestyle=':', color='darkred', linewidth=2, 
-                           label="Expected with Friction")
-        plt.axvline(fault_time_min, linestyle="--", color="black", linewidth=2, label="Friction Fault")
-        plt.xlabel("Time (min)")
-        plt.ylabel("RW Speed (rad/s)")
-        plt.title(f"Faulty Wheel {self.fault_wheel_number} Analysis")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Power consumption estimate
-        plt.subplot(2, 2, 4)
-        # Estimate power based on speed and friction
-        base_power = 0.5  # Base power consumption in Watts
-        power_consumption = np.full_like(timeData, base_power)
-        
-        for i in range(num_RW):
-            # Add power based on wheel speed
-            speed_power = np.abs(RW_speeds[:, i]) * 0.001  # Simplified power model
-            power_consumption += speed_power
-            
-            # Add extra power for faulty wheel due to friction
-            if i == self.fault_wheel_number:
-                fault_indices = timeData >= fault_time_min
-                extra_friction_power = self.fault_magnitude * np.abs(RW_speeds[fault_indices, i]) * 200
-                power_consumption[fault_indices] += extra_friction_power
-        
-        plt.plot(timeData, power_consumption, 'orange', linewidth=2, label="Total Power")
-        plt.axvline(fault_time_min, linestyle="--", color="black", linewidth=2, label="Friction Fault")
-        plt.xlabel("Time (min)")
-        plt.ylabel("Power Consumption (W)")
-        plt.title("Estimated Power Consumption")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        figureList["FrictionFault_RWAnalysis"] = fig2
-        
-        # Figure 3: Friction Analysis
-        fig3 = plt.figure(figsize=(12, 8))
-        
-        # Friction torques for all wheels
-        plt.subplot(2, 2, 1)
-        for i in range(num_RW):
-            label_suffix = " (FAULTY)" if i == self.fault_wheel_number else ""
-            plt.plot(timeData, RW_friction[i], color=colors[i], linewidth=2, 
-                    label=f"RW {i} Friction{label_suffix}")
-        plt.axvline(fault_time_min, linestyle="--", color="black", linewidth=2, label="Friction Fault")
-        plt.xlabel("Time (min)")
-        plt.ylabel("Friction Torque (N⋅m)")
-        plt.title("Reaction Wheel Friction Torques")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Faulty wheel friction focus
-        plt.subplot(2, 2, 2)
-        faulty_friction = RW_friction[self.fault_wheel_number]
-        plt.plot(timeData, faulty_friction, 'red', linewidth=2, 
-                label=f"RW {self.fault_wheel_number} Friction")
-        # Show expected friction increase
-        baseline_friction = np.mean(faulty_friction[timeData < fault_time_min]) if np.any(timeData < fault_time_min) else 0
-        expected_friction = baseline_friction + self.fault_magnitude
-        fault_indices = timeData >= fault_time_min
-        if np.any(fault_indices):
-            plt.axhline(expected_friction, linestyle=':', color='darkred', linewidth=2, 
-                       label=f"Expected (+{self.fault_magnitude} N⋅m)")
-        plt.axvline(fault_time_min, linestyle="--", color="black", linewidth=2, label="Friction Fault")
-        plt.xlabel("Time (min)")
-        plt.ylabel("Friction Torque (N⋅m)")
-        plt.title(f"Faulty Wheel {self.fault_wheel_number} Friction")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Friction vs Speed relationship
-        plt.subplot(2, 2, 3)
-        faulty_speed = RW_speeds[:, self.fault_wheel_number]
-        plt.scatter(faulty_speed[timeData < fault_time_min], faulty_friction[timeData < fault_time_min], 
-                   c='blue', alpha=0.6, label="Pre-fault", s=20)
-        if np.any(fault_indices):
-            plt.scatter(faulty_speed[fault_indices], faulty_friction[fault_indices], 
-                       c='red', alpha=0.6, label="Post-fault", s=20)
-        plt.xlabel("RW Speed (rad/s)")
-        plt.ylabel("Friction Torque (N⋅m)")
-        plt.title(f"Friction vs Speed - RW {self.fault_wheel_number}")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Total system friction
-        plt.subplot(2, 2, 4)
-        total_friction = np.sum(np.abs(RW_friction), axis=0)
-        plt.plot(timeData, total_friction, 'purple', linewidth=2, label="Total System Friction")
-        plt.axvline(fault_time_min, linestyle="--", color="black", linewidth=2, label="Friction Fault")
-        plt.xlabel("Time (min)")
-        plt.ylabel("Total Friction Torque (N⋅m)")
-        plt.title("Total System Friction")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        figureList["FrictionFault_FrictionAnalysis"] = fig3
-
-        # Show plots if requested
-        if showPlots:
-            plt.show()
-        else:
-            plt.close('all')
-
-        return figureList
-
-def runScenario(scenario, saveBinary=True):
-    """Run the friction fault scenario"""
-    simulationTime = macros.min2nano(30.)
-    scenario.modeRequest = "hillPoint"
-
-    scenario.createNewEvent(
-        "addOneTimeRWFault",
-        scenario.get_FswModel().processTasksTimeStep,
-        True,
-        ["self.TotalSim.CurrentNanos>=self.oneTimeFaultTime and self.oneTimeRWFaultFlag==1"],
-        [f"self.get_DynModel().AddRWFault('friction',{scenario.fault_magnitude},{scenario.fault_wheel_number}, self.TotalSim.CurrentNanos)", 
-         "self.oneTimeRWFaultFlag=0"]
-    )
-
-    scenario.createNewEvent(
-        "addRepeatedRWFault",
-        scenario.get_FswModel().processTasksTimeStep,
-        True,
-        ["self.repeatRWFaultFlag==1"],
-        ["self.get_DynModel().PeriodicRWFault(360,'friction',0.1,1, self.TotalSim.CurrentNanos)", 
-         "self.setEventActivity('addRepeatedRWFault',True)"]
-    )
-
-    viz = None
-    if vizSupport.vizFound:
-        # Create visualization binary directory if it doesn't exist
-        vizfiles_dir = os.path.join(VIZ_DIR, "_VizFiles")
-        if not os.path.exists(vizfiles_dir):
-            try:
-                os.makedirs(vizfiles_dir, exist_ok=True)
-            except:
-                print(f"Warning: Could not create directory {vizfiles_dir}")
-        
-        # Enable visualization
-        binary_filename = "friction_fault_viz" if saveBinary else None
-        if saveBinary:
-            binary_path = os.path.join(vizfiles_dir, binary_filename)
-        else:
-            binary_path = None
-            
-        viz = vizSupport.enableUnityVisualization(
-            scenario,
-            scenario.get_DynModel().taskName,
-            scenario.get_DynModel().scObject,
-            rwEffectorList=scenario.get_DynModel().rwStateEffector,
-            liveStream=not saveBinary,
-            saveFile=binary_path
-        )
-
-        for target in scenario.targets:
-            lat = target["lat"]
-            lon = target["lon"]
-            color = target.get("color", "red")
-            alt = 0.0
-            radius = 6371000.0 + alt
-            lat_rad = lat * macros.D2R
-            lon_rad = lon * macros.D2R
-            x = radius * np.cos(lat_rad) * np.cos(lon_rad)
-            y = radius * np.cos(lat_rad) * np.sin(lon_rad)
-            z = radius * np.sin(lat_rad)
-            location_position = [x, y, z]
-
-            vizSupport.addLocation(
-                viz,
-                stationName=target["name"],
-                parentBodyName="earth",
-                r_GP_P=location_position,
-                color=color
-            )
-
-        vizSupport.createStandardCamera(
-            viz,
-            setMode=1,
-            spacecraftName=scenario.get_DynModel().scObject.ModelTag,
-            fieldOfView=70 * macros.D2R,
-            displayName="Friction Fault Camera",
-            pointingVector_B=[0, 0, 0],
-            position_B=scenario.cameraLocation
-        )
-
-    scenario.InitializeSimulation()
-    scenario.ConfigureStopTime(simulationTime)
-    scenario.ExecuteSimulation()
-
-    return viz
-
-def run(showPlots=True, saveBinary=True):
-    """
-    Run the friction fault scenario with default parameters
-    
-    Parameters:
-    showPlots (bool): Flag to display plots
-    saveBinary (bool): Flag to save binary file for visualization
-    
-    Returns:
-    tuple: (scenario, viz, figureList) - The simulation objects and results
-    """
-    print("\n===== Running Friction Fault Scenario =====")
-    print(f"Show Plots: {showPlots}")
-    print(f"Save Binary: {saveBinary}")
-    
-    scenario = FrictionFaultScenario()
-    viz = runScenario(scenario, saveBinary)
-    figureList = scenario.pull_outputs(showPlots)
-
-    if saveBinary and viz:
-        print("\nBinary file saved successfully as 'friction_fault_viz_UnityViz.bin'")
-        print("You can now open this file in Vizard for visualization.")
-
-    print(f"Generated {len(figureList)} friction fault analysis plots")
-    return scenario, viz, figureList
-
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="Run the Friction Fault Scenario")
-    parser.add_argument("--no-plots", action="store_true", help="Don't show plots")
-    parser.add_argument("--no-binary", action="store_true", help="Don't save binary file")
-    args = parser.parse_args()
-
-    run(not args.no_plots, not args.no_binary)
-
-# Import necessary standard libraries
 import inspect
 import os
 import sys
@@ -488,27 +15,53 @@ import matplotlib.pyplot as plt
 # Import utilities from Basilisk
 from Basilisk.utilities import (orbitalMotion, macros, vizSupport)
 
-# Determine file path and append relevant directories to system path
+# Determine file path and append relevant directories to system path (same as friction.py)
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
 sys.path.append(path + '/../')
 sys.path.append(path + '/../models')
 sys.path.append(path + '/../plotting')
 
-# Import simulation modules
-from BSK_masters import BSKSim, BSKScenario
-import BSK_Dynamics, BSK_Fsw
-import BSK_Plotting as BSK_plt
+# Import simulation modules (same as your working friction.py)
+try:
+    from BSK_masters import BSKSim, BSKScenario
+    import BSK_Dynamics, BSK_Fsw
+    import BSK_Plotting as BSK_plt  # This should work like in friction.py
+    BSK_PLOTTING_AVAILABLE = True
+    print("Successfully imported BSK_Plotting for friction fault")
+except ImportError as e:
+    print(f"Warning: Could not import BSK_Plotting: {e}")
+    print("Will use standard matplotlib instead")
+    BSK_PLOTTING_AVAILABLE = False
 
-# Define the scenario class for RW fault analysis
-class scenario_AddRWFault(BSKSim, BSKScenario):
-    def __init__(self):
-        super(scenario_AddRWFault, self).__init__()
-        self.name = 'scenario_AddRWFault'  # Scenario name for identification
-        self.msgRecList = {}  # Placeholder for any future message subscriptions
-        self.sNavTransName = "sNavTransMsg"  # Navigation translation message name
-        self.attGuidName = "attGuidMsg"  # Attitude guidance message name
-        self.cameraLocation = [0.0, 3.0, 0.0]  # Camera position for visualization
+# FIXED: Use FrictionFaultScenario for GUI compatibility
+class FrictionFaultScenario(BSKSim, BSKScenario):
+    """
+    FIXED: Friction fault scenario with GUI parameters and BSK_Plotting support
+    Based on your friction.py but with GUI integration
+    """
+    def __init__(self, fault_magnitude=0.0005, fault_wheel=3, fault_time_min=10.0):
+        super(FrictionFaultScenario, self).__init__()
+        
+        # FIXED: Store GUI parameters
+        self.fault_magnitude = fault_magnitude
+        self.fault_wheel_number = fault_wheel
+        self.fault_time_min = fault_time_min
+        
+        # FIXED: Convert fault time to nanoseconds
+        self.oneTimeFaultTime = macros.min2nano(fault_time_min)
+        
+        print(f"FIXED: FrictionFaultScenario initialized with GUI parameters:")
+        print(f"  - Fault magnitude: {fault_magnitude} N⋅m")
+        print(f"  - Target wheel: RW{fault_wheel}")
+        print(f"  - Fault time: {fault_time_min} minutes")
+        
+        # Original initialization from your friction.py
+        self.name = 'FrictionFaultScenario'
+        self.msgRecList = {}
+        self.sNavTransName = "sNavTransMsg"
+        self.attGuidName = "attGuidMsg"
+        self.cameraLocation = [0.0, 3.0, 0.0]
 
         # Set the dynamics and flight software models
         self.set_DynModel(BSK_Dynamics)
@@ -519,12 +72,12 @@ class scenario_AddRWFault(BSKSim, BSKScenario):
         self.log_outputs()
 
         # Fault injection configuration
-        self.oneTimeRWFaultFlag = 1  # Enable one-time fault
-        self.repeatRWFaultFlag = 1  # Enable repeated fault
-        self.oneTimeFaultTime = macros.min2nano(10.)  # Inject one-time fault at 10 minutes
-        self.get_DynModel().RWFaultLog = []  # Initialize fault log
+        self.oneTimeRWFaultFlag = 1
+        self.repeatRWFaultFlag = 1
+        self.get_DynModel().RWFaultLog = []
 
     def configure_initial_conditions(self):
+        """Same as your friction.py"""
         # Set classical orbital elements
         oe = orbitalMotion.ClassicElements()
         oe.a = 10000000.0  # Semi-major axis in meters
@@ -548,6 +101,7 @@ class scenario_AddRWFault(BSKSim, BSKScenario):
         DynModel.scObject.hub.omega_BN_BInit = [[0.001], [-0.01], [0.03]]
 
     def log_outputs(self):
+        """Same as your friction.py"""
         # Set up message recording for RW speeds and friction torques
         FswModel = self.get_FswModel()
         DynModel = self.get_DynModel()
@@ -566,53 +120,8 @@ class scenario_AddRWFault(BSKSim, BSKScenario):
             self.rwLogs.append(DynModel.rwStateEffector.rwOutMsgs[item].recorder(samplingTime))
             self.AddModelToTask(DynModel.taskName, self.rwLogs[item])
 
-    def pull_outputs(self, showPlots):
-
-        # FSW process outputs, remove first data point as it is before FSW is called
-        attErrRec = self.msgRecList[self.attGuidName]
-
-        # B refers to the body frame (attached to the spacecraft).
-        # R refers to the reference frame (desired orientation).
-        # So, sigma_BR gives the orientation difference between the body and reference frames.
-
-        sigma_BR = np.delete(attErrRec.sigma_BR, 0, 0)
-
-        # Extract recorded RW data (speed and friction)
-        numRW = 4
-        RW_speeds = np.delete(self.rwSpeedRec.wheelSpeeds[:, range(numRW)], 0, 0)
-        RW_friction = []
-        for i in range(numRW):
-            RW_friction.append(np.delete(self.rwLogs[i].u_f, 0, 0))
-
-        # Estimate RW temperatures based on speed and friction
-        self.no_cooling, self.with_cooling = self.calculate_temperatures(RW_speeds, RW_friction)
-
-        # Plotting section
-        BSK_plt.clear_all_plots()
-        timeData = np.delete(attErrRec.times(), 0, 0) * macros.NANO2MIN
-
-        # Plot RW speeds and friction
-        BSK_plt.plot_rw_speeds(timeData, RW_speeds, numRW)
-        BSK_plt.plot_rw_friction(timeData, RW_friction, numRW, self.get_DynModel().RWFaultLog)
-        BSK_plt.plot_attitude_error(timeData, sigma_BR)
-
-        # Plot temperatures
-        self.plot_rw_temperature(timeData, self.no_cooling, numRW)
-        self.plot_rw_C_temperature(timeData, self.with_cooling, numRW)
-
-        # Return or show/save figures
-        figureList = {}
-        if showPlots:
-            BSK_plt.show_all_plots()
-        else:
-            fileName = os.path.basename(os.path.splitext(__file__)[0])
-            figureNames = ["RWSpeeds", "RWFriction","RWTemperatures(c)","RWTemperatures","attitudeErrorNorm" ]
-            figureList = BSK_plt.save_all_plots(fileName, figureNames)
-
-        return figureList
-
     def calculate_temperatures(self, rw_speeds, rw_friction):
-        """Estimate temperatures with and without cooling based on RW friction."""
+        """Same temperature calculation as your friction.py"""
         numRW = len(rw_friction)
         num_samples = len(rw_speeds)
         no_cooling = []
@@ -640,85 +149,355 @@ class scenario_AddRWFault(BSKSim, BSKScenario):
 
         return no_cooling, with_cooling
 
-
-
-
     def plot_rw_temperature(self, timeData, RW_temperatures, numRW):
-        """Generate plot of RW temperatures over time."""
-        plt.figure()
+        """FIXED: Enhanced temperature plot with GUI parameters"""
+        plt.figure(figsize=(12, 6))
         colors = ['blue', 'green', 'red', 'cyan']
 
         for idx in range(numRW):
-            plt.plot(timeData, RW_temperatures[idx], color=colors[idx],
-                     label=f'RW {idx+1}', linewidth=2)
+            # FIXED: Highlight faulty wheel
+            if idx == self.fault_wheel_number:
+                plt.plot(timeData, RW_temperatures[idx], color=colors[idx],
+                        label=f'RW {idx} (⚡ FAULTY)', linewidth=4)
+            else:
+                plt.plot(timeData, RW_temperatures[idx], color=colors[idx],
+                        label=f'RW {idx}', linewidth=2)
 
-        plt.xlabel('Time [min]')
-        plt.ylabel('Temperature [°C]')
-        plt.title('Reaction Wheel Temperatures(Without Cooling)')
-        plt.legend()
+        # FIXED: Add fault time marker
+        plt.axvline(x=self.fault_time_min, color='black', linestyle='--', linewidth=2, 
+                   label='Friction Fault')
+        plt.xlabel('Time [min]', fontsize=12)
+        plt.ylabel('Temperature [°C]', fontsize=12)
+        plt.title(f'FIXED: RW Temperatures (No Cooling)\nFriction Fault: RW{self.fault_wheel_number}, +{self.fault_magnitude} N⋅m at {self.fault_time_min}min', 
+                 fontsize=14, fontweight='bold')
+        plt.legend(fontsize=11)
         plt.grid(True, alpha=0.3)
 
         # Draw warning/critical temperature lines
-        plt.axhline(y=30, color='orange', linestyle='--', alpha=0.7, label='Warning')
+        plt.axhline(y=30, color='orange', linestyle='--', alpha=0.7, label='Warning (30°C)')
+        plt.axhline(y=50, color='red', linestyle='--', alpha=0.7, label='Critical (50°C)')
         plt.tight_layout()
 
     def plot_rw_C_temperature(self, timeData, RW_temperatures, numRW):
-        """Generate plot of RW temperatures over time."""
-        plt.figure()
+        """FIXED: Enhanced cooling temperature plot with GUI parameters"""
+        plt.figure(figsize=(12, 6))
         colors = ['blue', 'green', 'red', 'cyan']
 
         for idx in range(numRW):
-            plt.plot(timeData, RW_temperatures[idx], color=colors[idx],
-                     label=f'RW {idx+1}', linewidth=2)
+            # FIXED: Highlight faulty wheel
+            if idx == self.fault_wheel_number:
+                plt.plot(timeData, RW_temperatures[idx], color=colors[idx],
+                        label=f'RW {idx} (⚡ FAULTY)', linewidth=4)
+            else:
+                plt.plot(timeData, RW_temperatures[idx], color=colors[idx],
+                        label=f'RW {idx}', linewidth=2)
 
-        plt.xlabel('Time [min]')
-        plt.ylabel('Temperature [°C]')
-        plt.title('Reaction Wheel Temperatures(With Cooling)')
-        plt.legend()
+        # FIXED: Add fault time marker
+        plt.axvline(x=self.fault_time_min, color='black', linestyle='--', linewidth=2, 
+                   label='Friction Fault')
+        plt.xlabel('Time [min]', fontsize=12)
+        plt.ylabel('Temperature [°C]', fontsize=12)
+        plt.title(f'FIXED: RW Temperatures (With Cooling)\nFriction Fault: RW{self.fault_wheel_number}, +{self.fault_magnitude} N⋅m at {self.fault_time_min}min', 
+                 fontsize=14, fontweight='bold')
+        plt.legend(fontsize=11)
         plt.grid(True, alpha=0.3)
 
         # Draw warning/critical temperature lines
-        plt.axhline(y=30, color='orange', linestyle='--', alpha=0.7, label='Warning')
+        plt.axhline(y=30, color='orange', linestyle='--', alpha=0.7, label='Warning (30°C)')
         plt.tight_layout()
 
-    def runScenario(self):
+    def pull_outputs(self, showPlots):
+        """
+        FIXED: Use BSK_Plotting when available, with GUI parameters integrated
+        Based on your friction.py pattern but enhanced with GUI parameters
+        """
+        print("FIXED: Generating friction fault analysis plots with GUI parameters...")
+
+        # FSW process outputs, remove first data point as it is before FSW is called
+        attErrRec = self.msgRecList[self.attGuidName]
+        sigma_BR = np.delete(attErrRec.sigma_BR, 0, 0)
+
+        # Extract recorded RW data (speed and friction) - same as friction.py
+        numRW = 4
+        RW_speeds = np.delete(self.rwSpeedRec.wheelSpeeds[:, range(numRW)], 0, 0)
+        RW_friction = []
+        for i in range(numRW):
+            try:
+                RW_friction.append(np.delete(self.rwLogs[i].u_f, 0, 0))
+            except:
+                # Create placeholder if friction data not available
+                timeData = np.delete(attErrRec.times(), 0, 0) * macros.NANO2MIN
+                RW_friction.append(np.zeros_like(timeData))
+
+        # Estimate RW temperatures based on speed and friction
+        self.no_cooling, self.with_cooling = self.calculate_temperatures(RW_speeds, RW_friction)
+
+        # FIXED: Use BSK_Plotting if available, otherwise matplotlib
+        if BSK_PLOTTING_AVAILABLE:
+            return self._generate_plots_with_bsk(RW_speeds, RW_friction, sigma_BR, showPlots)
+        else:
+            return self._generate_plots_with_matplotlib(RW_speeds, RW_friction, sigma_BR, showPlots)
+
+    def _generate_plots_with_bsk(self, RW_speeds, RW_friction, sigma_BR, showPlots):
+        """Generate plots using BSK_Plotting (same pattern as your friction.py)"""
+        print("Using BSK_Plotting for friction fault plot generation...")
+        
+        # Use BSK_Plotting like your friction.py
+        BSK_plt.clear_all_plots()
+        timeData = np.delete(self.msgRecList[self.attGuidName].times(), 0, 0) * macros.NANO2MIN
+        numRW = 4
+
+        # FIXED: Add fault timing information to BSK plots
+        # Temporarily store fault info for BSK_plt functions to use
+        if hasattr(BSK_plt, 'fault_info'):
+            BSK_plt.fault_info = {
+                'fault_time': self.fault_time_min,
+                'fault_wheel': self.fault_wheel_number,
+                'fault_magnitude': self.fault_magnitude
+            }
+
+        # Use BSK_Plotting functions (same as your friction.py)
+        BSK_plt.plot_rw_speeds(timeData, RW_speeds, numRW)
+        BSK_plt.plot_rw_friction(timeData, RW_friction, numRW, self.get_DynModel().RWFaultLog)
+        BSK_plt.plot_attitude_error(timeData, sigma_BR)
+
+        # Add custom temperature plots with GUI parameters
+        self.plot_rw_temperature(timeData, self.no_cooling, numRW)
+        self.plot_rw_C_temperature(timeData, self.with_cooling, numRW)
+
+        # FIXED: Add custom friction analysis plot with GUI parameters
+        self._add_friction_analysis_plot(timeData, RW_speeds, RW_friction, numRW)
+
+        # Return or show/save figures (same pattern as friction.py)
+        figureList = {}
+        if showPlots:
+            BSK_plt.show_all_plots()
+        else:
+            fileName = os.path.basename(os.path.splitext(__file__)[0])
+            # FIXED: Updated figure names to include GUI parameters
+            figureNames = [
+                f"RWSpeeds_RW{self.fault_wheel_number}Fault", 
+                f"RWFriction_Mag{self.fault_magnitude}", 
+                f"RWTemperatures_NoCooling_RW{self.fault_wheel_number}", 
+                f"RWTemperatures_WithCooling_RW{self.fault_wheel_number}",
+                "attitudeErrorNorm",
+                f"FrictionAnalysis_RW{self.fault_wheel_number}"
+            ]
+            figureList = BSK_plt.save_all_plots(fileName, figureNames)
+
+        print(f"FIXED: Generated {len(figureList)} friction fault plots using BSK_Plotting")
+        return figureList
+
+    def _generate_plots_with_matplotlib(self, RW_speeds, RW_friction, sigma_BR, showPlots):
+        """Fallback plotting using standard matplotlib"""
+        print("Using matplotlib for friction fault plot generation...")
+        
+        plt.close('all')
+        timeData = np.delete(self.msgRecList[self.attGuidName].times(), 0, 0) * macros.NANO2MIN
+        figureList = {}
+
+        # Basic RW speeds plot
+        fig1 = plt.figure(figsize=(12, 8))
+        colors = ['blue', 'green', 'red', 'orange']
+        
+        for i in range(4):
+            if i == self.fault_wheel_number:
+                plt.plot(timeData, RW_speeds[:, i], color=colors[i], linewidth=4, 
+                        label=f"RW{i} (⚡ FAULTY)")
+            else:
+                plt.plot(timeData, RW_speeds[:, i], color=colors[i], linewidth=2, 
+                        label=f"RW{i}")
+        
+        plt.axvline(x=self.fault_time_min, color='black', linestyle='--', linewidth=2, 
+                   label='Friction Fault')
+        plt.xlabel('Time [min]', fontsize=12)
+        plt.ylabel('RW Speed [rad/s]', fontsize=12)
+        plt.title(f'FIXED: Friction Fault RW Speeds\n(RW{self.fault_wheel_number}, +{self.fault_magnitude} N⋅m at {self.fault_time_min}min)', 
+                 fontsize=14, fontweight='bold')
+        plt.legend(fontsize=11)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        figureList["FrictionFault_RWSpeeds"] = fig1
+
+        # Generate temperature plots
+        self.plot_rw_temperature(timeData, self.no_cooling, 4)
+        figureList["FrictionFault_RWTemperatures"] = plt.gcf()
+
+        self.plot_rw_C_temperature(timeData, self.with_cooling, 4)
+        figureList["FrictionFault_RWTemperatures_Cooling"] = plt.gcf()
+
+        # Show plots if requested
+        if showPlots:
+            plt.show()
+        else:
+            plt.close('all')
+
+        print(f"FIXED: Generated {len(figureList)} friction fault plots using matplotlib")
+        return figureList
+
+    def _add_friction_analysis_plot(self, timeData, RW_speeds, RW_friction, numRW):
+        """Add detailed friction analysis plot with GUI parameters"""
+        plt.figure(figsize=(14, 8))
+        
+        # Friction comparison plot
+        plt.subplot(2, 2, 1)
+        colors = ['blue', 'green', 'red', 'orange']
+        for i in range(numRW):
+            if i == self.fault_wheel_number:
+                plt.plot(timeData, RW_friction[i], color=colors[i], linewidth=4, 
+                        label=f"RW{i} Friction (⚡ FAULTY)")
+            else:
+                plt.plot(timeData, RW_friction[i], color=colors[i], linewidth=2, 
+                        label=f"RW{i} Friction")
+        
+        plt.axvline(x=self.fault_time_min, color='black', linestyle='--', linewidth=2, 
+                   label='Friction Fault')
+        plt.xlabel('Time [min]')
+        plt.ylabel('Friction Torque [N⋅m]')
+        plt.title(f'Friction Analysis: +{self.fault_magnitude} N⋅m to RW{self.fault_wheel_number}')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Additional analysis plots can be added here...
+        plt.tight_layout()
+
+    def runScenario(self, saveBinary=True):
+        """
+        FIXED: Run scenario with binary file saving (no live viz)
+        Based on your friction.py but with GUI parameters and binary output
+        """
         # Define simulation duration
         simulationTime = macros.min2nano(30.)
-        self.modeRequest = "hillPoint"  # Request a specific control mode
+        self.modeRequest = "hillPoint"
 
-        # If Unity viz is available, set up visualization
-        if vizSupport.vizFound:
-            viz = vizSupport.enableUnityVisualization(
-                self,
-                self.get_DynModel().taskName,
-                self.get_DynModel().scObject,
-                rwEffectorList=self.get_DynModel().rwStateEffector,
-                liveStream=True,
-                saveFile="friction_fault"
-            )
+        print(f"FIXED: Running friction fault scenario:")
+        print(f"  - Fault magnitude: {self.fault_magnitude} N⋅m")
+        print(f"  - Target wheel: RW{self.fault_wheel_number}")
+        print(f"  - Fault time: {self.fault_time_min} minutes")
 
-            # Set up default camera
-            vizSupport.createStandardCamera(
-                viz,
-                setMode=1,
-                spacecraftName=self.get_DynModel().scObject.ModelTag,
-                fieldOfView=30 * macros.D2R,
-                displayName="RW Camera",
-                pointingVector_B=[0, 0, 0],
-                position_B=self.cameraLocation
-            )
+        # FIXED: Add friction fault event with GUI parameters
+        self.createNewEvent(
+            "addOneTimeRWFault",
+            self.get_FswModel().processTasksTimeStep,
+            True,
+            ["self.TotalSim.CurrentNanos>=self.oneTimeFaultTime and self.oneTimeRWFaultFlag==1"],
+            [f"self.get_DynModel().AddRWFault('friction',{self.fault_magnitude},{self.fault_wheel_number}, self.TotalSim.CurrentNanos)", 
+             "self.oneTimeRWFaultFlag=0"]
+        )
+
+        # FIXED: Setup visualization to save binary file (no live streaming)
+        viz = None
+        if vizSupport.vizFound and saveBinary:
+            try:
+                # Create binary filename with fault parameters
+                binary_filename = f"friction_fault_rw{self.fault_wheel_number}_t{int(self.fault_time_min)}_f{int(self.fault_magnitude*10000)}"
+                
+                viz = vizSupport.enableUnityVisualization(
+                    self,
+                    self.get_DynModel().taskName,
+                    self.get_DynModel().scObject,
+                    rwEffectorList=self.get_DynModel().rwStateEffector,
+                    liveStream=False,      # FIXED: No live streaming
+                    saveFile=binary_filename  # FIXED: Save to binary file
+                )
+
+                # Set up camera
+                vizSupport.createStandardCamera(
+                    viz,
+                    setMode=1,
+                    spacecraftName=self.get_DynModel().scObject.ModelTag,
+                    fieldOfView=30 * macros.D2R,
+                    displayName=f"Friction Fault Camera RW{self.fault_wheel_number}",
+                    pointingVector_B=[0, 0, 0],
+                    position_B=self.cameraLocation
+                )
+                
+                print(f"FIXED: Visualization configured for binary file saving")
+
+            except Exception as e:
+                print(f"FIXED WARNING: Visualization setup failed: {e}")
+                viz = None
 
         # Run the simulation
         self.InitializeSimulation()
         self.ConfigureStopTime(simulationTime)
         self.ExecuteSimulation()
+        
+        return viz
 
-# Entry point for running the scenario as a script
-def run(showPlots=True):
-    scenario = scenario_AddRWFault()
-    scenario.runScenario()  # Run the simulation
-    scenario.pull_outputs(showPlots)  # Plot or save outputs
+def run(showPlots=True, saveBinary=True):
+    """
+    FIXED: GUI-compatible run function using BSK_Plotting
+    """
+    print("\n===== FIXED: Friction Fault Scenario with BSK_Plotting =====")
+    print(f"Show Plots: {showPlots}")
+    print(f"Save Binary: {saveBinary}")
+    
+    try:
+        scenario = FrictionFaultScenario(0.0005, 3, 10.0)
+        viz = scenario.runScenario(saveBinary)
+        figureList = scenario.pull_outputs(showPlots)
 
-# Run the script if executed directly
+        # Store in module globals for fault_loader
+        import sys
+        current_module = sys.modules[__name__]
+        current_module.scenario = scenario
+        current_module.figureList = figureList
+        current_module.viz = viz
+
+        print(f"FIXED: Generated {len(figureList)} friction fault analysis plots")
+        return scenario, viz, figureList
+        
+    except Exception as e:
+        print(f"FIXED ERROR: Friction fault failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, None, {}
+
+def run_with_parameters(fault_magnitude=0.0005, fault_wheel=3, fault_time_min=10.0, 
+                       showPlots=False, saveBinary=False):
+    """
+    FIXED: Run friction fault with GUI parameters using BSK_Plotting
+    """
+    print(f"\n===== FIXED: Friction Fault with GUI Parameters (BSK_Plotting) =====")
+    print(f"FIXED PARAMS - Magnitude: {fault_magnitude} N⋅m, Wheel: RW{fault_wheel}, Time: {fault_time_min}min")
+    
+    try:
+        # FIXED: Use actual GUI parameters
+        scenario = FrictionFaultScenario(fault_magnitude, fault_wheel, fault_time_min)
+        
+        # Run simulation with parameters
+        viz = scenario.runScenario(saveBinary)
+        
+        # Generate plots with correct parameters
+        figureList = scenario.pull_outputs(showPlots)
+        
+        # Store in module globals for fault_loader
+        import sys
+        current_module = sys.modules[__name__]
+        current_module.scenario = scenario
+        current_module.figureList = figureList
+        current_module.viz = viz
+        
+        print(f"FIXED SUCCESS: Generated {len(figureList)} friction fault plots with GUI parameters")
+        print(f"FIXED VERIFICATION:")
+        print(f"  - Used fault magnitude: {scenario.fault_magnitude} N⋅m")
+        print(f"  - Used target wheel: RW{scenario.fault_wheel_number}")
+        print(f"  - Used fault time: {scenario.fault_time_min} minutes")
+        print(f"  - Used BSK_Plotting: {BSK_PLOTTING_AVAILABLE}")
+        
+        return scenario, viz, figureList
+        
+    except Exception as e:
+        print(f"FIXED ERROR with friction fault parameters: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, None, {}
+
+# Global storage for fault_loader
+scenario = None
+figureList = {}
+viz = None
+
 if __name__ == "__main__":
     run(True)
