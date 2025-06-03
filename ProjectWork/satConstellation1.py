@@ -44,32 +44,21 @@ def run(show_plots=True):
     simulationTimeStep = macros.sec2nano(1.0)
     dynProcess.addTask(scSim.CreateNewTask(simTaskName, simulationTimeStep))
 
-    
+    num_satellites = 4
+    satellites = []
+    for i in range(num_satellites):
+        sat = spacecraft.Spacecraft()
+        sat.ModelTag = f"Satellite{i+1}"
+        satellites.append(sat)
+        scSim.AddModelToTask(simTaskName, sat)
+
     gravFactory = simIncludeGravBody.gravBodyFactory()
     earth = gravFactory.createEarth()
     earth.isCentralBody = True
     mu = earth.mu
     earth_radius = earth.radEquator
-    
-    num_clusters = 2
-    sats_per_cluster = 4
-    total_sats = num_clusters * sats_per_cluster
-    satellites = []
-    relative_anomalies = [0, 5, -5, 10]  # Leader + close followers
-    cluster_RAAC = [0, 0, 90, 270]       # RAAN for each cluster
-    cluster_anomaly_offset = [0, 180, 0, 0]  # Offset for anomaly (cluster 2 is opposite side)
-    a_base = 7000e3
-    mu = 398600.4418 * 1e9
-    for i in range(num_clusters):
-        for j in range(sats_per_cluster):
-            sat = spacecraft.Spacecraft()
-            sat.ModelTag = f"Satellite{i+1}"
-            satellites.append(sat)
-            scSim.AddModelToTask(simTaskName, sat)
 
-    # Add the sun
-    # sun = gravFactory.createSun()
-    # sun.isCentralBody = False  # Ensure the sun is not the central body for the orbits of the satellites
+     # Ensure the sun is not the central body for the orbits of the satellites
 
     for sat in satellites:
         gravFactory.addBodiesTo(sat)
@@ -88,37 +77,15 @@ def run(show_plots=True):
     # angular_speed=vN_base/ np.linalg.norm(rN_base)
     # print(rN_base)
     # Formation offsets relative to the leader - TIGHT FORMATION
-    relative_offsets = [
-        np.array([0.0, 0.0, 0.0]),       # Leader (Sat1)
-        np.array([200e3, 0.0, 0.0]),     # Child (Sat2) - Very close
-        np.array([400e3,0.0 , 0.0]),     # Child (Sat3) - Very close
-        np.array([600e3, 0.0, 0.0])    # Child (Sat4) - Very close
-    ]
-
     for i, sat in enumerate(satellites):
         # offset = relative_offsets[i]
         # r_init_N = rN_base + offset
         # sat.hub.r_CN_NInit = r_init_N
-
-        # # Approximate circular orbital speed at this radius
-        # if(i==0):
-        #     sat.hub.v_CN_NInit = vN_base
-        # else:
-        #     r_mag = np.linalg.norm(r_init_N)
-        #     v_mag = np.sqrt(mu / r_mag)
-        #     orbit_normal_N = np.cross(rN_base, vN_base)
-        #     orbit_normal_N = orbit_normal_N / np.linalg.norm(orbit_normal_N)
-        # # Calculate a velocity vector perpendicular to the position vector
-        #     velocity_direction = np.cross(orbit_normal_N, r_init_N)
-        #     velocity_direction = velocity_direction / np.linalg.norm(velocity_direction)
-        #     v_init_N = velocity_direction * v_mag
-        #     sat.hub.v_CN_NInit = v_init_N
-        if(i >=0 and i < 4):
-            # Set the leader's orbit
+        if(i>=0 and i<4):
             oe = orbitalMotion.ClassicElements()
-            oe.a = rLEO_base + i * 200e3 # Different altitudes
+            oe.a = 7000e3   
             oe.e = 0.0  # Circular
-            oe.i = 55 * macros.D2R
+            oe.i = (55+i*1) * macros.D2R
             oe.Omega = 0
             oe.omega = 0    
             oe.f = 45 * macros.D2R  # Same angular position
@@ -128,23 +95,53 @@ def run(show_plots=True):
             sat.hub.v_CN_NInit = vN
             sat.hub.sigma_BNInit = [0.0, 0.0, 0.0]
             sat.hub.omega_BN_BInit = [0.0, 0.0, 0.0]
-        else:
-            # Opposite side 
+        if(i>=4 and i<8):
             oe = orbitalMotion.ClassicElements()
-            oe.a = rLEO_base + (i-4) * 200e3
+            oe.a = 7000e3   
             oe.e = 0.0  # Circular
-            oe.i = 55 * macros.D2R
+            oe.i = (55+(i-4)*1) * macros.D2R
             oe.Omega = 0
             oe.omega = 0    
-            oe.f = (45+180) * macros.D2R  # Same angular position
+            oe.f = 225 * macros.D2R  # Same angular position
             rN, vN = orbitalMotion.elem2rv(mu, oe)
             print(rN)
             sat.hub.r_CN_NInit = rN
             sat.hub.v_CN_NInit = vN
             sat.hub.sigma_BNInit = [0.0, 0.0, 0.0]
             sat.hub.omega_BN_BInit = [0.0, 0.0, 0.0]
+        if(i>=8 and i<12):
+            oe = orbitalMotion.ClassicElements()
+            oe.a = 7000e3   
+            oe.e = 0.0  # Circular
+            oe.i = 56 * macros.D2R
+            oe.Omega = 0
+            oe.omega = 0    
+            oe.f = (135+(i-8)*2) * macros.D2R  # Same angular position
+            rN, vN = orbitalMotion.elem2rv(mu, oe)
+            print(rN)
+            sat.hub.r_CN_NInit = rN
+            sat.hub.v_CN_NInit = -vN
+            sat.hub.sigma_BNInit = [0.0, 0.0, 0.0]
+            sat.hub.omega_BN_BInit = [0.0, 0.0, 0.0]
+        if(i>=12 and i<16):
+            oe = orbitalMotion.ClassicElements()
+            oe.a = 7000e3   
+            oe.e = 0.0  # Circular
+            oe.i = 56 * macros.D2R
+            oe.Omega = 0
+            oe.omega = 0    
+            oe.f = (315+(i-8)*2) * macros.D2R  # Same angular position
+            rN, vN = orbitalMotion.elem2rv(mu, oe)
+            print(rN)
+            sat.hub.r_CN_NInit = rN
+            sat.hub.v_CN_NInit = vN
+            sat.hub.sigma_BNInit = [0.0, 0.0, 0.0]
+            sat.hub.omega_BN_BInit = [0.0, 0.0, 0.0]
+            
+            
+            
+
     # Set up communication modules
-    print(satellites)
     scLocationModules = []
     accessRecorders = []
     maximum_range = 2000e3  # Increased maximum range to 5000 km
@@ -159,7 +156,7 @@ def run(show_plots=True):
     scLocation.ModelTag = f"CommCheck{i+1}"
     scLocation.rEquator = earth_radius
     scLocation.rPolar = earth_radius * 0.98
-    scLocation.aHat_B = [0, 1.0, 0]  # Pointing in the +Y direction
+    scLocation.aHat_B = [0.2, -0.4, 0.2]  # Pointing in the +Y direction
     scLocation.theta = np.radians(30.0)  # Adjust as needed to be narrower
     scLocation.maximumRange = maximum_range
     for i, sat in enumerate(satellites):
@@ -175,7 +172,7 @@ def run(show_plots=True):
     # Force initial update of spacecraft location modules
     # for scLocation in scLocationModules:
     #     scLocation.UpdateState(macros.sec2nano(0.0))
-    for j in range(total_sats-1):
+    for j in range(num_satellites-1):
             recorder_name = f"AccessRecorder_{i+1}_{j+1}"
             recorder = scLocation.accessOutMsgs[j].recorder()
             # sending message to the debris
@@ -195,7 +192,7 @@ def run(show_plots=True):
         clockSync = simSynch.ClockSynch()
         clockSync.accelFactor = 50.0
         scSim.AddModelToTask(simTaskName, clockSync)
-        spriteList = ["satellite"] * 8
+        spriteList = ["satellite"] * len(satellites)
         viz = vizSupport.enableUnityVisualization(scSim,
                                                  simTaskName,
                                                  satellites,
@@ -214,7 +211,7 @@ def run(show_plots=True):
                 stationName=f"Satellite{i + 1}",
                 parentBodyName=f"Satellite{i + 1}",
                 r_GP_P=[0, 0, 0],
-                gHat_P=[0, 1, 0],
+                gHat_P=[0.2, -0.4, 0.2],
                 fieldOfView=np.pi / 4,
                 range=scLocation.maximumRange
             )
