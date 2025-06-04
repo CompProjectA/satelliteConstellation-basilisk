@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 """
-FIXED: encoder_fault.py - Complete version with proper BSK_Plotting integration and GUI parameters
+encoder_fault.py - Enhanced with dynamic simulation time support
 
-This version generates plots exactly matching the desired pattern:
-1. Attitude Error (Encoder Fault on RW X)
-2. Change in RW Speeds After Encoder Fault on RW X  
-3. Reaction Wheel Speeds (Encoder Fault on RW X)
+This module simulates encoder measurement errors in reaction wheels.
 """
 
 import inspect
@@ -16,18 +13,18 @@ import matplotlib.pyplot as plt
 
 from Basilisk.utilities import (orbitalMotion, macros, vizSupport)
 
-# Set paths (same as your working friction.py)
+# Set paths
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
 sys.path.append(path + '/../')
 sys.path.append(path + '/../models')
 sys.path.append(path + '/../plotting')
 
-# Import simulation modules (same as your working friction.py)
+# Import simulation modules
 try:
     from BSK_masters import BSKSim, BSKScenario
     import BSK_Dynamics, BSK_Fsw
-    import BSK_Plotting as BSK_plt  # This should work now
+    import BSK_Plotting as BSK_plt
     BSK_PLOTTING_AVAILABLE = True
     print("Successfully imported BSK_Plotting")
 except ImportError as e:
@@ -37,24 +34,27 @@ except ImportError as e:
 
 class EncoderFaultScenario(BSKSim, BSKScenario):
     """
-    FIXED: Encoder fault scenario that shows clear impact on attitude and RW speeds
+    Encoder fault scenario that shows clear impact on attitude and RW speeds
+    Enhanced with dynamic simulation time support
     """
-    def __init__(self, fault_magnitude=20.0, fault_wheel=1, fault_time_min=5.0):
+    def __init__(self, fault_magnitude=20.0, fault_wheel=1, fault_time_min=5.0, simulation_time_min=30.0):
         super(EncoderFaultScenario, self).__init__()
         
         # Store GUI parameters
         self.fault_magnitude = fault_magnitude  # Encoder error percentage
         self.fault_wheel_number = fault_wheel   # Which wheel to fault (0-3)
-        self.fault_time_min = fault_time_min    # When to inject fault (earlier for visible impact)
+        self.fault_time_min = fault_time_min    # When to inject fault
+        self.simulation_time_min = simulation_time_min  # Total simulation duration
         
         # Convert fault time to nanoseconds
         self.encoderFaultTime = macros.min2nano(fault_time_min)
         self.oneTimeFaultTime = self.encoderFaultTime
         
-        print(f"FIXED: EncoderFaultScenario initialized with GUI parameters:")
+        print(f"EncoderFaultScenario initialized with GUI parameters:")
         print(f"  - Fault magnitude: {fault_magnitude}% (encoder error)")
         print(f"  - Target wheel: RW{fault_wheel+1} (index {fault_wheel})")
         print(f"  - Fault time: {fault_time_min} minutes")
+        print(f"  - Simulation duration: {simulation_time_min} minutes")
         
         # Standard initialization
         self.name = 'EncoderFaultScenario'
@@ -151,7 +151,7 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
 
     def pull_outputs(self, showPlots):
         """Generate encoder fault plots matching the exact desired pattern"""
-        print("FIXED: Generating encoder fault analysis plots with GUI parameters...")
+        print("Generating encoder fault analysis plots with GUI parameters...")
         
         attErrRec = self.msgRecList[self.attGuidName]
         sigma_BR = np.delete(attErrRec.sigma_BR, 0, 0)  # Attitude error quaternion
@@ -165,10 +165,11 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
         fault_wheel = self.fault_wheel_number
         fault_magnitude = self.fault_magnitude
         
-        print(f"FIXED: Plotting with GUI parameters:")
+        print(f"Plotting with GUI parameters:")
         print(f"  - Fault time: {fault_time_min} minutes")
         print(f"  - Faulty wheel: RW{fault_wheel+1} (index {fault_wheel})")
         print(f"  - Fault magnitude: {fault_magnitude}%")
+        print(f"  - Time range: 0 to {self.simulation_time_min} minutes")
         
         # Clear previous plots
         if BSK_PLOTTING_AVAILABLE:
@@ -178,7 +179,7 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
         
         figureList = {}
         
-        # Plot 1: Attitude Error (matching your desired pattern exactly)
+        # Plot 1: Attitude Error
         plt.figure(1, figsize=(10, 5))
         attitude_error_norm = np.linalg.norm(sigma_BR, axis=1)
         plt.plot(timeData, attitude_error_norm, 'b-', linewidth=2, label="Attitude Error Norm")
@@ -188,15 +189,16 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
         plt.title(f"Attitude Error (Encoder Fault on RW {fault_wheel+1})")
         plt.legend()
         plt.grid(True)
+        plt.xlim(0, self.simulation_time_min)
         figureList["EncoderFault_AttitudeError"] = plt.figure(1)
         
-        # Plot 2: Change in RW Speeds After Fault (matching your pattern exactly)
+        # Plot 2: Change in RW Speeds After Fault
         plt.figure(2, figsize=(10, 5))
         
         # Find the index where the fault occurs
         fault_idx = np.argmax(timeData >= fault_time_min)
         if fault_idx == 0 and timeData[0] < fault_time_min:
-            fault_idx = max(1, len(timeData) // 4)  # Use early time if not found
+            fault_idx = max(1, len(timeData) // 4)
         
         # Calculate speed differences from fault injection point
         post_fault_time = timeData[fault_idx:]
@@ -207,8 +209,8 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
             for i in range(num_RW):
                 rw_speed_changes[:, i] = RW_speeds[fault_idx:, i] - baseline_speeds[i]
         
-        # Plot the speed changes with exact colors from your reference
-        colors = ['blue', 'orange', 'green', 'red']  # Matching your plot colors
+        # Plot the speed changes
+        colors = ['blue', 'orange', 'green', 'red']
         for i in range(num_RW):
             plt.plot(post_fault_time, rw_speed_changes[:, i], color=colors[i], 
                     linewidth=2, label=f"RW {i+1} Δ Speed")
@@ -218,9 +220,10 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
         plt.title(f"Change in RW Speeds After Encoder Fault on RW {fault_wheel+1}")
         plt.legend()
         plt.grid(True)
+        plt.xlim(fault_time_min, self.simulation_time_min)
         figureList["EncoderFault_SpeedChanges"] = plt.figure(2)
         
-        # Plot 3: Reaction Wheel Speeds (matching your pattern exactly)
+        # Plot 3: Reaction Wheel Speeds
         plt.figure(3, figsize=(10, 5))
         for i in range(num_RW):
             plt.plot(timeData, RW_speeds[:, i], color=colors[i], 
@@ -232,7 +235,126 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
         plt.title(f"Reaction Wheel Speeds (Encoder Fault on RW {fault_wheel+1})")
         plt.legend()
         plt.grid(True)
+        plt.xlim(0, self.simulation_time_min)
         figureList["EncoderFault_RWSpeeds"] = plt.figure(3)
+        
+        # Plot 4: Control Effort Analysis - Shows encoder fault impact
+        plt.figure(4, figsize=(12, 8))
+        
+        # Extract control torques
+        RW_torques = []
+        for i in range(num_RW):
+            if hasattr(self.rwLogs[i], 'u_current'):
+                RW_torques.append(np.delete(self.rwLogs[i].u_current, 0, 0))
+            else:
+                RW_torques.append(np.zeros_like(timeData))
+        
+        # Subplot 1: Control torques
+        plt.subplot(2, 2, 1)
+        for i in range(num_RW):
+            if i == fault_wheel:
+                plt.plot(timeData, RW_torques[i], color=colors[i], linewidth=3, 
+                        label=f"RW {i+1} (FAULTY)")
+            else:
+                plt.plot(timeData, RW_torques[i], color=colors[i], linewidth=2, 
+                        label=f"RW {i+1}")
+        
+        plt.axvline(fault_time_min, linestyle="--", color="red", linewidth=2, label="Encoder Fault")
+        plt.xlabel("Time (min)")
+        plt.ylabel("Control Torque [N⋅m]")
+        plt.title("Reaction Wheel Control Torques")
+        plt.legend()
+        plt.grid(True)
+        plt.xlim(0, self.simulation_time_min)
+        
+        # Subplot 2: Control effort oscillations
+        plt.subplot(2, 2, 2)
+        # Calculate torque rate (derivative) to show oscillations
+        for i in range(num_RW):
+            if len(RW_torques[i]) > 1:
+                torque_rate = np.gradient(RW_torques[i], timeData)
+                if i == fault_wheel:
+                    plt.plot(timeData, torque_rate, color=colors[i], linewidth=2, 
+                            label=f"RW {i+1} (FAULTY)")
+                else:
+                    plt.plot(timeData, torque_rate, color=colors[i], linewidth=1, 
+                            alpha=0.7, label=f"RW {i+1}")
+        
+        plt.axvline(fault_time_min, linestyle="--", color="red", linewidth=2)
+        plt.xlabel("Time (min)")
+        plt.ylabel("Torque Rate [N⋅m/min]")
+        plt.title("Control Oscillations (Encoder Error Effect)")
+        plt.legend()
+        plt.grid(True)
+        plt.xlim(0, self.simulation_time_min)
+        
+        # Subplot 3: RMS control effort
+        plt.subplot(2, 2, 3)
+        window_size = 10  # Window for RMS calculation
+        
+        for i in range(num_RW):
+            rms_torque = []
+            for j in range(len(RW_torques[i])):
+                start_idx = max(0, j - window_size // 2)
+                end_idx = min(len(RW_torques[i]), j + window_size // 2)
+                window_data = RW_torques[i][start_idx:end_idx]
+                rms_val = np.sqrt(np.mean(window_data**2))
+                rms_torque.append(rms_val)
+            
+            if i == fault_wheel:
+                plt.plot(timeData, rms_torque, color=colors[i], linewidth=3, 
+                        label=f"RW {i+1} (FAULTY)")
+            else:
+                plt.plot(timeData, rms_torque, color=colors[i], linewidth=2, 
+                        label=f"RW {i+1}")
+        
+        plt.axvline(fault_time_min, linestyle="--", color="red", linewidth=2)
+        plt.xlabel("Time (min)")
+        plt.ylabel("RMS Torque [N⋅m]")
+        plt.title("RMS Control Effort (Shows Increased Activity)")
+        plt.legend()
+        plt.grid(True)
+        plt.xlim(0, self.simulation_time_min)
+        
+        # Subplot 4: Encoder error impact summary
+        plt.subplot(2, 2, 4)
+        fault_idx = np.argmax(timeData >= fault_time_min)
+        
+        if fault_idx > 0 and fault_idx < len(timeData):
+            # Calculate metrics before and after fault
+            metrics = []
+            labels = []
+            
+            for i in range(num_RW):
+                if len(RW_torques[i]) > 0:
+                    pre_fault_std = np.std(RW_torques[i][:fault_idx])
+                    post_fault_std = np.std(RW_torques[i][fault_idx:])
+                    
+                    metrics.append([pre_fault_std, post_fault_std])
+                    labels.append(f'RW{i+1}')
+            
+            if metrics:
+                metrics = np.array(metrics)
+                x = np.arange(len(labels))
+                width = 0.35
+                
+                bars1 = plt.bar(x - width/2, metrics[:, 0], width, label='Pre-Fault', color='green', alpha=0.7)
+                bars2 = plt.bar(x + width/2, metrics[:, 1], width, label='Post-Fault', color='red', alpha=0.7)
+                
+                plt.xlabel('Reaction Wheel')
+                plt.ylabel('Torque Std Dev [N⋅m]')
+                plt.title('Control Variability: Encoder Fault Impact')
+                plt.xticks(x, labels)
+                plt.legend()
+                plt.grid(True, alpha=0.3, axis='y')
+                
+                # Highlight the faulty wheel
+                bars2[fault_wheel].set_alpha(1.0)
+                bars2[fault_wheel].set_linewidth(2)
+                bars2[fault_wheel].set_edgecolor('black')
+        
+        plt.tight_layout()
+        figureList["EncoderFault_ControlAnalysis"] = plt.figure(4)
         
         if showPlots:
             plt.show()
@@ -244,16 +366,17 @@ class EncoderFaultScenario(BSKSim, BSKScenario):
 
 
 def runScenario(scenario, saveBinary=True):
-    """Run encoder fault scenario with earlier fault injection for visible impact"""
-    simulationTime = macros.min2nano(30.)  # Run for 30 minutes
+    """Run encoder fault scenario with proper simulation time"""
+    simulationTime = macros.min2nano(scenario.simulation_time_min)
     scenario.modeRequest = "hillPoint"
 
-    print(f"FIXED: Running encoder fault scenario:")
+    print(f"Running encoder fault scenario:")
     print(f"  - Target wheel: RW{scenario.fault_wheel_number+1}")
     print(f"  - Fault time: {scenario.fault_time_min} minutes")
     print(f"  - Fault magnitude: {scenario.fault_magnitude}%")
+    print(f"  - Simulation duration: {scenario.simulation_time_min} minutes")
 
-    # Set up encoder fault event - inject during active control phase
+    # Set up encoder fault event
     scenario.createNewEvent(
         "injectEncoderFault",
         scenario.get_FswModel().processTasksTimeStep,
@@ -287,7 +410,7 @@ def runScenario(scenario, saveBinary=True):
             binary_filename = f"encoder_fault_rw{scenario.fault_wheel_number+1}_t{int(scenario.fault_time_min)}_e{int(scenario.fault_magnitude)}"
             binary_path = os.path.join(vizfiles_dir, binary_filename)
             
-            print(f"FIXED: Saving visualization to binary file: {binary_path}")
+            print(f"Saving visualization to binary file: {binary_path}")
             
             viz = vizSupport.enableUnityVisualization(
                 scenario,
@@ -308,10 +431,10 @@ def runScenario(scenario, saveBinary=True):
                 position_B=[0.0, 1.5, 0.0]
             )
             
-            print(f"FIXED: Visualization configured for binary file with fault parameters")
+            print(f"Visualization configured for binary file with fault parameters")
 
         except Exception as e:
-            print(f"FIXED WARNING: Visualization failed: {e}")
+            print(f"WARNING: Visualization failed: {e}")
             viz = None
 
     # Run simulation
@@ -322,13 +445,14 @@ def runScenario(scenario, saveBinary=True):
     return viz
 
 
-def run(showPlots=True, saveBinary=True):
+def run(showPlots=True, saveBinary=True, simulation_time_min=30.0):
     """Run encoder fault scenario with default parameters"""
-    print("\n===== FIXED: Encoder Fault Scenario =====")
+    print("\n===== Encoder Fault Scenario =====")
+    print(f"Simulation Duration: {simulation_time_min} minutes")
     
     try:
         # Use defaults that show clear impact
-        scenario = EncoderFaultScenario(20.0, 1, 5.0)  # 20% error, RW2, 5 minutes
+        scenario = EncoderFaultScenario(20.0, 1, 5.0, simulation_time_min)
         viz = runScenario(scenario, saveBinary)
         figureList = scenario.pull_outputs(showPlots)
 
@@ -339,24 +463,25 @@ def run(showPlots=True, saveBinary=True):
         current_module.figureList = figureList
         current_module.viz = viz
 
-        print(f"FIXED: Generated {len(figureList)} encoder fault plots")
+        print(f"Generated {len(figureList)} encoder fault plots")
         return scenario, viz, figureList
         
     except Exception as e:
-        print(f"FIXED ERROR: {e}")
+        print(f"ERROR: {e}")
         import traceback
         traceback.print_exc()
         return None, None, {}
 
 
 def run_with_parameters(fault_magnitude=20.0, fault_wheel=1, fault_time_min=5.0, 
-                       showPlots=False, saveBinary=False):
+                       simulation_time_min=30.0, showPlots=False, saveBinary=False):
     """Run encoder fault with GUI parameters - uses exact GUI values"""
-    print(f"\n===== FIXED: Encoder Fault with GUI Parameters =====")
+    print(f"\n===== Encoder Fault with GUI Parameters =====")
     print(f"PARAMS - Magnitude: {fault_magnitude}%, Wheel: RW{fault_wheel+1}, Time: {fault_time_min}min")
+    print(f"Simulation Duration: {simulation_time_min} minutes")
     
     try:
-        scenario = EncoderFaultScenario(fault_magnitude, fault_wheel, fault_time_min)
+        scenario = EncoderFaultScenario(fault_magnitude, fault_wheel, fault_time_min, simulation_time_min)
         viz = runScenario(scenario, saveBinary)
         figureList = scenario.pull_outputs(showPlots)
         
@@ -372,6 +497,7 @@ def run_with_parameters(fault_magnitude=20.0, fault_wheel=1, fault_time_min=5.0,
         print(f"  - Used fault magnitude: {scenario.fault_magnitude}%")
         print(f"  - Used target wheel: RW{scenario.fault_wheel_number+1} (index {scenario.fault_wheel_number})")
         print(f"  - Used fault time: {scenario.fault_time_min} minutes")
+        print(f"  - Used simulation time: {scenario.simulation_time_min} minutes")
         
         return scenario, viz, figureList
         
@@ -387,13 +513,14 @@ scenario = None
 figureList = {}
 viz = None
 
-# Test with parameters that match your GUI usage
+# Test with parameters
 if __name__ == "__main__":
     print("Testing encoder fault with GUI-style parameters...")
     test_scenario, test_viz, test_plots = run_with_parameters(
         fault_magnitude=20.0,  # 20% encoder error
-        fault_wheel=2,         # RW3 (index 2, shows as "RW 3" in plots) 
-        fault_time_min=10.0,   # 10 minutes (from your GUI)
+        fault_wheel=2,         # RW3 (index 2)
+        fault_time_min=10.0,   # 10 minutes
+        simulation_time_min=30.0,  # 30 minute simulation
         showPlots=True
     )
     print(f"Test completed with {len(test_plots)} plots")

@@ -1,21 +1,4 @@
-#
-#  ISC License
-#
-#  Copyright (c) 2016, Autonomous Vehicle Systems Lab, University of Colorado at Boulder
-#
-#  Permission to use, copy, modify, and/or distribute this software for any
-#  purpose with or without fee is hereby granted, provided that the above
-#  copyright notice and this permission notice appear in all copies.
-#
-#  THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-#  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-#  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-#  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-#  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-#  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-#  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-#
-
+#!/usr/bin/env python
 """
 Battery Fault Simulation Module
 
@@ -82,7 +65,7 @@ class BatteryFaultScenario(BSKSim, BSKScenario):
 
 def run(show_plots=False, liveStream=False, timeStep=1.0, orbitCase='LEO', 
         useSphericalHarmonics=False, planetCase='Earth', fault_magnitude=50.0, 
-        fault_time_min=15.0, showPlots=None, saveBinary=False, **kwargs):
+        fault_time_min=15.0, simulation_time_min=30.0, showPlots=None, saveBinary=False, **kwargs):
     """
     Main battery fault simulation function.
     
@@ -96,6 +79,7 @@ def run(show_plots=False, liveStream=False, timeStep=1.0, orbitCase='LEO',
         planetCase: Planet ('Earth' or 'Mars')
         fault_magnitude: Fault power consumption in Watts
         fault_time_min: Time to inject fault in minutes
+        simulation_time_min: Total simulation duration in minutes
         saveBinary: Whether to save binary files
     
     Returns:
@@ -109,10 +93,12 @@ def run(show_plots=False, liveStream=False, timeStep=1.0, orbitCase='LEO',
     # Extract parameters from kwargs if they're passed that way
     fault_magnitude = kwargs.get('fault_magnitude', fault_magnitude)
     fault_time_min = kwargs.get('fault_time_min', fault_time_min)
+    simulation_time_min = kwargs.get('simulation_time_min', simulation_time_min)
     
-    print(f"DEBUG: Running battery fault simulation with:")
+    print(f"Running battery fault simulation with:")
     print(f"  - Fault magnitude: {fault_magnitude}W")
     print(f"  - Fault time: {fault_time_min} minutes")
+    print(f"  - Simulation duration: {simulation_time_min} minutes")
     print(f"  - Orbit: {orbitCase}")
     print(f"  - Planet: {planetCase}")
     
@@ -174,7 +160,7 @@ def run(show_plots=False, liveStream=False, timeStep=1.0, orbitCase='LEO',
 
     # Calculate fault time in nanoseconds
     faultTime = macros.min2nano(fault_time_min)
-    print(f"DEBUG: Fault will be injected at {fault_time_min} minutes ({fault_time_min * 60} seconds)")
+    print(f"Fault will be injected at {fault_time_min} minutes ({fault_time_min * 60} seconds)")
     
     # Convert fault magnitude from W to kW (Basilisk units)
     fault_power_kw = fault_magnitude / 1000.0
@@ -302,11 +288,12 @@ def run(show_plots=False, liveStream=False, timeStep=1.0, orbitCase='LEO',
     scObject.hub.r_CN_NInit = rN  # m   - r_BN_N
     scObject.hub.v_CN_NInit = vN  # m/s - v_BN_N
 
-    # Set the simulation time to exactly 30 minutes
-    simulationTime = macros.sec2nano(30.0 * 60.0)  # 30 minutes = 1800 seconds
+    # Set the simulation time based on the parameter
+    simulationTime = macros.sec2nano(simulation_time_min * 60.0)
+    print(f"Simulation time set to: {simulation_time_min} minutes ({simulation_time_min * 60} seconds)")
 
     # Setup data logging
-    numDataPoints = 100
+    numDataPoints = min(100, int(simulation_time_min * 2))  # Scale data points with sim time
     samplingTime = unitTestSupport.samplingTime(simulationTime, simulationTimeStep, numDataPoints)
     dataLog = scObject.scStateOutMsg.recorder(samplingTime)
     scSim.AddModelToTask(simTaskName, dataLog)
@@ -379,13 +366,15 @@ def run(show_plots=False, liveStream=False, timeStep=1.0, orbitCase='LEO',
     fig = plt.gcf()
     ax = fig.gca()
     ax.ticklabel_format(useOffset=False, style='plain')
+    time_minutes = dataLog.times() * macros.NANO2MIN
     for idx in range(3):
-        plt.plot(dataLog.times() * macros.NANO2SEC / 1800, posData[:, idx] / 1000.,
+        plt.plot(time_minutes, posData[:, idx] / 1000.,
                 color=unitTestSupport.getLineColor(idx, 3),
                 label='$r_{BN,' + str(idx) + '}$')
     plt.legend(loc='lower right')
-    plt.xlabel('Time [30min periods]')
+    plt.xlabel('Time [minutes]')
     plt.ylabel('Inertial Position [km]')
+    plt.xlim(0, simulation_time_min)
     pltName = fileName + "1" + orbitCase + str(int(useSphericalHarmonics)) + planetCase
     figureList[pltName] = plt.figure(1)
 
@@ -402,14 +391,13 @@ def run(show_plots=False, liveStream=False, timeStep=1.0, orbitCase='LEO',
 
     # Plot 3: Battery storage level with fault injection
     plt.figure(3)
-    timeData = batteryLog.times() * macros.NANO2SEC        
+    timeData = batteryLog.times() * macros.NANO2MIN  # Convert to minutes
     storageData = batteryLog.storageLevel                  
     
     plt.plot(timeData, storageData, 'b-', linewidth=2, label='Battery Stored Charge')
     
-    # Mark the fault injection moment (convert to seconds)
-    faultTime_sec = fault_time_min * 60.0
-    plt.axvline(x=faultTime_sec, color='r', linestyle='--', linewidth=2, 
+    # Mark the fault injection moment
+    plt.axvline(x=fault_time_min, color='r', linestyle='--', linewidth=2, 
                label=f'Fault Injected ({fault_magnitude}W additional load)')
     
     # Mark safe mode threshold
@@ -417,20 +405,81 @@ def run(show_plots=False, liveStream=False, timeStep=1.0, orbitCase='LEO',
     plt.axhline(y=safeThresh, color='orange', linestyle=':', linewidth=2,
                label='Safe Mode Threshold (20%)')
     
-    plt.xlabel('Time [s]')
+    plt.xlabel('Time [minutes]')
     plt.ylabel('Stored Charge [Wh]')
     plt.title(f'Battery Storage Level with {fault_magnitude}W Fault Injection')
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.ylim(0, battery.storageCapacity * 1.1)
+    plt.xlim(0, simulation_time_min)
     
-    # Debug: Print timing information
-    print(f"DEBUG: Plot time range: {timeData[0]:.1f} to {timeData[-1]:.1f} seconds")
-    print(f"DEBUG: Expected fault time: {faultTime_sec:.1f} seconds")
-    print(f"DEBUG: Simulation duration: {timeData[-1]:.1f} seconds ({timeData[-1]/60:.1f} minutes)")
+    # Print timing information
+    print(f"Plot time range: {timeData[0]:.1f} to {timeData[-1]:.1f} minutes")
+    print(f"Fault injection time: {fault_time_min:.1f} minutes")
+    print(f"Simulation duration: {timeData[-1]:.1f} minutes")
     
     pltName = fileName + "3BatteryFault" + orbitCase + str(int(useSphericalHarmonics)) + planetCase
     figureList[pltName] = plt.figure(3)
+    
+    # Plot 4: Power Balance Analysis - Shows fault functionality
+    plt.figure(4)
+    
+    # Calculate power consumption rate from battery data
+    power_consumption = np.zeros_like(timeData)
+    for i in range(1, len(timeData)):
+        dt_hours = (timeData[i] - timeData[i-1]) / 60.0  # Convert minutes to hours
+        if dt_hours > 0:
+            dE = storageData[i-1] - storageData[i]  # Energy decrease (Wh)
+            power_consumption[i] = dE / dt_hours  # Power (W)
+    
+    # Simple moving average for smoothing
+    window_size = 5
+    power_consumption_smooth = np.convolve(power_consumption, np.ones(window_size)/window_size, mode='same')
+    
+    # Create subplot layout
+    plt.subplot(2, 1, 1)
+    plt.plot(timeData, power_consumption_smooth, 'r-', linewidth=2, label='Total Power Consumption')
+    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
+    plt.axhline(y=10, color='green', linestyle=':', alpha=0.7, label='Baseline (10W)')
+    plt.axhline(y=10 + fault_magnitude, color='red', linestyle=':', alpha=0.7, 
+               label=f'With Fault ({10 + fault_magnitude}W)')
+    plt.xlabel('Time [minutes]')
+    plt.ylabel('Power Consumption [W]')
+    plt.title('Power Consumption Analysis - Battery Fault Verification')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.xlim(0, simulation_time_min)
+    plt.ylim(0, max(70, 10 + fault_magnitude + 10))
+    
+    # Subplot 2: Discharge rate
+    plt.subplot(2, 1, 2)
+    discharge_rate = np.gradient(storageData, timeData)  # Wh/min
+    discharge_rate_w = discharge_rate * 60  # Convert to W
+    
+    # Simple moving average
+    window_size = 5
+    discharge_rate_smooth = np.convolve(discharge_rate_w, np.ones(window_size)/window_size, mode='same')
+    
+    plt.plot(timeData, -discharge_rate_smooth, 'b-', linewidth=2, label='Discharge Rate')
+    plt.axvline(x=fault_time_min, color='black', linestyle='--', linewidth=2, label='Fault Injection')
+    
+    # Find safe mode activation time
+    safe_mode_idx = np.where(storageData <= safeThresh)[0]
+    if len(safe_mode_idx) > 0:
+        safe_mode_time = timeData[safe_mode_idx[0]]
+        plt.axvline(x=safe_mode_time, color='orange', linestyle='--', linewidth=2, label='Safe Mode')
+    
+    plt.xlabel('Time [minutes]')
+    plt.ylabel('Discharge Rate [W]')
+    plt.title('Battery Discharge Rate')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.xlim(0, simulation_time_min)
+    plt.ylim(-10, max(70, 10 + fault_magnitude + 10))
+    
+    plt.tight_layout()
+    pltName = fileName + "4BatteryPowerAnalysis" + orbitCase + str(int(useSphericalHarmonics)) + planetCase
+    figureList[pltName] = plt.figure(4)
 
     if show_plots:
         plt.show()
@@ -438,7 +487,7 @@ def run(show_plots=False, liveStream=False, timeStep=1.0, orbitCase='LEO',
     # Close plots to avoid memory issues
     plt.close("all")
 
-    print(f"DEBUG: Battery fault returning {len(figureList)} figures: {list(figureList.keys())}")
+    print(f"Battery fault returning {len(figureList)} figures: {list(figureList.keys())}")
     
     # Return the format expected by fault_loader: (scenario, viz, figure_list)
     # Create a simple scenario object with the required data
@@ -453,12 +502,16 @@ def run(show_plots=False, liveStream=False, timeStep=1.0, orbitCase='LEO',
     return scenario, None, figureList
 
 
-def run_with_parameters(fault_magnitude=50.0, fault_wheel=3, fault_time_min=15.0, showPlots=False, saveBinary=False):
+def run_with_parameters(fault_magnitude=50.0, fault_wheel=3, fault_time_min=15.0, 
+                       simulation_time_min=30.0, showPlots=False, saveBinary=False):
     """
     Run battery fault with specific GUI parameters - matches the pattern in powerlimit_fault.py
+    
+    Enhanced to accept simulation_time_min parameter
     """
     print(f"\n===== BATTERY FAULT with GUI Parameters =====")
     print(f"PARAMS - Power: {fault_magnitude}W, Wheel: {fault_wheel}, Time: {fault_time_min}min")
+    print(f"Simulation Duration: {simulation_time_min} minutes")
     
     try:
         scenario, viz, figureList = run(
@@ -469,7 +522,8 @@ def run_with_parameters(fault_magnitude=50.0, fault_wheel=3, fault_time_min=15.0
             useSphericalHarmonics=False,
             planetCase='Earth',
             fault_magnitude=fault_magnitude,
-            fault_time_min=fault_time_min
+            fault_time_min=fault_time_min,
+            simulation_time_min=simulation_time_min
         )
         
         print(f"SUCCESS: Generated {len(figureList)} battery plots with GUI parameters")
@@ -491,9 +545,9 @@ def generate_battery_plots(fault_data, time_data, fault_time_min, spacecraft_nam
     import matplotlib.pyplot as plt
     plots = {}
     
-    print(f"DEBUG: Generating battery plots for {spacecraft_name}")
-    print(f"DEBUG: Fault time: {fault_time_min} minutes")
-    print(f"DEBUG: Time data range: {time_data[0]:.1f} to {time_data[-1]:.1f} minutes")
+    print(f"Generating battery plots for {spacecraft_name}")
+    print(f"Fault time: {fault_time_min} minutes")
+    print(f"Time data range: {time_data[0]:.1f} to {time_data[-1]:.1f} minutes")
     
     # Extract fault parameters
     if isinstance(fault_data, dict):
@@ -570,5 +624,6 @@ if __name__ == "__main__":
         useSphericalHarmonics=False,
         planetCase='Earth',
         fault_magnitude=50.0,
-        fault_time_min=15.0
+        fault_time_min=15.0,
+        simulation_time_min=30.0
     )

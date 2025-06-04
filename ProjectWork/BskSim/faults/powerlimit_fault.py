@@ -1,12 +1,8 @@
 #!/usr/bin/env python
 """
-FIXED: powerlimit_fault.py - Now properly uses GUI parameters
+powerlimit_fault.py - Enhanced with dynamic simulation time support
 
-The key changes:
-1. Modified run() to accept and use GUI parameters
-2. Updated run_power_limit_scenario() to use dynamic parameters
-3. Fixed fault timing and wheel selection
-4. Added parameter validation and debugging
+This module simulates power limitation faults in reaction wheels.
 """
 
 import inspect
@@ -27,16 +23,17 @@ import BSK_Dynamics, BSK_Fsw
 import BSK_Plotting as BSK_plt
 
 class PowerLimitFaultScenario(BSKSim, BSKScenario):
-    """Power limit fault scenario - FIXED to use GUI parameters"""
+    """Power limit fault scenario with dynamic simulation time support"""
     
-    def __init__(self, fault_magnitude=0.01, fault_wheel=1, fault_time_min=5.0):
+    def __init__(self, fault_magnitude=0.01, fault_wheel=1, fault_time_min=5.0, simulation_time_min=30.0):
         super(PowerLimitFaultScenario, self).__init__()
         self.name = 'PowerLimitFaultScenario'
 
-        # FIXED: Use GUI parameters instead of hardcoded values
+        # Use GUI parameters
         self.fault_magnitude = fault_magnitude
         self.fault_wheel_number = fault_wheel
         self.fault_time_min = fault_time_min
+        self.simulation_time_min = simulation_time_min
         
         # Convert fault time to nanoseconds
         self.oneTimeFaultTime = macros.min2nano(fault_time_min)
@@ -45,13 +42,14 @@ class PowerLimitFaultScenario(BSKSim, BSKScenario):
         # Set backup RW4 activation 5 minutes after fault
         self.rw4ActivationTime = self.faultTime + macros.min2nano(5.0)
         
-        # FIXED: Use the correct target wheel from GUI
+        # Use the correct target wheel from GUI
         self.targetRW = fault_wheel
         
-        print(f"FIXED: PowerLimitFaultScenario initialized with:")
+        print(f"PowerLimitFaultScenario initialized with:")
         print(f"  - Fault magnitude: {fault_magnitude} W")
         print(f"  - Target wheel: RW{fault_wheel} (index {fault_wheel})")
         print(f"  - Fault time: {fault_time_min} minutes")
+        print(f"  - Simulation duration: {simulation_time_min} minutes")
 
         # Standard initialization
         self.msgRecList = {}
@@ -71,7 +69,7 @@ class PowerLimitFaultScenario(BSKSim, BSKScenario):
 
 
     def setup_visualization(self):
-        """Setup Vizard visualization - FIXED to save binary file instead of live stream"""
+        """Setup Vizard visualization - save binary file instead of live stream"""
         if vizSupport.vizFound:
             # Create visualization directory if it doesn't exist
             vizfiles_dir = os.path.join(path, '..', 'Vizfile', '_VizFiles')
@@ -82,18 +80,18 @@ class PowerLimitFaultScenario(BSKSim, BSKScenario):
                 except Exception as e:
                     print(f"Warning: Could not create directory {vizfiles_dir}: {e}")
             
-            # FIXED: Create binary filename with fault parameters
+            # Create binary filename with fault parameters
             binary_filename = f"powerlimit_fault_rw{self.fault_wheel_number}_t{int(self.fault_time_min)}_p{int(self.fault_magnitude*1000)}"
             binary_path = os.path.join(vizfiles_dir, binary_filename)
             
-            print(f"FIXED: Saving visualization to binary file: {binary_path}")
+            print(f"Saving visualization to binary file: {binary_path}")
             
             self.viz = vizSupport.enableUnityVisualization(
                 self,
                 self.get_DynModel().taskName,
                 self.get_DynModel().scObject,
-                liveStream=False,  # FIXED: No live streaming
-                saveFile=binary_path  # FIXED: Save to binary file
+                liveStream=False,  # No live streaming
+                saveFile=binary_path  # Save to binary file
             )
             self.viz.settings.orbitLinesOn = 1
             self.viz.settings.showSpacecraftLabels = 1
@@ -107,7 +105,7 @@ class PowerLimitFaultScenario(BSKSim, BSKScenario):
                 pointingVector_B=[0.0, 0.0, 0.0],
                 position_B=[0.0, 1.5, 0.0]
             )
-            print(f"FIXED: Vizard configured to save binary file with fault parameters")
+            print(f"Vizard configured to save binary file with fault parameters")
         else:
             print("Vizard not available")
 
@@ -164,7 +162,7 @@ class PowerLimitFaultScenario(BSKSim, BSKScenario):
             self.AddModelToTask(DynModel.taskName, self.rwLogs[item])
 
     def pull_outputs(self, showPlots):
-        """Generate plots with FIXED parameters displayed"""
+        """Generate plots with parameters displayed"""
         attErrRec = self.msgRecList[self.attGuidName]
         
         sigma_BR = np.delete(attErrRec.sigma_BR, 0, 0)
@@ -182,7 +180,7 @@ class PowerLimitFaultScenario(BSKSim, BSKScenario):
         
         timeData = np.delete(attErrRec.times(), 0, 0) * macros.NANO2MIN
         
-        # FIXED: Use actual GUI parameters in plots
+        # Use actual GUI parameters in plots
         activationIndex = np.where(timeData >= (self.fault_time_min + 5.0))[0]
         activationIndex = activationIndex[0] if len(activationIndex) > 0 else len(timeData)
         
@@ -192,31 +190,32 @@ class PowerLimitFaultScenario(BSKSim, BSKScenario):
 
         BSK_plt.clear_all_plots()
         
-        # PLOT 1: Attitude Error with FIXED title
+        # PLOT 1: Attitude Error
         sigma_BR_norm = np.linalg.norm(sigma_BR, axis=1)
         plt.figure(1)
-        plt.title(f"FIXED: Attitude Error (PL={self.fault_magnitude}W, RW{self.targetRW}, {self.fault_time_min}min)")
+        plt.title(f"Attitude Error (PL={self.fault_magnitude}W, RW{self.targetRW}, {self.fault_time_min}min)")
         plt.xlabel("Time (min)")
         plt.ylabel("Attitude Error Norm")
         plt.plot(timeData, sigma_BR_norm, 'b-', label="Attitude Error Norm")
         
-        # Add fault injection marker at CORRECT time
+        # Add fault injection marker at correct time
         plt.axvline(x=self.fault_time_min, color='r', linestyle='--', linewidth=2, 
                    label=f'Fault Injection (RW{self.targetRW})')
         plt.axvline(x=self.fault_time_min + 5.0, color='g', linestyle='--', linewidth=2, 
                    label='RW4 Activated')
         plt.legend()
         plt.grid(True)
+        plt.xlim(0, self.simulation_time_min)
         
-        # PLOT 2: RW Speeds with FIXED highlighting
+        # PLOT 2: RW Speeds
         plt.figure(2)
-        plt.title(f"FIXED: RW Speeds (Fault: RW{self.targetRW}, {self.fault_magnitude}W at {self.fault_time_min}min)")
+        plt.title(f"RW Speeds (Fault: RW{self.targetRW}, {self.fault_magnitude}W at {self.fault_time_min}min)")
         plt.xlabel("Time [min]")
         plt.ylabel("Speed [RPM]")
         
         colors = ['blue', 'green', 'red', 'orange']
         for i in range(num_RW):
-            # FIXED: Highlight the correct faulty wheel
+            # Highlight the correct faulty wheel
             if i == self.targetRW:
                 plt.plot(timeData, RW_speeds_modified[:, i], color=colors[i], 
                         linewidth=3, label=f"RW{i+1} (FAULTY)")
@@ -224,13 +223,14 @@ class PowerLimitFaultScenario(BSKSim, BSKScenario):
                 plt.plot(timeData, RW_speeds_modified[:, i], color=colors[i], 
                         linewidth=2, label=f"RW{i+1}")
         
-        # Add markers at CORRECT times
+        # Add markers at correct times
         plt.axvline(x=self.fault_time_min, color='r', linestyle='--', linewidth=2, 
                    label=f'Fault Injection (RW{self.targetRW})')
         plt.axvline(x=self.fault_time_min + 5.0, color='g', linestyle='--', linewidth=2, 
                    label='RW4 Activated')
         plt.legend()
         plt.grid(True)
+        plt.xlim(0, self.simulation_time_min)
         
         if showPlots:
             plt.show()
@@ -239,29 +239,168 @@ class PowerLimitFaultScenario(BSKSim, BSKScenario):
         figureList["PowerLimitFault_AttitudeError"] = plt.figure(1)
         figureList["PowerLimitFault_RWSpeeds"] = plt.figure(2)
         
+        # Plot 3: Power Consumption Analysis - Shows power limit enforcement
+        plt.figure(3, figsize=(12, 8))
+        
+        # Calculate power consumption for each wheel
+        # Power = Torque * Angular velocity
+        RW_power = []
+        for i in range(num_RW):
+            power = np.abs(RW_torque[i] * RW_speeds[:, i])
+            RW_power.append(power)
+        
+        # Subplot 1: Power consumption over time
+        plt.subplot(2, 2, 1)
+        for i in range(num_RW):
+            if i == self.targetRW:
+                plt.plot(timeData, RW_power[i], color=colors[i], linewidth=3, 
+                        label=f"RW{i+1} (LIMITED)")
+            else:
+                plt.plot(timeData, RW_power[i], color=colors[i], linewidth=2, 
+                        label=f"RW{i+1}")
+        
+        plt.axvline(x=self.fault_time_min, color='r', linestyle='--', linewidth=2, 
+                   label='Power Limit Applied')
+        plt.axhline(y=self.fault_magnitude, color='orange', linestyle=':', linewidth=2,
+                   label=f'Limit: {self.fault_magnitude}W')
+        plt.xlabel("Time (min)")
+        plt.ylabel("Power Consumption [W]")
+        plt.title("Reaction Wheel Power Consumption")
+        plt.legend()
+        plt.grid(True)
+        plt.xlim(0, self.simulation_time_min)
+        
+        # Subplot 2: Power limiting effectiveness
+        plt.subplot(2, 2, 2)
+        fault_idx = np.argmax(timeData >= self.fault_time_min)
+        
+        if fault_idx > 0:
+            # Focus on the limited wheel
+            limited_power = RW_power[self.targetRW]
+            
+            # Calculate what power would have been without limit (extrapolate)
+            pre_fault_trend = limited_power[max(0, fault_idx-20):fault_idx]
+            if len(pre_fault_trend) > 0:
+                avg_pre_fault = np.mean(pre_fault_trend)
+                projected_power = np.ones_like(limited_power[fault_idx:]) * avg_pre_fault
+                
+                plt.plot(timeData[:fault_idx], limited_power[:fault_idx], 'b-', 
+                        linewidth=2, label='Actual Power')
+                plt.plot(timeData[fault_idx:], limited_power[fault_idx:], 'r-', 
+                        linewidth=2, label='Limited Power')
+                plt.plot(timeData[fault_idx:], projected_power, 'b--', 
+                        linewidth=2, alpha=0.5, label='Projected (No Limit)')
+                
+                plt.axvline(x=self.fault_time_min, color='black', linestyle='--', linewidth=2)
+                plt.axhline(y=self.fault_magnitude, color='orange', linestyle=':', linewidth=2,
+                           label=f'Power Limit: {self.fault_magnitude}W')
+        
+        plt.xlabel("Time (min)")
+        plt.ylabel("Power [W]")
+        plt.title(f"Power Limiting Effect on RW{self.targetRW+1}")
+        plt.legend()
+        plt.grid(True)
+        plt.xlim(0, self.simulation_time_min)
+        
+        # Subplot 3: Cumulative energy saved
+        plt.subplot(2, 2, 3)
+        if fault_idx > 0:
+            dt_min = timeData[1] - timeData[0] if len(timeData) > 1 else 1.0
+            dt_hours = dt_min / 60.0
+            
+            # Energy that would have been consumed vs actual
+            actual_energy = np.cumsum(RW_power[self.targetRW] * dt_hours)
+            
+            # Estimate saved energy
+            if len(pre_fault_trend) > 0:
+                projected_energy = np.zeros_like(actual_energy)
+                projected_energy[:fault_idx] = actual_energy[:fault_idx]
+                for i in range(fault_idx, len(timeData)):
+                    projected_energy[i] = projected_energy[i-1] + avg_pre_fault * dt_hours
+                
+                saved_energy = projected_energy - actual_energy
+                
+                plt.plot(timeData, actual_energy, 'r-', linewidth=2, label='Actual Energy')
+                plt.plot(timeData, projected_energy, 'b--', linewidth=2, label='Projected Energy')
+                plt.fill_between(timeData, actual_energy, projected_energy, 
+                               where=(timeData >= self.fault_time_min), 
+                               alpha=0.3, color='green', label='Energy Saved')
+        
+        plt.axvline(x=self.fault_time_min, color='black', linestyle='--', linewidth=2)
+        plt.xlabel("Time (min)")
+        plt.ylabel("Cumulative Energy [Wh]")
+        plt.title("Energy Conservation Due to Power Limit")
+        plt.legend()
+        plt.grid(True)
+        plt.xlim(0, self.simulation_time_min)
+        
+        # Subplot 4: Power limit enforcement summary
+        plt.subplot(2, 2, 4)
+        if fault_idx > 0 and fault_idx < len(timeData):
+            # Statistics before and after limit
+            pre_limit_power = RW_power[self.targetRW][:fault_idx]
+            post_limit_power = RW_power[self.targetRW][fault_idx:]
+            
+            if len(pre_limit_power) > 0 and len(post_limit_power) > 0:
+                stats = {
+                    'Mean Power': [np.mean(pre_limit_power), np.mean(post_limit_power)],
+                    'Max Power': [np.max(pre_limit_power), np.max(post_limit_power)],
+                    'Power Variance': [np.var(pre_limit_power), np.var(post_limit_power)]
+                }
+                
+                x = np.arange(len(stats))
+                width = 0.35
+                
+                fig, ax = plt.gca(), plt.gca()
+                
+                pre_values = list(stats.values())
+                post_values = []
+                for i, (key, values) in enumerate(stats.items()):
+                    bars1 = ax.bar(i - width/2, values[0], width, label='Pre-Limit' if i == 0 else "", 
+                                   color='blue', alpha=0.7)
+                    bars2 = ax.bar(i + width/2, values[1], width, label='Post-Limit' if i == 0 else "", 
+                                   color='red', alpha=0.7)
+                
+                ax.set_ylabel('Power [W]')
+                ax.set_xlabel('Metric')
+                ax.set_title(f'Power Limit Impact on RW{self.targetRW+1}')
+                ax.set_xticks(x)
+                ax.set_xticklabels(list(stats.keys()), rotation=15)
+                ax.legend()
+                ax.grid(True, alpha=0.3, axis='y')
+                
+                # Add limit line
+                ax.axhline(y=self.fault_magnitude, color='orange', linestyle=':', linewidth=2)
+        
+        plt.tight_layout()
+        figureList["PowerLimitFault_PowerAnalysis"] = plt.figure(3)
+        
         return figureList
 
 
-def run_power_limit_scenario_fixed(powerLimit, fault_wheel, fault_time_min):
+def run_power_limit_scenario(powerLimit, fault_wheel, fault_time_min, simulation_time_min):
     """
-    FIXED: Run power limit scenario with GUI parameters
+    Run power limit scenario with GUI parameters
     """
-    print(f"FIXED: Running power limit scenario with:")
+    print(f"Running power limit scenario with:")
     print(f"  - Power limit: {powerLimit} W")
     print(f"  - Target wheel: RW{fault_wheel}")
     print(f"  - Fault time: {fault_time_min} minutes")
+    print(f"  - Simulation duration: {simulation_time_min} minutes")
     
-    # FIXED: Pass parameters to scenario
+    # Pass parameters to scenario
     scenario = PowerLimitFaultScenario(
         fault_magnitude=powerLimit,
         fault_wheel=fault_wheel,
-        fault_time_min=fault_time_min
+        fault_time_min=fault_time_min,
+        simulation_time_min=simulation_time_min
     )
     
-    simulationTime = macros.min2nano(30.)
+    # Use dynamic simulation time
+    simulationTime = macros.min2nano(simulation_time_min)
     scenario.modeRequest = "hillPoint"
     
-    # Phase 1: Run until fault time (now dynamic)
+    # Phase 1: Run until fault time
     print(f"Phase 1: Normal operation until {fault_time_min} minutes...")
     scenario.InitializeSimulation()
     scenario.ConfigureStopTime(scenario.faultTime)
@@ -269,28 +408,34 @@ def run_power_limit_scenario_fixed(powerLimit, fault_wheel, fault_time_min):
     
     # Phase 2: Apply power limit to specified wheel
     print(f"Phase 2: Applying {powerLimit}W power limit to RW{fault_wheel}...")
-    apply_power_limit_to_wheel_fixed(scenario, powerLimit, fault_wheel, scenario.faultTime)
+    apply_power_limit_to_wheel(scenario, powerLimit, fault_wheel, scenario.faultTime)
     
-    # Phase 3: Run with fault until RW4 activation
-    print("Phase 3: Running with power fault...")
-    scenario.ConfigureStopTime(scenario.rw4ActivationTime)
-    scenario.ExecuteSimulation()
-    
-    # Phase 4: Activate RW4
-    print("Phase 4: Activating RW4 backup...")
-    activate_RW4_fixed(scenario, scenario.rw4ActivationTime)
-    
-    # Phase 5: Complete simulation
-    print("Phase 5: Completing simulation...")
-    scenario.ConfigureStopTime(simulationTime)
-    scenario.ExecuteSimulation()
+    # Phase 3: Run with fault until RW4 activation (if time permits)
+    if scenario.rw4ActivationTime < simulationTime:
+        print("Phase 3: Running with power fault...")
+        scenario.ConfigureStopTime(scenario.rw4ActivationTime)
+        scenario.ExecuteSimulation()
+        
+        # Phase 4: Activate RW4
+        print("Phase 4: Activating RW4 backup...")
+        activate_RW4(scenario, scenario.rw4ActivationTime)
+        
+        # Phase 5: Complete simulation
+        print("Phase 5: Completing simulation...")
+        scenario.ConfigureStopTime(simulationTime)
+        scenario.ExecuteSimulation()
+    else:
+        # Just run to end without RW4 activation
+        print("Phase 3: Completing simulation...")
+        scenario.ConfigureStopTime(simulationTime)
+        scenario.ExecuteSimulation()
     
     return scenario
 
 
-def apply_power_limit_to_wheel_fixed(scenario, powerLimit, fault_wheel, currentTimeNanos):
+def apply_power_limit_to_wheel(scenario, powerLimit, fault_wheel, currentTimeNanos):
     """
-    FIXED: Apply power limit to the correct wheel specified by GUI
+    Apply power limit to the correct wheel specified by GUI
     """
     DynModels = scenario.get_DynModel()
     
@@ -305,34 +450,35 @@ def apply_power_limit_to_wheel_fixed(scenario, powerLimit, fault_wheel, currentT
             max_speed_rad_s = 6000 * 2 * np.pi / 60
             reduced_torque = powerLimit / max_speed_rad_s
             target_rw.maxMotorTorque = reduced_torque
-            print(f"FIXED: Set RW{fault_wheel+1} max torque to {reduced_torque} Nm (was {scenario.original_max_torque})")
+            print(f"Set RW{fault_wheel+1} max torque to {reduced_torque} Nm (was {scenario.original_max_torque})")
         else:
             scenario.original_rw_friction = target_rw.fCoulomb
             target_rw.fCoulomb = 0.05
-            print(f"FIXED: Set RW{fault_wheel+1} friction to 0.05 (was {scenario.original_rw_friction})")
+            print(f"Set RW{fault_wheel+1} friction to 0.05 (was {scenario.original_rw_friction})")
     
     timeMin = currentTimeNanos * macros.NANO2MIN
     scenario.powerLimitLog.append(["powerLimit", powerLimit, fault_wheel, timeMin])
-    print(f"FIXED: Applied {powerLimit}W power limit to RW{fault_wheel+1} at {timeMin:.2f} min")
+    print(f"Applied {powerLimit}W power limit to RW{fault_wheel+1} at {timeMin:.2f} min")
 
 
-def activate_RW4_fixed(scenario, currentTimeNanos):
-    """FIXED: Activate RW4 with correct timing"""
+def activate_RW4(scenario, currentTimeNanos):
+    """Activate RW4 with correct timing"""
     timeMin = currentTimeNanos * macros.NANO2MIN
     scenario.powerLimitLog.append(["RW4Activation", "N/A", 4, timeMin])
-    print(f"FIXED: Activated RW4 at {timeMin:.2f} minutes")
+    print(f"Activated RW4 at {timeMin:.2f} minutes")
 
 
 # ========================================
-# FIXED GUI INTEGRATION FUNCTIONS
+# GUI INTEGRATION FUNCTIONS
 # ========================================
 
-def run(showPlots=True, saveBinary=True):
+def run(showPlots=True, saveBinary=True, simulation_time_min=30.0):
     """
-    FIXED: GUI-compatible run function that uses default parameters
-    This maintains backward compatibility while preparing for parameter injection
+    GUI-compatible run function that uses default parameters
+    Enhanced with dynamic simulation time
     """
-    print("\n===== FIXED: Power Limit Fault Scenario =====")
+    print("\n===== Power Limit Fault Scenario =====")
+    print(f"Simulation Duration: {simulation_time_min} minutes")
     
     # Use defaults if no parameters provided
     fault_magnitude = 0.01
@@ -340,7 +486,7 @@ def run(showPlots=True, saveBinary=True):
     fault_time_min = 5.0
     
     try:
-        scenario = run_power_limit_scenario_fixed(fault_magnitude, fault_wheel, fault_time_min)
+        scenario = run_power_limit_scenario(fault_magnitude, fault_wheel, fault_time_min, simulation_time_min)
         figureList = scenario.pull_outputs(showPlots)
         
         viz = getattr(scenario, 'viz', None)
@@ -352,27 +498,29 @@ def run(showPlots=True, saveBinary=True):
         current_module.figureList = figureList
         current_module.viz = viz
         
-        print(f"FIXED: Generated {len(figureList)} plots with correct parameters")
+        print(f"Generated {len(figureList)} plots with correct parameters")
         return scenario, viz, figureList
         
     except Exception as e:
-        print(f"FIXED ERROR: {e}")
+        print(f"ERROR: {e}")
         import traceback
         traceback.print_exc()
         return None, None, {}
 
 
 def run_with_parameters(fault_magnitude=0.01, fault_wheel=1, fault_time_min=10.0, 
-                       showPlots=False, saveBinary=False):
+                       simulation_time_min=30.0, showPlots=False, saveBinary=False):
     """
-    FIXED: Run with specific GUI parameters - THIS IS THE KEY FUNCTION
+    Run with specific GUI parameters
+    Enhanced with dynamic simulation time
     """
-    print(f"\n===== FIXED: Power Limit with GUI Parameters =====")
-    print(f"FIXED PARAMS - Power: {fault_magnitude}W, Wheel: RW{fault_wheel}, Time: {fault_time_min}min")
+    print(f"\n===== Power Limit with GUI Parameters =====")
+    print(f"PARAMS - Power: {fault_magnitude}W, Wheel: RW{fault_wheel}, Time: {fault_time_min}min")
+    print(f"Simulation Duration: {simulation_time_min} minutes")
     
     try:
-        # FIXED: Use the actual GUI parameters
-        scenario = run_power_limit_scenario_fixed(fault_magnitude, fault_wheel, fault_time_min)
+        # Use the actual GUI parameters
+        scenario = run_power_limit_scenario(fault_magnitude, fault_wheel, fault_time_min, simulation_time_min)
         
         # Generate plots with correct parameters
         figureList = scenario.pull_outputs(showPlots)
@@ -386,16 +534,17 @@ def run_with_parameters(fault_magnitude=0.01, fault_wheel=1, fault_time_min=10.0
         current_module.figureList = figureList
         current_module.viz = viz
         
-        print(f"FIXED SUCCESS: Generated {len(figureList)} plots with GUI parameters")
-        print(f"FIXED VERIFICATION:")
+        print(f"SUCCESS: Generated {len(figureList)} plots with GUI parameters")
+        print(f"VERIFICATION:")
         print(f"  - Used power limit: {scenario.fault_magnitude}W")
         print(f"  - Used target wheel: RW{scenario.targetRW}")
         print(f"  - Used fault time: {scenario.fault_time_min}min")
+        print(f"  - Used simulation time: {scenario.simulation_time_min}min")
         
         return scenario, viz, figureList
         
     except Exception as e:
-        print(f"FIXED ERROR with parameters: {e}")
+        print(f"ERROR with parameters: {e}")
         import traceback
         traceback.print_exc()
         return None, None, {}
@@ -411,7 +560,8 @@ if __name__ == "__main__":
     test_scenario, test_viz, test_plots = run_with_parameters(
         fault_magnitude=0.5, 
         fault_wheel=0, 
-        fault_time_min=15.0, 
+        fault_time_min=15.0,
+        simulation_time_min=60.0,
         showPlots=True
     )
     print(f"Test completed with {len(test_plots)} plots")

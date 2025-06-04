@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """
-FIXED fault_loader.py - Now properly passes GUI parameters to fault modules
+fault_loader.py - Enhanced to pass simulation time to fault modules
 
-KEY FIX: Enhanced run_scenario() to use run_with_parameters() when available
+This module dynamically loads and runs fault scenarios with proper parameter passing.
 """
 
 import os
@@ -18,7 +18,7 @@ def safe_import_fault_module(module_name, class_name, fallback_class=None):
         module = importlib.import_module(f"faults.{module_name}")
         fault_class = getattr(module, class_name)
         run_function = getattr(module, "run", None)
-        run_with_parameters = getattr(module, "run_with_parameters", None)  # NEW: Check for enhanced function
+        run_with_parameters = getattr(module, "run_with_parameters", None)
         return fault_class, run_function, run_with_parameters
     except ImportError as e:
         print(f"Warning: Could not import {module_name}: {e}")
@@ -33,7 +33,7 @@ def safe_import_fault_module(module_name, class_name, fallback_class=None):
 # Import fault modules with enhanced parameter support
 fault_modules = {}
 run_functions = {}
-run_with_parameters_functions = {}  # NEW: Store enhanced functions
+run_with_parameters_functions = {}
 fault_implementations = {}
 
 # Try to import friction fault
@@ -48,7 +48,7 @@ powerlimit_class, powerlimit_run, powerlimit_run_with_params = safe_import_fault
 if powerlimit_class:
     fault_modules["power_limit"] = powerlimit_class
     run_functions["power_limit"] = powerlimit_run
-    run_with_parameters_functions["power_limit"] = powerlimit_run_with_params  # CRITICAL: Store the enhanced function
+    run_with_parameters_functions["power_limit"] = powerlimit_run_with_params
 
 # Try to import encoder fault
 encoder_class, encoder_run, encoder_run_with_params = safe_import_fault_module("encoder_fault", "EncoderFaultScenario")
@@ -67,7 +67,7 @@ if battery_class:
 else:
     print("Failed to import battery fault module")
 
-# [Keep all existing fault implementation functions unchanged - they're working fine]
+# Fault implementation functions
 def apply_friction_fault(dynModel, fault_magnitude, fault_wheel, current_time):
     """Apply friction fault to a reaction wheel"""
     if hasattr(dynModel, 'rwFactory'):
@@ -173,9 +173,9 @@ def extract_fault_data_from_scenario(scenario, fault_type):
                     wheel_speeds_raw = scenario.rwSpeedRec.wheelSpeeds
                     if len(wheel_speeds_raw) > 1:
                         fault_data['wheel_speeds'] = np.delete(wheel_speeds_raw, 0, 0)
-                        print(f"DEBUG: Extracted wheel speeds with shape: {fault_data['wheel_speeds'].shape}")
+                        print(f"Extracted wheel speeds with shape: {fault_data['wheel_speeds'].shape}")
             except Exception as e:
-                print(f"DEBUG: Could not extract wheel speeds: {e}")
+                print(f"Could not extract wheel speeds: {e}")
         
         # Extract attitude error if available
         if hasattr(scenario, 'msgRecList'):
@@ -186,11 +186,11 @@ def extract_fault_data_from_scenario(scenario, fault_type):
                         import numpy as np
                         sigma_BR = np.delete(attErrRec.sigma_BR, 0, 0)
                         fault_data['attitude_error'] = np.linalg.norm(sigma_BR, axis=1)
-                        print(f"DEBUG: Extracted attitude error data with {len(fault_data['attitude_error'])} points")
+                        print(f"Extracted attitude error data with {len(fault_data['attitude_error'])} points")
             except Exception as e:
-                print(f"DEBUG: Could not extract attitude error: {e}")
+                print(f"Could not extract attitude error: {e}")
         
-        print(f"DEBUG: Extracted fault data keys: {list(fault_data.keys())}")
+        print(f"Extracted fault data keys: {list(fault_data.keys())}")
         
     except Exception as e:
         print(f"ERROR: Failed to extract fault data: {e}")
@@ -232,9 +232,9 @@ def create_scenario(fault_type: str, **kwargs):
 
 def run_scenario(fault_type: str, **kwargs):
     """
-    FIXED: Run a simulation using run_with_parameters() when available
+    Run a simulation using run_with_parameters() when available
     
-    This is the CRITICAL fix - now properly uses GUI parameters!
+    Enhanced to accept simulation_time_min parameter
     """
     fault_type = fault_type.lower().replace(" ", "_")
     
@@ -244,38 +244,43 @@ def run_scenario(fault_type: str, **kwargs):
     
     # Extract simulation parameters for scenario configuration
     sim_params = kwargs.get('simulation_params', {})
-    fault_magnitude = sim_params.get('fault_magnitude', kwargs.get('fault_magnitude', 0.5))
-    fault_wheel = sim_params.get('fault_wheel', kwargs.get('fault_wheel', 0))
+    fault_magnitude = sim_params.get('fault_magnitude', kwargs.get('fault_magnitude', 0.0005))
+    fault_wheel = sim_params.get('fault_wheel', kwargs.get('fault_wheel', 3))
     fault_time_min = sim_params.get('fault_time_min', kwargs.get('fault_time_min', 10.0))
     
-    print(f"FIXED DEBUG: Running {fault_type} with parameters:")
+    # Extract simulation duration
+    simulation_time_min = sim_params.get('simulation_time_min', kwargs.get('simulation_time_min', 30.0))
+    
+    print(f"Running {fault_type} with parameters:")
     print(f"  - showPlots: {show_plots}")
     print(f"  - saveBinary: {save_binary}")
     print(f"  - fault_magnitude: {fault_magnitude}")
     print(f"  - fault_wheel: {fault_wheel}")
     print(f"  - fault_time_min: {fault_time_min}")
+    print(f"  - simulation_time_min: {simulation_time_min}")
     
-    # CRITICAL FIX: Check if the enhanced run_with_parameters function is available
+    # Check if the enhanced run_with_parameters function is available
     if fault_type in run_with_parameters_functions and run_with_parameters_functions[fault_type]:
-        print(f"FIXED: Using run_with_parameters() for {fault_type}")
+        print(f"Using run_with_parameters() for {fault_type}")
         
         try:
             run_with_params_func = run_with_parameters_functions[fault_type]
             
-            # Call the enhanced function with GUI parameters
+            # Call the enhanced function with all parameters including simulation time
             result = run_with_params_func(
                 fault_magnitude=fault_magnitude,
                 fault_wheel=fault_wheel,
                 fault_time_min=fault_time_min,
+                simulation_time_min=simulation_time_min,
                 showPlots=show_plots,
                 saveBinary=save_binary
             )
             
-            print(f"FIXED: run_with_parameters() returned: {type(result)}")
+            print(f"run_with_parameters() returned: {type(result)}")
             
             # Handle the result
             if result is None:
-                print(f"FIXED: run_with_parameters returned None")
+                print(f"run_with_parameters returned None")
                 return None, None, {}
             elif isinstance(result, tuple):
                 if len(result) >= 2:
@@ -286,14 +291,14 @@ def run_scenario(fault_type: str, **kwargs):
                 return result, None, {}
                 
         except Exception as e:
-            print(f"FIXED ERROR: run_with_parameters failed for {fault_type}: {e}")
+            print(f"ERROR: run_with_parameters failed for {fault_type}: {e}")
             import traceback
             traceback.print_exc()
             # Fall back to regular run function
     
     # Fall back to regular run function if run_with_parameters is not available
     if fault_type in RUN_FUNCTIONS and RUN_FUNCTIONS[fault_type]:
-        print(f"FIXED: Falling back to regular run() for {fault_type}")
+        print(f"Falling back to regular run() for {fault_type}")
         
         run_function = RUN_FUNCTIONS[fault_type]
         
@@ -306,12 +311,14 @@ def run_scenario(fault_type: str, **kwargs):
                 run_params['showPlots'] = show_plots
             if 'saveBinary' in run_sig.parameters:
                 run_params['saveBinary'] = save_binary
+            if 'simulation_time_min' in run_sig.parameters:
+                run_params['simulation_time_min'] = simulation_time_min
                 
             result = run_function(**run_params)
             
             # Handle different return formats
             if result is None:
-                print(f"FIXED DEBUG: Run function returned None for {fault_type}")
+                print(f"Run function returned None for {fault_type}")
                 return None, None, {}
             elif isinstance(result, tuple) and len(result) >= 2:
                 if len(result) == 2:
@@ -322,12 +329,12 @@ def run_scenario(fault_type: str, **kwargs):
                 return result, None, {}
                 
         except Exception as e:
-            print(f"FIXED ERROR: Failed to run {fault_type} scenario: {e}")
+            print(f"ERROR: Failed to run {fault_type} scenario: {e}")
             import traceback
             traceback.print_exc()
             return None, None, {}
     else:
-        print(f"FIXED: No run function available for {fault_type}")
+        print(f"No run function available for {fault_type}")
         return None, None, {}
 
 
