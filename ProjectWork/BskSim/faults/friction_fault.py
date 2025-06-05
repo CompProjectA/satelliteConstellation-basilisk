@@ -1,3 +1,10 @@
+# Friction fault works from model folder --> BSK_Dynamic.py.
+# There are two types: one-time and repeated injection.
+# If we change values in BSK_Dynamic.py, it shows correctly in the plots.
+# But if we change RW or friction Nm in the GUI, the fault is not injected.
+# Plots still get their values from BSK_Dynamic.py, not from the GUI input.
+# Also, plots start from RW0 — they should start from RW1.
+
 #!/usr/bin/env python
 """
 friction_fault.py - Enhanced with dynamic simulation time support
