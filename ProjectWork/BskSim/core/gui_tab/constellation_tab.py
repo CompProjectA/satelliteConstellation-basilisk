@@ -226,7 +226,7 @@ class ConstellationTab(BaseTab):
         # Simple dialog for orbit parameters
         dialog = tk.Toplevel(self.parent_app.root)
         dialog.title("Create New Orbit")
-        dialog.geometry("400x300")
+        dialog.geometry("500x400")
         dialog.transient(self.parent_app.root)
         dialog.grab_set()
         
@@ -247,6 +247,14 @@ class ConstellationTab(BaseTab):
         ttk.Label(frame, text="Inclination (degrees):").pack(anchor=tk.W, pady=(10,0))
         inc_var = tk.DoubleVar(value=60.0)
         ttk.Entry(frame, textvariable=inc_var).pack(fill=tk.X, pady=5)
+
+        # Number of satellites
+        # Number of satellites
+        ttk.Label(frame, text="Number of Satellites:").pack(anchor=tk.W, pady=(10,0))
+        num_sats_var = tk.IntVar(value=4)
+        ttk.Spinbox(frame, from_=1, to=20, textvariable=num_sats_var).pack(fill=tk.X, pady=5)
+
+
         
         def create_orbit():
             new_orbit = {
@@ -257,9 +265,19 @@ class ConstellationTab(BaseTab):
             }
             self.orbit_configurations.append(new_orbit)
             self.update_orbit_combo()
+
+                # Select the newly created orbit
+            self.current_orbit_var.set(new_orbit["name"])
+            self.orbit_combo.set(new_orbit["name"])
+            
             dialog.destroy()
             self.add_log(f"Created new orbit: {new_orbit['name']} at {new_orbit['altitude']}km")
         
+            num_sats = num_sats_var.get()
+            self.create_constellation(num_sats, new_orbit["name"])
+            self.update_satellite_listbox()
+
+
         ttk.Button(frame, text="Create Orbit", command=create_orbit).pack(pady=20)
         ttk.Button(frame, text="Cancel", command=dialog.destroy).pack()
     
@@ -281,6 +299,7 @@ class ConstellationTab(BaseTab):
         if confirm:
             self.orbit_configurations = [o for o in self.orbit_configurations if o['name'] != current_orbit]
             self.update_orbit_combo()
+            
             self.add_log(f"Deleted orbit: {current_orbit}")
 
 

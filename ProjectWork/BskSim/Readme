@@ -211,6 +211,17 @@ o	Fault impact analysis
 o	Reaction wheel performance
 o	Power consumption tracking
 
+
+ 
+⏳ Simulation Timing Note
+The simulation time in our Spacecraft Constellation Fault Simulator is configured to run for 30 minutes 
+of mission time. However, when the binary file is played back in the Vizard visualization tool, this
+ 30-minute duration is compressed for faster playback.
+ In Vizard, the entire 30-minute simulation is typically displayed in about 30 seconds of real time.
+This time compression is intentional—it allows for a quick yet complete visual review of the satellite 
+constellation’s behavior, including reaction wheel faults, attitude changes, and target tracking, 
+without waiting for the full real-time duration.
+ 
 Simulation Workflow
 1. Pre-Simulation Setup
 Configure Constellation → Define Orbits → Add Satellites
