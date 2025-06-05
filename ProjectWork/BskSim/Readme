@@ -1,138 +1,349 @@
-
 🛰️ Spacecraft Constellation Fault Simulator
-
-A GUI-based spacecraft constellation simulator built on the Basilisk framework. It allows simulation of multiple satellites, injection of realistic reaction wheel faults, and analysis of fault effects using plots and 3D visualisation through Vizard.
+A comprehensive GUI-based spacecraft constellation simulator built on the Basilisk astrodynamics framework. This simulator enables the modeling of multi-satellite constellations, injection of realistic reaction wheel faults, and analysis of fault propagation effects through advanced plotting and 3D visualization via Vizard.
+📋 Table of Contents
+•	Overview
+•	Key Features
+•	System Requirements
+•	Installation
+•	Directory Structure
+•	Quick Start Guide
+•	GUI User Guide
+•	Simulation Workflow
+•	Fault Types
+•	Output Files
+•	Troubleshooting
+•	Technical Architecture
 
 Overview
-This simulator is designed for:
-•	Modeling and managing multi-satellite constellations
-•	Injecting faults like encoder drift, friction increase, power limits, and battery degradation
-•	Visualizing scenarios in Unity-based Vizard
-•	Logging telemetry and creating .bin files for later playback
-•	Exporting data for performance evaluation and debugging
- Features
-•	Multi-satellite support with up to 20 satellites
-•	Four realistic fault types with configurable parameters
-•	Ground target assignment and camera targeting
-•	GUI for fault configuration, simulation control, and output analysis
-•	Vizard-compatible .bin generation
-•	Plotting and telemetry logging
+This simulator provides a comprehensive platform for:
+•	Multi-Satellite Constellation Management: Configure and manage up to 20 satellites in various orbital configurations
+•	Realistic Fault Injection: Simulate hardware failures including encoder drift, mechanical friction, power limitations, and battery degradation
+•	Advanced Visualization: Generate Unity-compatible binary files for 3D visualization in Vizard
+•	Data Analysis: Comprehensive plotting and telemetry logging for performance evaluation
+•	Mission Planning: Test fault tolerance and recovery strategies for satellite constellations
 
+Key Features
+🌍 Constellation Management
+•	Support for multiple orbital configurations (LEO, MEO, GEO)
+•	Quick-setup presets for common constellation patterns
+•	Individual satellite parameter customization
+•	Real-time orbital propagation using Basilisk dynamics
 
+🔧 Fault Simulation
+•	Friction Fault: Simulates bearing degradation and mechanical wear
+•	Power Limit Fault: Models power system constraints and failures
+•	Encoder Fault: Introduces measurement errors in reaction wheel feedback
+•	Battery Fault: Simulates battery degradation and increased power consumption
 
-📁 Directory Structure
+📊 Analysis Tools
+•	Real-time plotting of spacecraft dynamics
+•	Attitude error analysis
+•	Reaction wheel performance monitoring
+•	Power consumption tracking
+•	Inter-satellite distance calculations
 
-satelliteConstellation-basilisk\ProjectWork\BskSim
-"
+🎮 Visualization
+•	Vizard-compatible binary file generation
+•	Configurable camera views for each satellite
+•	Ground target tracking visualization
+•	Orbit trajectory display
+
+System Requirements
+Prerequisites
+•	Python: 3.7 or higher
+•	Basilisk: Latest version properly installed
+•	Operating System: Windows 10/11, macOS, or Linux
+•	RAM: Minimum 8GB (16GB recommended for large constellations)
+•	Storage: At least 2GB free space for simulation outputs
+
+System Requirements
+Prerequisites
+•	Python: 3.7 or higher
+•	Basilisk: Latest version properly installed
+•	Operating System: Windows 10/11, macOS, or Linux
+•	RAM: Minimum 8GB (16GB recommended for large constellations)
+•	Storage: At least 2GB free space for simulation outputs
+
+Python Dependencies
+numpy>=1.19.0
+matplotlib>=3.3.0
+tkinter (usually included with Python)
+Pillow>=8.0.0
+
+Installation
+1.	Clone the Repository
+git clone <https://github.com/CompProjectA/satelliteConstellation-basilisk.git>
+cd satelliteConstellation-basilisk/ProjectWork/BskSim
+
+2.	Verify Basilisk Installation
+python -c "from Basilisk import __path__; print('Basilisk found at:', __path__[0])"
+
+3.	Install Additional Dependencies
+pip install numpy matplotlib Pillow
+
+4.	Test Installation
+cd core
+python run_fault_simulator.py
+
+Directory Structure
 BskSim/
-├── BSK_masters.py              # Master Basilisk simulation script
-├── Readme                      # This file
+├── BSK_masters.py              # Master simulation orchestrator
+├── README.md                   # This documentation file
 │
 ├── core/                       # Core simulation modules
-│   ├── pycache/           # Python cache files
-│   ├── gui_tab/               # GUI tab components
-│   │   ├── init.py        # Package initialization
-│   │   ├── base_tab.py        # Base class for all tabs
+│   ├── __pycache__/           # Python bytecode cache
+│   ├── gui_tab/               # GUI tab implementations
+│   │   ├── __init__.py        # Package initialization
+│   │   ├── base_tab.py        # Base class for GUI tabs
 │   │   ├── constellation_tab.py # Satellite constellation management
 │   │   ├── fault_tab.py       # Fault configuration interface
 │   │   ├── output_tab.py      # Output settings and logging
 │   │   ├── results_tab.py     # Results viewing and analysis
-│   │   ├── target_tab.py      # Target location management
-│   │   └── visualization_tab.py # Visualization settings
+│   │   ├── target_tab.py      # Ground target management
+│   │   └── visualization_tab.py # 3D visualization settings
 │   │
-│   ├─
 │   ├── fault_loader.py        # Dynamic fault module loader
-│   ├── plots.py              # Centralized plotting functions
-│   ├── run_fault_simulator.py # Main application launcher
-│   ├── rw_fault_help.py      # Help content and documentation
+│   ├── plots.py              # Centralized plotting engine
+│   ├── run_fault_simulator.py # Application entry point
+│   ├── rw_fault_help.py      # Help documentation system
 │   ├── spacecraft_simulation.py # Core simulation engine
 │   ├── spacecraft_simulator_gui.py # Main GUI application
-│   ├── style.py              # GUI styling and themes
-│   └── swinburne.png         # Application logo
+│   ├── style.py              # GUI theme and styling
+│   └── swinburne.png         # University logo
 │
-├── faults/                    # Fault simulation modules
-│   ├── pycache/          # Python cache files
-│   ├── battery_fault.py      # Battery degradation fault
-│   ├── encoder_fault.py      # Encoder measurement fault
-│   ├── friction_fault.py     # Mechanical friction fault
-│   ├── powerlimit_fault.py   # Power limitation fault
-│   └── rw_fault.py          # Base reaction wheel fault class
+├── faults/                    # Fault implementation modules
+│   ├── __pycache__/          # Python bytecode cache
+│   ├── battery_fault.py      # Battery degradation simulation
+│   ├── encoder_fault.py      # Encoder error simulation
+│   ├── friction_fault.py     # Mechanical friction simulation
+│   ├── powerlimit_fault.py   # Power constraint simulation
+│   └── rw_fault.py          # Legacy compatibility layer
 │
 ├── logs/                      # Simulation output logs
 │   └── sim_results_*/        # Timestamped result directories
 │
 ├── models/                    # Basilisk model configurations
-│   ├── pycache/          # Python cache files
+│   ├── __pycache__/          # Python bytecode cache
 │   ├── BSK_Dynamics.py       # Spacecraft dynamics models
 │   ├── BSK_FormationDynamics.py # Formation flying dynamics
-│   ├── BSK_FormationFsw.py   # Formation flight software
-│   └── BSK_Fsw.py           # Spacecraft flight software
+│   ├── BSK_FormationFsw.py   # Formation control algorithms
+│   └── BSK_Fsw.py           # Spacecraft control software
 │
-├── plots/                     # Generated plot images
-│   └── *.png                 # Timestamped plot files
+├── plots/                     # Generated visualization plots
+│   └── *.png                 # Timestamped plot images
 │
-├── plotting/                  # Plotting utilities
-│   ├── pycache/          # Python cache files
+├── plotting/                  # Plotting utility modules
+│   ├── __pycache__/          # Python bytecode cache
 │   └── BSK_Plotting.py       # Basilisk plotting utilities
 │
-├── scenarios/                 # Predefined simulation scenarios
+├── scenarios/                 # Pre-configured scenarios
+│   └── (scenario files)      # Example mission scenarios
 │
-└── Vizfile/                  # Vizard visualization files
-└── _VizFiles/            # Binary visualization data
-└── *_UnityViz.bin    # Vizard binary files"
+└── Vizfile/                  # Vizard visualization data
+    └── _VizFiles/            # Binary visualization files
+        └── *_UnityViz.bin    # Vizard-compatible binaries
 
-Quick Start
 
+Quick Start Guide
+Launch the Simulator
 cd core
 python run_fault_simulator.py
 
-GUI Guide
-Tabs Overview:
-1.	Constellation Tab – Configure satellites, orbits, and quick-setup presets.
-2.	Fault Tab – Select fault type, magnitude, timing, and assign it to a satellite.
-3.	Targets Tab – Assign observation targets to each satellite.
-4.	Visualization Tab – Set camera views and visualization settings for Vizard.
-5.	Output Tab – Choose run duration, log options, and enable .bin generation.
-6.	Results Tab – View and export plots of satellite behavior and fault impact.
+
+Basic Workflow
+1.	Configure Constellation: Use the "4-Sat Default" button for a quick start
+2.	Add a Fault: Enable friction fault on Satellite1 at 30 minutes
+3.	Assign Targets: Click "Auto-Assign All Targets"
+4.	Run Simulation: Click the green "Run Simulation" button
+5.	View Results: Check the Results tab for generated plots
+
+GUI User Guide
+🛰️ Constellation Tab
+Manage your satellite constellation with these features:
+•	Quick Setup Buttons: Pre-configured constellation patterns 
+o	4-Sat Default: 4 satellites at 600km altitude
+o	6-Sat MEO: 6 satellites at 1200km altitude
+o	2-Sat High: 2 satellites at 2000km altitude
+•	Orbit Management: Create custom orbits with specific parameters
+•	Satellite List: View and edit individual satellite properties
+•	Orbital Parameters: Adjust semi-major axis, eccentricity, inclination, etc.
+
+🔧 Fault Configuration Tab
+Configure reaction wheel faults:
+•	Fault Type Selection: Choose from friction, power limit, encoder, or battery faults
+•	Target Selection: Specify which satellite and reaction wheel
+•	Timing Control: Set when the fault occurs during simulation
+•	Magnitude Setting: Control fault severity
+•	Periodic Faults: Enable recurring fault patterns
+
+🎯 Targets Tab
+Manage ground observation targets:
+•	Target List: Add/remove observation locations
+•	Geographic Coordinates: Set latitude/longitude for each target
+•	Priority Assignment: Rank targets by importance (1-5)
+•	Satellite Assignment: Link targets to specific satellites
+•	Coverage Analysis: Check target visibility from assigned satellites
+
+🎥 Visualization Tab
+Configure 3D visualization settings:
+•	Camera Configuration: Set camera position and field of view
+•	View Presets: Quick camera positions (Earth View, Target View, etc.)
+•	Orbit Display: Control orbit line visibility and styling
+•	Satellite Display: Adjust spacecraft size and labeling
+•	Color Schemes: Choose visualization color themes
+
+📊 Output Settings Tab
+Control simulation parameters and outputs:
+•	Simulation Duration: Set total runtime (10-90 minutes)
+•	Output Options: Enable/disable plots and binary files
+•	Directory Configuration: Set output paths for logs and plots
+•	Real-time Logging: Monitor simulation progress
+•	Binary Filename: Name your Vizard visualization file
+
+📈 Results Tab
+Analyze simulation outputs:
+•	Plot Browser: Navigate generated visualizations
+•	Interactive Viewing: Zoom, pan, and export plots
+•	Plot Categories: 
+o	Constellation orbit visualizations
+o	Inter-satellite distances
+o	Fault impact analysis
+o	Reaction wheel performance
+o	Power consumption tracking
 
 Simulation Workflow
-1.	Select Constellation → default setup or custom.
-2.	Add Faults → encoder, power limit, etc.
-3.	Assign Targets → random or manual lat/lon input.
-4.	Run Simulation → generate .bin file and logs.
-5.	Visualise in Vizard → load .bin for analysis.
+1. Pre-Simulation Setup
+Configure Constellation → Define Orbits → Add Satellites
+                      ↓
+               Set Fault Parameters
+                      ↓
+              Assign Ground Targets
+                      ↓
+           Configure Visualization Settings
+
+2. Simulation Execution
+
+Initialize Dynamics → Inject Faults → Propagate Orbits
+                   ↓
+            Record Telemetry
+                   ↓
+         Generate Visualization Data
+
+3. Post-Simulation Analysis
+
+Generate Plots → Export Data → Create Vizard Binary
+             ↓
+      Analyze Fault Impact
+             ↓
+    Review Performance Metrics
+
 
 Fault Types
-Fault Type	Description	Effect
-Friction Fault	Simulates rotor resistance	Reduced agility
-Power Limit Fault	Limits motor power	Delayed maneuvers
-Encoder Fault	Introduces sensor error	Inaccurate attitude control
-Battery Fault	Adds power drain	Reduced runtime
+Friction Fault
+•	Physical Model: Increases Coulomb friction coefficient
+•	Effect: Reduced reaction wheel efficiency, increased power consumption
+•	Parameters: 
+o	Magnitude: Additional friction torque (N⋅m)
+o	Typical values: 0.0001 - 0.001 N⋅m
 
-📂 Output Files
+Power Limit Fault
+•	Physical Model: Constrains maximum motor torque
+•	Effect: Reduced control authority, slower maneuvers
+•	Parameters: 
+o	Magnitude: Maximum power limit (W)
+o	Typical values: 0.1 - 5.0 W
 
-•	Logs: logs/sim_results_*/
-•	Plots: plots/
-•	Vizard: Vizfile/_VizFiles/*.bin
+Encoder Fault
+•	Physical Model: Introduces measurement noise/bias
+•	Effect: Control oscillations, pointing errors
+•	Parameters: 
+o	Magnitude: Error percentage (%)
+o	Typical values: 5 - 50%
 
-Troubleshooting
+Battery Fault
+•	Physical Model: Increases power consumption rate
+•	Effect: Reduced mission duration, potential safe mode
+•	Parameters: 
+o	Magnitude: Additional power drain (W)
+o	Typical values: 10 - 100 W
+
+Output Files
+Log Files
+Location: logs/sim_results_YYYYMMDD_HHMMSS/
+•	simulation_summary.txt: Configuration and results overview
+•	telemetry_*.csv: Time-series spacecraft data
+•	fault_log.txt: Fault injection timeline
+
+Plot Files
+Location: plots/
+•	*_ConstellationAnalysis.png: Orbital configuration
+•	*_FaultAnalysis.png: Fault impact visualization
+•	*_InterSatelliteDistances.png: Formation geometry
+•	*_PowerAnalysis.png: Power system performance
+
+Vizard Files
+Location: Vizfile/_VizFiles/
+•	*_UnityViz.bin: 3D visualization binary
+•	Compatible with Basilisk Vizard application
 
 
-Issue	Fix
-Vizard not showing satellite	Make sure .bin file is generated
-Camera not aiming at target	Validate pointing vector config
-GUI not opening	Check tkinter is installed
-Module errors	Ensure Basilisk is in Python PATH
+Troubleshooting – Common Issues and Solutions
 
-📄 License
-This simulator is part of an academic project at Swinburne University. Basilisk is a separate open-source tool and follows its own license.
+GUI does not launch
+➤ Verify tkinter installation: python -m tkinter
+
+Basilisk import error
+➤ Check PYTHONPATH includes Basilisk directory
+
+Visualization not working
+➤ Ensure Vizard is installed and binary path is correct
+
+Memory error with large constellations
+➤ Reduce simulation duration or number of satellites
+
+Plots not generating
+➤ Check matplotlib backend: use 'Agg' for headless systems
+
+Fault not appearing
+➤ Verify fault time is within simulation duration
 
 
-Support
-For issues or guidance:
-•	Refer to the in-app Help tab
-•	Visit Basilisk documentation
-•	Use example scenarios in /scenarios for reference
+Technical Architecture
+Core Components
+1.	Simulation Engine (spacecraft_simulation.py) 
+o	Integrates Basilisk dynamics
+o	Manages time propagation
+o	Handles fault injection events
+2.	GUI Framework (spacecraft_simulator_gui.py) 
+o	Tkinter-based interface
+o	Model-View pattern
+o	Event-driven architecture
+3.	Fault System (fault_loader.py) 
+o	Dynamic module loading
+o	Plugin architecture for new fault types
+o	Real-time fault injection
+4.	Visualization Pipeline 
+o	Matplotlib for 2D plots
+o	Vizard binary generation for 3D
+o	Real-time data streaming capability
 
 
+Data Flow
+User Input → GUI → Configuration → Simulation Engine
+                                        ↓
+                              Basilisk Dynamics
+                                        ↓
+                              Fault Injection
+                                        ↓
+Results ← Plotting Engine ← Data Recording
+
+
+License
+This simulator is developed as part of an academic project at Swinburne University of Technology.
+ The Basilisk Astrodynamics Framework is used under its separate license terms.
+ 
+Acknowledgments
+•	Basilisk Development Team: For the excellent astrodynamics framework
+•	Swinburne University: For project support and resources
+•	Contributors: All students Team
 

@@ -137,6 +137,7 @@ class SatelliteSimulatorApp:
         self.save_plots = tk.BooleanVar(value=True)
         self.save_binary = tk.BooleanVar(value=True)
         
+        
         # Satellite data
         self.satellites = []
         self._initialize_default_satellites()

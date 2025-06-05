@@ -345,16 +345,16 @@ class FrictionFaultScenario(BSKSim, BSKScenario):
         for i in range(numRW):
             if i == self.fault_wheel_number:
                 plt.plot(timeData, RW_friction[i], color=colors[i], linewidth=4, 
-                        label=f"RW{i} Friction (FAULTY)")
+                        label=f"RW{i+1} Friction (FAULTY)")
             else:
                 plt.plot(timeData, RW_friction[i], color=colors[i], linewidth=2, 
-                        label=f"RW{i} Friction")
+                        label=f"RW{i+1} Friction")
         
         plt.axvline(x=self.fault_time_min, color='black', linestyle='--', linewidth=2, 
                    label='Friction Fault')
         plt.xlabel('Time [min]')
         plt.ylabel('Friction Torque [N⋅m]')
-        plt.title(f'Friction Analysis: +{self.fault_magnitude} N⋅m to RW{self.fault_wheel_number}')
+        plt.title(f'Friction Analysis: +{self.fault_magnitude} N⋅m to RW{self.fault_wheel_number+1}')
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.xlim(0, self.simulation_time_min)
@@ -366,10 +366,10 @@ class FrictionFaultScenario(BSKSim, BSKScenario):
             power_friction = np.abs(RW_friction[i] * RW_speeds[:, i])
             if i == self.fault_wheel_number:
                 plt.plot(timeData, power_friction, color=colors[i], linewidth=4, 
-                        label=f"RW{i} Power (FAULTY)")
+                        label=f"RW{i+1} Power (FAULTY)")
             else:
                 plt.plot(timeData, power_friction, color=colors[i], linewidth=2, 
-                        label=f"RW{i} Power")
+                        label=f"RW{i+1} Power")
         
         plt.axvline(x=self.fault_time_min, color='black', linestyle='--', linewidth=2)
         plt.xlabel('Time [min]')
@@ -390,10 +390,10 @@ class FrictionFaultScenario(BSKSim, BSKScenario):
             
             if i == self.fault_wheel_number:
                 plt.plot(timeData, energy_loss, color=colors[i], linewidth=4, 
-                        label=f"RW{i} Energy (FAULTY)")
+                        label=f"RW{i+1} Energy (FAULTY)")
             else:
                 plt.plot(timeData, energy_loss, color=colors[i], linewidth=2, 
-                        label=f"RW{i} Energy")
+                        label=f"RW{i+1} Energy")
         
         plt.axvline(x=self.fault_time_min, color='black', linestyle='--', linewidth=2)
         plt.xlabel('Time [min]')
@@ -418,15 +418,22 @@ class FrictionFaultScenario(BSKSim, BSKScenario):
             values = [pre_fault_friction, post_fault_friction, friction_increase]
             bars = plt.bar(categories, values, color=['green', 'red', 'orange'])
             
-            # Add value labels
+            # Add value labels with scientific notation for small values
             for bar, value in zip(bars, values):
                 height = bar.get_height()
-                plt.text(bar.get_x() + bar.get_width()/2., height,
-                        f'{value:.5f}', ha='center', va='bottom')
+                if abs(value) < 0.01:
+                    label_text = f'{value:.2e}'  # Scientific notation for small values
+                else:
+                    label_text = f'{value:.5f}'
+                plt.text(bar.get_x() + bar.get_width()/2., height + abs(height) * 0.01,
+                        label_text, ha='center', va='bottom')
             
             plt.ylabel('Friction Torque [N⋅m]')
-            plt.title(f'Friction Fault Impact on RW{self.fault_wheel_number}')
+            plt.title(f'Friction Fault Impact on RW{self.fault_wheel_number+1}')
             plt.grid(True, alpha=0.3, axis='y')
+            
+            # Set y-axis to show small values properly
+            plt.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
         
         plt.tight_layout()
 

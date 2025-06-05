@@ -3,6 +3,7 @@
 fault_tab.py
 
 Implements the Fault Configuration tab for the Spacecraft Constellation Fault Simulator.
+Updated to show wheel numbers as 1-4 for consistency with plots.
 """
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -27,7 +28,7 @@ class FaultTab(BaseTab):
         # Create the tab UI
         self.create_tab_ui()
         
-        # ADD THIS: Bind fault type change after UI is created
+        # Bind fault type change after UI is created
         self.fault_type_var.trace('w', self.on_fault_type_change)
 
     def get_active_satellite_index(self):
@@ -54,7 +55,6 @@ class FaultTab(BaseTab):
             self.fault_satellite_combo.current(index)
             self.load_fault_config(index)
             
-    # ADD THIS NEW METHOD
     def on_fault_type_change(self, *args):
         """Handle fault type change to update default magnitudes"""
         fault_type = self.fault_type_var.get()
@@ -222,7 +222,7 @@ class FaultTab(BaseTab):
         ttk.Label(p_wheel_frame, text="Wheel Number:").pack(side=tk.LEFT)
         
         self.periodic_wheel_var = tk.IntVar(value=1)
-        self.periodic_wheel_spinbox = ttk.Spinbox(p_wheel_frame, from_=0, to=3, textvariable=self.periodic_wheel_var, width=5, state="disabled")
+        self.periodic_wheel_spinbox = ttk.Spinbox(p_wheel_frame, from_=1, to=4, textvariable=self.periodic_wheel_var, width=5, state="disabled")
         self.periodic_wheel_spinbox.pack(side=tk.LEFT, padx=5)
         
         # Button frame
@@ -347,7 +347,7 @@ class FaultTab(BaseTab):
     def load_fault_config(self, index):
         """Load fault configuration for the specified satellite"""
         if 0 <= index < len(self.satellites):
-            # ADD THIS: Set flag to prevent magnitude change logging when loading
+            # Set flag to prevent magnitude change logging when loading
             self._loading_config = True
             
             fault = self.satellites[index]["fault"]
@@ -367,7 +367,7 @@ class FaultTab(BaseTab):
             self.update_fault_config()
             self.update_fault_status()
             
-            # ADD THIS: Clear loading flag
+            # Clear loading flag
             self._loading_config = False
             
     def update_fault_config(self):
@@ -432,7 +432,6 @@ class FaultTab(BaseTab):
         mag_frame = ttk.Frame(self.params_frame)
         mag_frame.pack(fill=tk.X, pady=2)
         
-        # UPDATED: Store reference to magnitude label
         self.fault_mag_label = ttk.Label(mag_frame, text="Magnitude (N·m):")
         self.fault_mag_label.pack(side=tk.LEFT)
         ttk.Entry(mag_frame, textvariable=self.fault_mag, width=10).pack(side=tk.LEFT, padx=5)
@@ -443,7 +442,8 @@ class FaultTab(BaseTab):
         wheel_frame.pack(fill=tk.X, pady=2)
         
         ttk.Label(wheel_frame, text="Wheel Number:").pack(side=tk.LEFT)
-        ttk.Spinbox(wheel_frame, from_=0, to=3, textvariable=self.fault_wheel, width=5).pack(side=tk.LEFT, padx=5)
+        # Updated to show 1-4 instead of 0-3
+        ttk.Spinbox(wheel_frame, from_=1, to=4, textvariable=self.fault_wheel, width=5).pack(side=tk.LEFT, padx=5)
         
         # Time
         time_frame = ttk.Frame(self.params_frame)
@@ -458,7 +458,6 @@ class FaultTab(BaseTab):
         limit_frame = ttk.Frame(self.params_frame)
         limit_frame.pack(fill=tk.X, pady=2)
         
-        # UPDATED: Store reference to magnitude label
         self.fault_mag_label = ttk.Label(limit_frame, text="Power Limit (W):")
         self.fault_mag_label.pack(side=tk.LEFT)
         ttk.Entry(limit_frame, textvariable=self.fault_mag, width=10).pack(side=tk.LEFT, padx=5)
@@ -469,7 +468,8 @@ class FaultTab(BaseTab):
         wheel_frame.pack(fill=tk.X, pady=2)
         
         ttk.Label(wheel_frame, text="Wheel Number:").pack(side=tk.LEFT)
-        ttk.Spinbox(wheel_frame, from_=0, to=3, textvariable=self.fault_wheel, width=5).pack(side=tk.LEFT, padx=5)
+        # Updated to show 1-4 instead of 0-3
+        ttk.Spinbox(wheel_frame, from_=1, to=4, textvariable=self.fault_wheel, width=5).pack(side=tk.LEFT, padx=5)
         
         # Time
         time_frame = ttk.Frame(self.params_frame)
@@ -480,7 +480,7 @@ class FaultTab(BaseTab):
         
     def create_encoder_params(self):
         """Create encoder fault parameter widgets"""
-        # UPDATED: Add magnitude field for encoder
+        # Add magnitude field for encoder
         mag_frame = ttk.Frame(self.params_frame)
         mag_frame.pack(fill=tk.X, pady=2)
         
@@ -494,7 +494,8 @@ class FaultTab(BaseTab):
         wheel_frame.pack(fill=tk.X, pady=2)
         
         ttk.Label(wheel_frame, text="Wheel Number:").pack(side=tk.LEFT)
-        ttk.Spinbox(wheel_frame, from_=0, to=3, textvariable=self.fault_wheel, width=5).pack(side=tk.LEFT, padx=5)
+        # Updated to show 1-4 instead of 0-3
+        ttk.Spinbox(wheel_frame, from_=1, to=4, textvariable=self.fault_wheel, width=5).pack(side=tk.LEFT, padx=5)
         
         # Time
         time_frame = ttk.Frame(self.params_frame)
@@ -513,7 +514,6 @@ class FaultTab(BaseTab):
         drain_frame = ttk.Frame(self.params_frame)
         drain_frame.pack(fill=tk.X, pady=2)
         
-        # UPDATED: Store reference to magnitude label and correct unit
         self.fault_mag_label = ttk.Label(drain_frame, text="Power Drain (W):")
         self.fault_mag_label.pack(side=tk.LEFT)
         ttk.Entry(drain_frame, textvariable=self.fault_mag, width=10).pack(side=tk.LEFT, padx=5)
@@ -544,13 +544,13 @@ class FaultTab(BaseTab):
         fault_enabled = self.fault_enabled_var.get()
         fault_type = self.fault_type_var.get()
         fault_mag = self.fault_mag.get()
-        fault_wheel = self.fault_wheel.get()
+        fault_wheel = self.fault_wheel.get() - 1  # Convert back to 0-based for internal storage
         fault_time = self.fault_time.get()
         
         periodic_enabled = self.periodic_enabled_var.get()
         periodic_interval = self.periodic_interval_var.get()
         periodic_magnitude = self.periodic_magnitude_var.get()
-        periodic_wheel = self.periodic_wheel_var.get()
+        periodic_wheel = self.periodic_wheel_var.get() - 1  # Convert back to 0-based
         
         # Apply to all satellites
         for satellite in self.satellites:
@@ -595,10 +595,10 @@ class FaultTab(BaseTab):
             fault_enabled = self.fault_enabled_var.get()
             fault_type = self.fault_type_var.get()
             fault_magnitude = self.fault_mag.get()
-            fault_wheel = self.fault_wheel.get()
+            fault_wheel = self.fault_wheel.get() - 1  # Convert from 1-4 to 0-3 for internal storage
             fault_time = self.fault_time.get()
             
-            # ADD THIS: Default magnitudes per fault type
+            # Default magnitudes per fault type
             DEFAULT_FAULT_MAGNITUDES = {
                 "friction": 0.0005,    # N·m - this is fine as is
                 "power_limit": 0.5,    # W - realistic power limit
@@ -606,7 +606,7 @@ class FaultTab(BaseTab):
                 "battery": 50.0        # W - significant battery drain
             }
             
-            # ADD THIS: Scale fault magnitude if it's still the default 0.0005
+            # Scale fault magnitude if it's still the default 0.0005
             # Only override if the magnitude is exactly 0.0005 (the GUI default)
             # This prevents overriding user-specified custom values
             if abs(fault_magnitude - 0.0005) < 1e-6 and fault_type in DEFAULT_FAULT_MAGNITUDES:
@@ -629,9 +629,9 @@ class FaultTab(BaseTab):
             periodic["enabled"] = self.periodic_enabled_var.get()
             periodic["interval"] = self.periodic_interval_var.get()
             periodic_magnitude = self.periodic_magnitude_var.get()
-            periodic_wheel = self.periodic_wheel_var.get()
+            periodic_wheel = self.periodic_wheel_var.get() - 1  # Convert from 1-4 to 0-3
             
-            # ADD THIS: Also scale periodic fault magnitude if needed
+            # Also scale periodic fault magnitude if needed
             if abs(periodic_magnitude - 0.1) < 1e-6 and fault_type in DEFAULT_FAULT_MAGNITUDES:
                 # Use 20% of the main fault magnitude as default for periodic
                 scaled_periodic = DEFAULT_FAULT_MAGNITUDES[fault_type] * 0.2
@@ -652,11 +652,11 @@ class FaultTab(BaseTab):
             except:
                 pass
             
-            # Log the configuration with actual values
+            # Log the configuration with actual values (display wheel as 1-based)
             if fault_enabled:
                 self.parent_app.add_log(
                     f"Applied {fault_type} fault to {sat_name}: "
-                    f"magnitude={fault_magnitude}, wheel={fault_wheel}, time={fault_time}min"
+                    f"magnitude={fault_magnitude}, wheel={fault_wheel+1}, time={fault_time}min"
                 )
             else:
                 self.parent_app.add_log(f"Disabled fault for {sat_name}")
