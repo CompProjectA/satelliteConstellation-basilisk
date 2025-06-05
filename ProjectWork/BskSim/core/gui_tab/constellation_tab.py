@@ -269,7 +269,7 @@ class ConstellationTab(BaseTab):
                 # Select the newly created orbit
             self.current_orbit_var.set(new_orbit["name"])
             self.orbit_combo.set(new_orbit["name"])
-            
+
             dialog.destroy()
             self.add_log(f"Created new orbit: {new_orbit['name']} at {new_orbit['altitude']}km")
         
@@ -388,7 +388,7 @@ class ConstellationTab(BaseTab):
     def calculate_coverage_info(self, satellite):
         """Calculate coverage information for satellite"""
         try:
-            altitude = satellite["orbit"]["a"] - 6371  # Altitude above Earth
+            altitude = satellite["orbit"]["a"] - 6371  # Altitude above the Earth
             
             # Calculate coverage radius (simplified)
             earth_radius = 6371  # km
