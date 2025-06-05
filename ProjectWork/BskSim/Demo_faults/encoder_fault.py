@@ -13,7 +13,9 @@ import matplotlib.pyplot as plt
 
 
 from Basilisk.utilities import (orbitalMotion, macros, vizSupport)
-from faults.rw_fault import RWFaultScenario
+from rw_fault import RWFaultScenario
+
+
 
 
 # Set paths

@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 
 from Basilisk.simulation import spacecraft, spacecraftLocation, simSynch,extForceTorque,simpleNav
 from Basilisk.utilities import (SimulationBaseClass, macros, orbitalMotion, simIncludeGravBody, unitTestSupport, vizSupport)
@@ -9,6 +10,12 @@ from Basilisk.architecture import messaging
 from Basilisk.utilities import SimulationBaseClass
 
 bskPath = __path__[0]
+
+sys.path.append('./BskSim/Demo_faults')
+from encoder_fault import scenario_EncoderFault as EncoderFault
+from friction_fault import scenario_AddRWFault as FrictionFault
+
+
 
 # Define a simple message payload for strings
 from Basilisk.architecture import messaging
@@ -51,6 +58,31 @@ def run(show_plots=True):
         sat.ModelTag = f"Satellite{i+1}"
         satellites.append(sat)
         scSim.AddModelToTask(simTaskName, sat)
+
+        # === FAULT INJECTION BLOCK ===
+    # 1. Encoder Fault for Satellite 1 (index 0)
+    encoder_fault_module = EncoderFault()
+    encoder_fault_module.ModelTag = "encoder_fault_sat2"
+    encoder_fault_module.fault_RW_index = 1  # RW index to affect
+    encoder_fault_module.fault_magnitude = 2.0
+    encoder_fault_module.trigger_time = macros.min2nano(10)
+    encoder_fault_module.scObjectName = satellites[2].ModelTag
+    scSim.AddModelToTask(simTaskName, encoder_fault_module)
+
+    # 2. Friction Fault for Satellite 2 (index 1)
+    friction_fault_module = FrictionFault()
+    friction_fault_module.ModelTag = "friction_fault_sat3"
+    friction_fault_module.get_DynModel().scObject.ModelTag = satellites[3].ModelTag
+    scSim.AddModelToTask(simTaskName, friction_fault_module)
+
+
+    # Record fault output messages
+    dataLog_friction = friction_fault_module.rwSpeedRec
+    scSim.AddModelToTask(simTaskName, dataLog_friction)
+    dataLog_encoder = encoder_fault_module.outputMsg.recorder()
+    scSim.AddModelToTask(simTaskName, dataLog_encoder)
+
+
 
     gravFactory = simIncludeGravBody.gravBodyFactory()
     earth = gravFactory.createEarth()
