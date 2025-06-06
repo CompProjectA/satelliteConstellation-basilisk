@@ -11,8 +11,8 @@ from Basilisk.utilities import SimulationBaseClass
 
 bskPath = __path__[0]
 
-sys.path.append('./BskSim/Demo_faults')
-from encoder_fault import scenario_EncoderFault as EncoderFault
+sys.path.append('./BskSim/faults')
+from encoder_fault import EncoderFaultScenario as EncoderFault
 from friction_fault import scenario_AddRWFault as FrictionFault
 
 
