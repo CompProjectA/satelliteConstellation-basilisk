@@ -230,6 +230,95 @@ def create_scenario(fault_type: str, **kwargs):
         print(f"Error creating scenario for {fault_type}: {e}")
         return None
 
+def run_scenario_enhanced(fault_type: str, **kwargs):
+    """
+    Enhanced run_scenario that properly handles battery capacity reduction
+    """
+    fault_type = fault_type.lower().replace(" ", "_")
+    
+    # Extract standard parameters
+    show_plots = kwargs.get('showPlots', False)
+    save_binary = kwargs.get('saveBinary', False)
+    
+    # Extract simulation parameters
+    sim_params = kwargs.get('simulation_params', {})
+    fault_magnitude = sim_params.get('fault_magnitude', kwargs.get('fault_magnitude', 0.0005))
+    fault_wheel = sim_params.get('fault_wheel', kwargs.get('fault_wheel', 3))
+    fault_time_min = sim_params.get('fault_time_min', kwargs.get('fault_time_min', 10.0))
+    simulation_time_min = sim_params.get('simulation_time_min', kwargs.get('simulation_time_min', 30.0))
+    
+    # Special handling for battery faults
+    if fault_type == "battery":
+        # Check if this is a capacity reduction (magnitude between 10-90)
+        if 10 <= fault_magnitude <= 90:
+            battery_capacity_percentage = fault_magnitude
+            print(f"Detected battery capacity reduction: {battery_capacity_percentage}%")
+            
+            # Add capacity percentage to kwargs
+            kwargs['battery_capacity_percentage'] = battery_capacity_percentage
+            sim_params['battery_capacity_percentage'] = battery_capacity_percentage
+        else:
+            # Regular power drain fault
+            print(f"Battery power drain fault: {fault_magnitude}W")
+    
+    print(f"Running enhanced {fault_type} scenario with parameters:")
+    print(f"  - showPlots: {show_plots}")
+    print(f"  - saveBinary: {save_binary}")
+    print(f"  - fault_magnitude: {fault_magnitude}")
+    print(f"  - fault_wheel: {fault_wheel}")
+    print(f"  - fault_time_min: {fault_time_min}")
+    print(f"  - simulation_time_min: {simulation_time_min}")
+    
+    # Call the appropriate run function
+    if fault_type in run_with_parameters_functions and run_with_parameters_functions[fault_type]:
+        print(f"Using run_with_parameters() for {fault_type}")
+        
+        try:
+            run_with_params_func = run_with_parameters_functions[fault_type]
+            
+            # For battery fault, include capacity percentage if available
+            if fault_type == "battery" and 'battery_capacity_percentage' in kwargs:
+                result = run_with_params_func(
+                    fault_magnitude=fault_magnitude,
+                    fault_wheel=fault_wheel,
+                    fault_time_min=fault_time_min,
+                    simulation_time_min=simulation_time_min,
+                    showPlots=show_plots,
+                    saveBinary=save_binary,
+                    battery_capacity_percentage=kwargs['battery_capacity_percentage']
+                )
+            else:
+                result = run_with_params_func(
+                    fault_magnitude=fault_magnitude,
+                    fault_wheel=fault_wheel,
+                    fault_time_min=fault_time_min,
+                    simulation_time_min=simulation_time_min,
+                    showPlots=show_plots,
+                    saveBinary=save_binary
+                )
+            
+            print(f"run_with_parameters() returned: {type(result)}")
+            
+            # Handle the result
+            if result is None:
+                print(f"run_with_parameters returned None")
+                return None, None, {}
+            elif isinstance(result, tuple):
+                if len(result) >= 2:
+                    return result[0], result[1], result[2] if len(result) > 2 else {}
+                else:
+                    return result[0] if len(result) > 0 else None, None, {}
+            else:
+                return result, None, {}
+                
+        except Exception as e:
+            print(f"ERROR: run_with_parameters failed for {fault_type}: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    # Fall back to regular run if enhanced version not available
+    return run_scenario(fault_type, **kwargs)
+
 def run_scenario(fault_type: str, **kwargs):
     """
     Run a simulation using run_with_parameters() when available

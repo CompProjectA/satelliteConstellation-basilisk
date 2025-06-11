@@ -3,7 +3,7 @@
 fault_tab.py
 
 Implements the Fault Configuration tab for the Spacecraft Constellation Fault Simulator.
-Updated to show wheel numbers as 1-4 for consistency with plots.
+Corrected to show wheel numbers as 1-4 consistently throughout the interface.
 """
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -61,10 +61,10 @@ class FaultTab(BaseTab):
         
         # Default magnitudes per fault type
         DEFAULT_FAULT_MAGNITUDES = {
-            "friction": 0.0005,    # N⋅m
-            "power_limit": 0.5,    # W
-            "encoder": 20.0,       # %
-            "battery": 50.0        # W
+            "friction": 0.0005,    # N⋅m - constant Coulomb friction
+            "power_limit": 0.5,    # W - power limitation
+            "encoder": 20.0,       # % - encoder error percentage
+            "battery": 50.0        # W - additional power drain
         }
         
         # If the current magnitude is still the old default, update it
@@ -175,7 +175,7 @@ class FaultTab(BaseTab):
         # Initialize variables for fault parameters
         self.fault_mag = tk.DoubleVar(value=0.0005)
         self.fault_time = tk.DoubleVar(value=10.0)
-        self.fault_wheel = tk.IntVar(value=3)
+        self.fault_wheel = tk.IntVar(value=4)  # Default to RW4 (displayed as 4, stored as 3)
         
         # Create parameter widgets (updated based on fault type)
         self.create_parameter_widgets()
@@ -355,14 +355,14 @@ class FaultTab(BaseTab):
             self.fault_enabled_var.set(fault["enabled"])
             self.fault_type_var.set(fault["type"])
             self.fault_mag.set(fault["magnitude"])
-            self.fault_wheel.set(fault["wheel"])
+            self.fault_wheel.set(fault["wheel"] + 1)  # Convert 0-3 to 1-4 for display
             self.fault_time.set(fault["time"])
             
             periodic = fault["periodic"]
             self.periodic_enabled_var.set(periodic["enabled"])
             self.periodic_interval_var.set(periodic["interval"])
             self.periodic_magnitude_var.set(periodic["magnitude"])
-            self.periodic_wheel_var.set(periodic["wheel"])
+            self.periodic_wheel_var.set(periodic["wheel"] + 1)  # Convert 0-3 to 1-4 for display
             
             self.update_fault_config()
             self.update_fault_status()
@@ -403,10 +403,10 @@ class FaultTab(BaseTab):
         fault_type = self.fault_type_var.get()
         
         descriptions = {
-            "friction": "Friction fault adds additional friction to the reaction wheel, simulating mechanical issues like bearing damage. Higher magnitude values create more severe effects.",
-            "power_limit": "Power limit fault restricts the maximum electrical power available to the reaction wheel, simulating power system limitations. Lower magnitude values create more severe effects.",
-            "encoder": "Encoder fault causes measurement errors in the reaction wheel speed feedback, leading to attitude control errors. This can result in oscillations and instability.",
-            "battery": "Battery fault simulates increased power consumption or battery degradation, which can limit mission duration and capabilities. Higher magnitude values create more severe effects."
+            "friction": "Friction fault increases the constant Coulomb friction in the reaction wheel, simulating mechanical issues like bearing damage. The default Coulomb friction is 0.0005 N⋅m. Higher values cause slower wheel operation and increased temperatures.",
+            "power_limit": "Power limit fault restricts the maximum electrical power available to the reaction wheel, simulating power system limitations. Lower magnitude values create more severe effects by limiting available power.",
+            "encoder": "Encoder fault causes measurement errors in the reaction wheel speed feedback, leading to attitude control errors. This can result in oscillations and instability. Error is specified as a percentage.",
+            "battery": "Battery fault simulates increased power consumption or battery degradation. When battery state of charge falls below 20%, the spacecraft enters safe mode to preserve remaining charge. Magnitude is additional power drain in Watts."
         }
         
         description = descriptions.get(fault_type, "No description available")
@@ -417,8 +417,9 @@ class FaultTab(BaseTab):
         sat_name = self.fault_satellite_var.get()
         
         if self.fault_enabled_var.get():
-            fault_type = self.fault_type_var.get().capitalize()
-            self.fault_status_label.config(text=f"Fault enabled: {fault_type}")
+            fault_type = self.fault_type_var.get().replace('_', ' ').title()
+            wheel_num = self.fault_wheel.get()
+            self.fault_status_label.config(text=f"Fault enabled: {fault_type} on RW{wheel_num}")
         else:
             self.fault_status_label.config(text="No fault enabled")
         
@@ -432,17 +433,16 @@ class FaultTab(BaseTab):
         mag_frame = ttk.Frame(self.params_frame)
         mag_frame.pack(fill=tk.X, pady=2)
         
-        self.fault_mag_label = ttk.Label(mag_frame, text="Magnitude (N·m):")
+        self.fault_mag_label = ttk.Label(mag_frame, text="Magnitude (N⋅m):")
         self.fault_mag_label.pack(side=tk.LEFT)
         ttk.Entry(mag_frame, textvariable=self.fault_mag, width=10).pack(side=tk.LEFT, padx=5)
-        ttk.Label(mag_frame, text="(friction torque in N·m)", style="Info.TLabel").pack(side=tk.LEFT, padx=5)
+        ttk.Label(mag_frame, text="(additional Coulomb friction torque)", style="Info.TLabel").pack(side=tk.LEFT, padx=5)
         
         # Wheel
         wheel_frame = ttk.Frame(self.params_frame)
         wheel_frame.pack(fill=tk.X, pady=2)
         
         ttk.Label(wheel_frame, text="Wheel Number:").pack(side=tk.LEFT)
-        # Updated to show 1-4 instead of 0-3
         ttk.Spinbox(wheel_frame, from_=1, to=4, textvariable=self.fault_wheel, width=5).pack(side=tk.LEFT, padx=5)
         
         # Time
@@ -468,7 +468,6 @@ class FaultTab(BaseTab):
         wheel_frame.pack(fill=tk.X, pady=2)
         
         ttk.Label(wheel_frame, text="Wheel Number:").pack(side=tk.LEFT)
-        # Updated to show 1-4 instead of 0-3
         ttk.Spinbox(wheel_frame, from_=1, to=4, textvariable=self.fault_wheel, width=5).pack(side=tk.LEFT, padx=5)
         
         # Time
@@ -494,7 +493,6 @@ class FaultTab(BaseTab):
         wheel_frame.pack(fill=tk.X, pady=2)
         
         ttk.Label(wheel_frame, text="Wheel Number:").pack(side=tk.LEFT)
-        # Updated to show 1-4 instead of 0-3
         ttk.Spinbox(wheel_frame, from_=1, to=4, textvariable=self.fault_wheel, width=5).pack(side=tk.LEFT, padx=5)
         
         # Time
@@ -525,6 +523,10 @@ class FaultTab(BaseTab):
         
         ttk.Label(time_frame, text="Fault Time (min):").pack(side=tk.LEFT)
         ttk.Entry(time_frame, textvariable=self.fault_time, width=10).pack(side=tk.LEFT, padx=5)
+        
+        # Info
+        ttk.Label(self.params_frame, text="Safe mode activates when battery charge falls below 20%.", 
+                 style="Info.TLabel").pack(pady=5)
         
     def toggle_periodic(self):
         """Enable/disable periodic fault entry fields"""
@@ -600,15 +602,13 @@ class FaultTab(BaseTab):
             
             # Default magnitudes per fault type
             DEFAULT_FAULT_MAGNITUDES = {
-                "friction": 0.0005,    # N·m - this is fine as is
+                "friction": 0.0005,    # N⋅m - default Coulomb friction
                 "power_limit": 0.5,    # W - realistic power limit
                 "encoder": 20.0,       # % - noticeable encoder error
                 "battery": 50.0        # W - significant battery drain
             }
             
             # Scale fault magnitude if it's still the default 0.0005
-            # Only override if the magnitude is exactly 0.0005 (the GUI default)
-            # This prevents overriding user-specified custom values
             if abs(fault_magnitude - 0.0005) < 1e-6 and fault_type in DEFAULT_FAULT_MAGNITUDES:
                 scaled_magnitude = DEFAULT_FAULT_MAGNITUDES[fault_type]
                 if fault_type != "friction":  # Don't log for friction since 0.0005 is correct
@@ -656,7 +656,7 @@ class FaultTab(BaseTab):
             if fault_enabled:
                 self.parent_app.add_log(
                     f"Applied {fault_type} fault to {sat_name}: "
-                    f"magnitude={fault_magnitude}, wheel={fault_wheel+1}, time={fault_time}min"
+                    f"magnitude={fault_magnitude}, wheel=RW{fault_wheel+1}, time={fault_time}min"
                 )
             else:
                 self.parent_app.add_log(f"Disabled fault for {sat_name}")
@@ -692,28 +692,32 @@ class FaultTab(BaseTab):
                 status = "Disabled"
                 status_color = 'gray'
             
-            # Format magnitude based on fault type
+            # Format magnitude based on fault type with proper units
             magnitude_str = str(fault["magnitude"])
             if fault["type"] == "friction":
-                magnitude_str = f"{fault['magnitude']} N·m"
+                magnitude_str = f"{fault['magnitude']} N⋅m"
             elif fault["type"] == "power_limit":
                 magnitude_str = f"{fault['magnitude']} W"
             elif fault["type"] == "battery":
-                magnitude_str = f"{fault['magnitude']} W"  # UPDATED: Changed from kW to W
+                magnitude_str = f"{fault['magnitude']} W"
             elif fault["type"] == "encoder":
-                magnitude_str = f"{fault['magnitude']}%"  # UPDATED: Show percentage
+                magnitude_str = f"{fault['magnitude']}%"
             
-            # Periodic status
+            # Periodic status with RW 1-4 display
             periodic_str = "No"
             if fault["periodic"]["enabled"]:
-                periodic_str = f"Yes ({fault['periodic']['interval']}s)"
+                periodic_wheel_display = fault['periodic']['wheel'] + 1  # Convert 0-3 to 1-4
+                periodic_str = f"Yes (RW{periodic_wheel_display}, {fault['periodic']['interval']}s)"
             
-            # Insert row
+            # Display wheel number as 1-4 instead of 0-3
+            wheel_display = f"RW{fault['wheel'] + 1}"
+            
+            # Insert row with all values properly formatted
             item = self.fault_summary_tree.insert('', 'end', values=(
                 sat["name"],
                 status,
                 fault["type"].replace('_', ' ').title(),
-                f"Wheel {fault['wheel']}",
+                wheel_display,
                 f"{fault['time']} min",
                 magnitude_str,
                 periodic_str
@@ -729,6 +733,9 @@ class FaultTab(BaseTab):
         self.fault_summary_tree.tag_configure('enabled', foreground='darkred', font=('Segoe UI', 10, 'bold'))
         self.fault_summary_tree.tag_configure('disabled', foreground='gray')
         
-        # Update statistics if it exists
+        # Update statistics label
         if hasattr(self, 'fault_stats_label'):
             self.fault_stats_label.config(text=f"Total: {total_satellites} satellites | Faults: {enabled_faults} enabled")
+            
+        # Log summary update
+        self.parent_app.add_log(f"Fault summary updated: {enabled_faults}/{total_satellites} faults enabled")

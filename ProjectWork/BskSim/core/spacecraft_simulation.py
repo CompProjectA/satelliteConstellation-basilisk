@@ -1508,9 +1508,4 @@ if __name__ == "__main__":
         print(f"Configuration test failed: {e}")
         
     print("\nspacecraft_simulation.py module ready for use!")
-    print("Key features:")
-    print("  - Real fault simulation with automatic fallback")
-    print("  - Battery and solar panel visualization")
-    print("  - Target visibility optimization")
-    print("  - Camera positioning for target viewing")
-    print("  - Comprehensive error handling")
+   

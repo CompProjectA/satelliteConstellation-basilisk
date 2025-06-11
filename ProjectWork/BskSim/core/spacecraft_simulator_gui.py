@@ -395,15 +395,31 @@ class SatelliteSimulatorApp:
         except:
             pass
             
+
     def add_log(self, message):
-        """Add a message to the application log"""
-        try:
-            self.output_tab.add_log_entry(message)  # Changed from add_log_message to add_log_entry
-            self.logger.info(message)
-        except Exception as e:
-            print(f"Log: {message}")
-            print(f"Error adding to log: {e}")
+            """
+            Add a message to the application log with proper error handling
             
+            Parameters:
+            message (str): The message to log
+            """
+            try:
+                # Check if output_tab exists and has the add_log_entry method
+                if hasattr(self, 'output_tab') and hasattr(self.output_tab, 'add_log_entry'):
+                    self.output_tab.add_log_entry(message)
+                else:
+                    # If output_tab not ready, just print to console
+                    print(f"Log: {message}")
+                
+                # Also log to logger if available
+                if hasattr(self, 'logger'):
+                    self.logger.info(message)
+                    
+            except Exception as e:
+                # Failsafe - just print to console if any error
+                print(f"Log: {message}")
+                print(f"Error adding to log widget: {e}")
+                
     def update_satellite_dropdowns(self):
         """Update all satellite dropdown menus"""
         try:
