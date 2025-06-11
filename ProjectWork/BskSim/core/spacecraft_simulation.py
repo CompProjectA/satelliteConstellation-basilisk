@@ -260,6 +260,9 @@ class SimulationConfig:
             "encoder": 20.0,       # % - noticeable encoder error
             "battery": 50.0        # W - significant battery drain
         }
+
+ 
+
         # Legacy fault parameters (for backward compatibility)
         self.fault_type = "friction"  # Options: friction, power_limit, encoder, battery
         self.fault_magnitude = 0.0005
