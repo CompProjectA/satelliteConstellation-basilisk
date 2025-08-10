@@ -1,11 +1,24 @@
 
 import numpy as np
 from Basilisk.simulation import spacecraft, spacecraftLocation
+from Basilisk.simulation import simpleBattery 
+from Basilisk.architecture import messaging
 from message_data import MessageData
 
 class ChildSatellite:
+    def initializeBattery(self):
+        self.battery = simpleBattery.SimpleBattery()
+        self.battery.ModelTag = f"satBattery {self.index}"
+        self.battery.storageCapacity   = 100.0 
+        self.battery.storedCharge_Init = 50.0 
+        self.batteryReader = messaging.PowerStorageStatusMsgReader()
+        self.batteryReader.subscribeTo(self.battery.batPowerOutMsg)
+
     def __init__(self, index, rN, vN,gravFactory, leading_sat):
         self.index = index
+        self.battery = None
+        self.batteryReader = None
+        self.initializeBattery()
         self.model_tag = f"Satellite{index+1}"
         self.messageInHistory: list[MessageData] = []
         self.messageOutHistory: list[MessageData] = []
@@ -16,7 +29,7 @@ class ChildSatellite:
         self.sc.hub.v_CN_NInit=vN
         self.leader = leading_sat
         self.comm_module = leading_sat.comm_module
-
+    
     def setup_comm(self):
         self.comm_module.addSpacecraftToModel(self.sc.scStateOutMsg)
     
@@ -56,7 +69,9 @@ class LeadingSatellite:
         
     def add_child(self, child_sat):
         self.children.append(child_sat)
-
+    def sendMessageToLead(self, message, timeSent, lead):
+        self.writeOut(MessageData(message, timeSent, lead))
+        lead.writeIn(MessageData(message, timeSent, self))
     def sendMessage(self, message,timeSent, child_sat):
         if(child_sat in self.children):
             self.writeOut(MessageData(message, timeSent, child_sat))

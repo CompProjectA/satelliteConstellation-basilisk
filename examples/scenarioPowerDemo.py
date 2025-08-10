@@ -87,14 +87,15 @@ splitPath = path.split(bskName)
 from Basilisk.utilities import SimulationBaseClass
 from Basilisk.simulation import simplePowerSink
 from Basilisk.simulation import simpleBattery
-from Basilisk.simulation import simpleSolarPanel
+from Basilisk.simulation import simpleSolarPanel, simSynch
 from Basilisk.simulation import eclipse
 from Basilisk.simulation import spacecraft
 from Basilisk.utilities import macros
 from Basilisk.utilities import orbitalMotion
 from Basilisk.utilities import simIncludeGravBody
 from Basilisk.utilities import astroFunctions
-
+from Basilisk.utilities import vizSupport
+from Basilisk.architecture import messaging
 from Basilisk import __path__
 bskPath = __path__[0]
 
@@ -123,6 +124,10 @@ def run(show_plots):
     # initialize spacecraft object and set properties
     scObject = spacecraft.Spacecraft()
     scObject.ModelTag = "bsk-Sat"
+
+    scObject1 = spacecraft.Spacecraft()
+    scObject1.ModelTag = "bsk-Sat2"
+
 
     # clear prior gravitational body and SPICE setup definitions
     gravFactory = simIncludeGravBody.gravBodyFactory()
@@ -154,6 +159,16 @@ def run(show_plots):
     oe.f     = 75.0*macros.D2R
     rN, vN = orbitalMotion.elem2rv(mu, oe)
 
+    oe1 = orbitalMotion.ClassicElements()
+    oe1.a = astroFunctions.E_radius*1e3 + 400e3
+    oe1.e = 0.0
+    oe1.i = 0.0*macros.D2R
+
+    oe1.Omega = 0.0*macros.D2R
+    oe1.omega = 0.0*macros.D2R
+    oe1.f     = 105.0*macros.D2R
+    rN, vN = orbitalMotion.elem2rv(mu, oe1)
+
     n = np.sqrt(mu/oe.a/oe.a/oe.a)
     P = 2.*np.pi/n
 
@@ -162,7 +177,14 @@ def run(show_plots):
 
     scObject.hub.sigma_BNInit = [[0.1], [0.2], [-0.3]]  # sigma_BN_B
     scObject.hub.omega_BN_BInit = [[0.001], [-0.001], [0.001]]
+
+    scObject1.hub.r_CN_NInit = rN
+    scObject1.hub.v_CN_NInit = vN
+
+    scObject1.hub.sigma_BNInit = [[0.1], [0.2], [-0.3]]  # sigma_BN_B
+    scObject1.hub.omega_BN_BInit = [[0.001], [-0.001], [0.001]]
     scenarioSim.AddModelToTask(taskName, scObject)
+    scenarioSim.AddModelToTask(taskName, scObject1)
 
     #   Create an eclipse object so the panels don't always work
     eclipseObject = eclipse.Eclipse()
@@ -170,6 +192,9 @@ def run(show_plots):
     eclipseObject.addPlanetToModel(plMsg)
     eclipseObject.sunInMsg.subscribeTo(sunMsg)
     scenarioSim.AddModelToTask(taskName, eclipseObject)
+
+ 
+
 
     # Create a solar panel
     solarPanel = simpleSolarPanel.SimpleSolarPanel()
@@ -194,7 +219,27 @@ def run(show_plots):
     powerMonitor.addPowerNodeToModel(solarPanel.nodePowerOutMsg)
     powerMonitor.addPowerNodeToModel(powerSink.nodePowerOutMsg)
     scenarioSim.AddModelToTask(taskName, powerMonitor)
+    gsList = []
+    batteryPanel = vizSupport.vizInterface.GenericStorage()
+    batteryPanel.label = "Battery (%)"
+    batteryPanel.units = "%"
+    batteryPanel.minValue = 0
+    batteryPanel.maxValue = 100
 
+    batteryPanel.useStorageLevel = True
+    batteryInMsg = messaging.PowerStorageStatusMsgReader()
+    batteryInMsg.subscribeTo(powerMonitor.batPowerOutMsg)
+    batteryPanel.batteryStateInMsg = batteryInMsg
+    batteryPanel.this.disown()
+
+    batteryPanel.thresholds = vizSupport.vizInterface.IntVector([20, 50, 80])
+
+    batteryPanel.color = vizSupport.vizInterface.IntVector(
+        vizSupport.toRGBA255("red") +
+        vizSupport.toRGBA255("orange") +
+        vizSupport.toRGBA255("yellow") +
+        vizSupport.toRGBA255("green")
+    )
     # Setup logging on the power system
     spLog = solarPanel.nodePowerOutMsg.recorder()
     psLog = powerSink.nodePowerOutMsg.recorder()
@@ -202,6 +247,22 @@ def run(show_plots):
     scenarioSim.AddModelToTask(taskName, spLog)
     scenarioSim.AddModelToTask(taskName, psLog)
     scenarioSim.AddModelToTask(taskName, pmLog)
+    gsList.append([batteryPanel])
+    if vizSupport.vizFound:
+        print("Vizard Visualization Found. Enabling live streaming...")
+        clockSync = simSynch.ClockSynch()
+        clockSync.accelFactor = 50.0
+        scenarioSim.AddModelToTask(taskName, clockSync)
+        
+        viz = vizSupport.enableUnityVisualization(scenarioSim,
+                                                 taskName,
+                                                 scObject,
+                                                genericStorageList = gsList,
+                                                liveStream=True,
+                                                 )
+        vizSupport.setInstrumentGuiSetting(viz, 
+                                            spacecraftName=scObject.ModelTag,
+                                            showGenericStoragePanel=True)
 
     # Need to call the self-init and cross-init methods
     scenarioSim.InitializeSimulation()
