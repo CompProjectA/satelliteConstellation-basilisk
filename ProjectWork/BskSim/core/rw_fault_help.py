@@ -1,301 +1,272 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 rw_fault_help.py
 
-Contains help content and documentation for the spacecraft reaction wheel fault simulator.
-This module separates the help content from the GUI code for better organization.
+Contains help content for the Spacecraft Constellation Fault Simulator.
 """
 
-# Dictionary of help content for different topics
-HELP_CONTENT = {
-    "friction": """Friction Fault
+def get_general_help(section="overview"):
+    """Get general help content about the simulator"""
+    help_sections = {
+        "overview": """Spacecraft Constellation Fault Simulator
+=======================================
 
-Friction faults simulate increased mechanical friction in a reaction wheel, which requires more torque to overcome static friction.
+The Spacecraft Constellation Fault Simulator allows you to model multiple satellites 
+in formation, inject various faults, and analyze their effects on spacecraft attitude 
+control and mission performance.
 
-Parameters:
-• Magnitude: The strength of the friction effect (higher values = more friction)
-• Wheel: Which reaction wheel to apply the fault to (0-3)
-• Time: When to inject the fault during simulation (in minutes)
+This simulator is built on the Basilisk astrodynamics framework, providing high-fidelity 
+simulation of spacecraft dynamics in Earth orbit.
 
-Effects:
-Increased friction causes higher power consumption, reduced wheel speed response, and can lead to attitude control errors if severe.
+Use the different tabs to configure your constellation, set up fault scenarios, 
+define target locations, and configure visualization options.
 
-Periodic Fault:
-When enabled, adds cycling friction effects that can simulate intermittent mechanical issues or varying friction levels.
-""",
-    "power_limit": """Power Limit Fault
+Key features:
+- Configure multiple satellites in a constellation
+- Inject different fault types into reaction wheels
+- Assign observation targets to specific satellites
+- Configure camera positions for visualization
+- View simulation results in plots and 3D visualization""",
 
-Power limit faults restrict the maximum power available to the reaction wheel, limiting its ability to generate torque.
+        "simulation": """Simulation Settings
+==================
 
-Parameters:
-• Power Limit (W): Maximum power the wheel can draw (in Watts)
-• Wheel: Which reaction wheel to apply the limit to (0-3)
-• Time: When to apply the power limit during simulation (in minutes)
+Simulation Parameters:
+- Simulation Time: Duration in minutes (30-60 minutes recommended for a full orbit)
+- Show Plots: Display results after simulation
+- Save Binary: Generate visualization file for Vizard
 
-Effects:
-Limited power means the wheel cannot respond correctly to large torque commands, causing slower response and potentially instability in spacecraft attitude control.
+The simulation uses numerical integration to solve the equations of motion 
+for each spacecraft, accounting for orbital dynamics, attitude control, 
+and injected faults.
 
-Periodic Fault:
-When enabled, creates cycling power limits that can simulate power system fluctuations or partial failures.
-""",
-    "encoder": """Encoder Fault
+Workflow:
+1. Configure your satellite constellation in the Constellation tab
+2. Set up fault parameters in the Fault Configuration tab
+3. Define and assign targets in the Targets tab
+4. Configure visualization in the Visualization tab
+5. Set output options in the Output Settings tab
+6. Click the Run Simulation button
+7. View results in the Results tab or open Vizard for 3D visualization""",
 
-Encoder faults cause errors in the reaction wheel speed feedback to the control system, creating a mismatch between commanded and actual wheel speeds.
+        "visualization": """Visualization Settings
+====================
 
-Parameters:
-• Wheel: Which reaction wheel's encoder to fault (0-3)
-• Time: When to inject the fault during simulation (in minutes)
+The Visualization tab controls how the simulation appears in Vizard and the preview.
 
-Effects:
-With inaccurate speed feedback, the control system cannot properly command the wheel, leading to oscillations, incorrect wheel speeds, and potentially severe attitude control errors.
+Camera Configuration:
+- Select which satellite has the active camera
+- Set camera position relative to the satellite body frame
+- Adjust field of view (FOV) for wider or narrower viewing angle
+- Use presets for common viewing angles (Earth View, Target View, etc.)
 
-Periodic Fault:
-When enabled, creates intermittent encoder errors that can simulate partial encoder failure or electrical noise in the feedback loop.
-""",
-    "battery": """Battery Fault
+Orbit Control:
+- Show/hide individual satellite orbits
+- Adjust orbit line width and transparency
+- Master controls to show/hide all orbits at once
 
-Battery faults simulate increased power consumption or battery degradation in the spacecraft's power system.
+Satellite Display:
+- Toggle satellite name labels
+- Adjust satellite size multiplier for visibility
+- Choose color schemes (distinct, rainbow, cool, warm)
+- View satellite information including altitude and assignments
 
-Parameters:
-• Power Drain (kW): The additional power consumption caused by the fault
-• Time: When to inject the fault during simulation (in minutes)
+Target Settings:
+- Set target altitude above Earth surface
+- Adjust target marker size
+- Show/hide assignment connections between satellites and targets
+- View target assignment summary
 
-Effects:
-Increased power consumption causes faster battery depletion, which can lead to reduced spacecraft capabilities
-or complete power failure if the battery level falls below critical thresholds.
+The visualization preview shows a simplified 3D view of your constellation.
+The actual Vizard visualization will show full orbital dynamics and motion.""",
 
-Periodic Fault:
-When enabled, adds cycling power drain effects that can simulate intermittent electrical issues or varying
-power consumption patterns.
-""",
-    "targets": """Target Management
+        "constellation": """Constellation Configuration
+=========================
 
-Targets represent ground locations that the spacecraft can observe or communicate with during its orbit.
+The Constellation tab manages satellite creation and orbital parameters.
 
-Adding Targets:
-1. Enter a name for the target location
-2. Specify the latitude (-90 to 90 degrees)
-3. Specify the longitude (-180 to 180 degrees)
-4. Select a color for visualization
-5. Click "Add Target"
+Orbit Management:
+- Create multiple orbit configurations (Default, MEO Navigation, High Coverage)
+- Each orbit has altitude and inclination parameters
+- Delete unused orbits (must be empty)
 
-Visibility:
-Targets are visible to the spacecraft when they are above the horizon from the spacecraft's position. The visibility timeline is shown in the simulation results.
+Quick Setup Buttons:
+- 4-Sat Default: Creates 4 satellites at 600km altitude
+- 6-Sat MEO: Creates 6 satellites at 1200km altitude  
+- 2-Sat High: Creates 2 satellites at 2000km altitude
 
-Examples:
-Default targets include major cities around the world. You can add custom targets like ground stations, research locations, or areas of interest.
-""",
-    "camera": """Camera Settings
+Satellite List:
+- Shows all satellites with their orbit and altitude
+- Add/remove individual satellites
+- Displays orbit assignment and altitude for each satellite
 
-The camera settings control the viewing position for the 3D visualization in Vizard.
+Satellite Details:
+- Edit satellite name
+- Change orbit assignment (moves satellite to new orbit)
+- Adjust position in orbit (true anomaly in degrees)
+- View orbital parameters and coverage information
 
-Parameters:
-• X, Y, Z: Camera position coordinates in the spacecraft body frame
+Orbital Parameters:
+- Semi-major axis (a): Earth radius + altitude in km
+- Eccentricity (e): Shape of orbit (kept small for circular orbits)
+- Inclination (i): Angle between orbit and equator
+- RAAN (Ω): Right ascension of ascending node
+- Argument of periapsis (ω): Orientation of orbit ellipse
+- True anomaly (f): Position along the orbit
 
-Recommended Settings:
-• Side view: (0.0, 2.0, 0.0)
-• Top view: (0.0, 0.0, 2.0)
-• Front view: (2.0, 0.0, 0.0)
+All satellites in the same orbit share the same orbital plane.""",
 
-Tips:
-Adjust these values to get the best view of the spacecraft and its reaction wheels. The Vizard visualization allows you to rotate and zoom during playback.
-""",
-    "periodic": """Periodic Fault Injection
+        "fault": """Fault Configuration
+=================
 
-Periodic faults cycle on and off during the simulation, creating time-varying effects on the spacecraft.
+The Fault tab configures reaction wheel failures for individual satellites.
 
-Parameters:
-• Interval (sec): How often the fault repeats (in seconds)
-• Magnitude: Strength of the periodic fault effect
-• Wheel: Which wheel to apply the periodic fault to (0-3)
+Fault Types:
+1. Friction: Adds mechanical resistance to wheel rotation
+   - Simulates bearing damage or contamination
+   - Magnitude in N⋅m (higher = more severe)
 
-Use Cases:
-Periodic faults are useful for simulating:
-• Intermittent hardware issues
-• Orbital thermal cycling effects
-• Power system fluctuations
-• Noise in sensor or actuator systems
+2. Power Limit: Restricts maximum electrical power to wheel
+   - Simulates power system degradation
+   - Magnitude in Watts (lower = more severe)
 
-Notes:
-The periodic fault runs independently from the one-time fault, allowing you to simulate multiple fault conditions simultaneously.
-"""
-}
+3. Encoder: Causes measurement errors in wheel speed
+   - Simulates sensor failures
+   - Results in control oscillations
 
-# General help content for different sections
-GENERAL_HELP = {
-    "overview": """The Spacecraft Reaction Wheel Fault Simulator is a specialized tool for modeling and analyzing the effects of various fault types on spacecraft attitude control systems.
+4. Battery: Increases power consumption
+   - Simulates battery degradation
+   - Magnitude in kW additional drain
 
-Key Features:
-• High-fidelity spacecraft dynamics simulation using the Basilisk astrodynamics framework
-• Multiple fault types (friction, power limit, encoder, battery)
-• Detailed visualization of spacecraft behavior
-• Comprehensive data analysis through plots and visualizations
-• Target visibility tracking for ground station analysis
-
-This simulator helps engineers and researchers understand how spacecraft will respond to hardware failures in orbit, allowing for better fault detection, isolation, and recovery strategies.
-
-Getting Started:
-1. Configure basic simulation parameters in the "Simulation Settings" tab
-2. Select a fault type and configure its parameters in the "Fault Configuration" tab
-3. Add ground targets and set camera options in the "Visualization" tab
-4. Click "Run Simulation" to execute the simulation
-5. View the results in plots and/or the Vizard 3D visualization tool
-
-The simulator creates detailed plots of spacecraft attitude, reaction wheel speeds, and fault-specific metrics to help analyze the effects of the fault on spacecraft performance.
-""",
-    "simulation": """Simulation Parameters:
-
-• Simulation Time: Duration of the simulation in minutes. Longer simulations show more complete orbit effects but take longer to run. Typical values are 30-60 minutes for a full orbit.
-
-• Output Options:
-  - Show Plots: Display plots of simulation results after completion
-  - Save Binary: Save a binary file for Vizard 3D visualization
-  - Binary Filename: Name for the saved binary file (without extension)
-
-Simulation Process:
-1. The simulator initializes the spacecraft in a predefined orbit with reaction wheels for attitude control
-2. The spacecraft is commanded to maintain a specific attitude profile
-3. At the specified fault time, the selected fault is injected into the reaction wheel
-4. The simulation continues, showing the spacecraft's response to the fault
-5. Results are displayed in plots and saved for further analysis
-
-Performance Tips:
-• Shorter simulations (5-10 minutes) are good for quick tests and fault response analysis
-• Longer simulations (30-60 minutes) show full orbital effects and long-term stabilization
-• For periodic faults, ensure the simulation runs long enough to capture multiple fault cycles
-• Use meaningful binary filenames to identify different test cases
-""",
-    "faults": """The simulator supports four main types of faults:
-
-1. Friction Fault:
-   • Simulates increased mechanical friction in the reaction wheel
-   • Parameters: Magnitude (torque in N·m), Wheel (0-3), Time (minutes)
-   • Effects: Higher power consumption, reduced response speed, potentially destabilized attitude
-   • Real-world causes: Bearing damage, lubricant degradation, mechanical wear
-   • Typical magnitude values: 0.0001 to 0.001 N·m
-
-2. Power Limit Fault:
-   • Restricts the maximum electrical power available to the wheel
-   • Parameters: Power Limit (Watts), Wheel (0-3), Time (minutes)
-   • Effects: Torque saturation, inability to respond to large commands
-   • Real-world causes: Power system failures, overheating, current limiters
-   • Typical power limit values: 0.2 to 1.0 W (small spacecraft)
-
-3. Encoder Fault:
-   • Creates measurement errors in the wheel speed feedback
-   • Parameters: Wheel (0-3), Time (minutes)
-   • Effects: Control oscillations, incorrect wheel speeds, attitude instability
-   • Real-world causes: Sensor failure, wiring issues, electronic noise
-   • Notes: Unlike other faults, encoder faults affect the control system rather than the hardware
-
-4. Battery Fault:
-   • Simulates increased power consumption or battery degradation
-   • Parameters: Power Drain (kW), Time (minutes)
-   • Effects: Faster battery depletion, potential power failure
-   • Real-world causes: Short circuits, damaged cells, thermal issues
-   • Typical power drain values: 0.01 to 0.1 kW (10-100W)
+Fault Parameters:
+- Enable Fault: Turns fault on/off for selected satellite
+- Wheel Number: Which reaction wheel (0-3) is affected
+- Fault Time: When to inject the fault (minutes into simulation)
+- Magnitude: Severity of the fault (units depend on fault type)
 
 Periodic Faults:
-   • Optional cycling of fault effects at regular intervals
-   • Parameters: Interval (seconds), Magnitude, Wheel (0-3)
-   • Useful for simulating intermittent issues or thermal cycling effects
-   • Can be combined with any fault type for more complex scenarios
+- Enable recurring faults at set intervals
+- Interval: Time between fault occurrences (seconds)
+- Can affect different wheel than main fault
 
-Selecting the appropriate fault parameters:
-   • Start with small magnitude values and gradually increase to observe effects
-   • Test different wheels to see how fault location affects spacecraft response
-   • Try different fault times to see how the vehicle's state at fault injection affects response
-   • For realistic scenarios, combine steady and periodic faults to simulate complex failures
-""",
-    "visualization": """The simulator provides two types of visualization:
+Apply Options:
+- Apply to selected satellite only
+- Apply same configuration to all satellites""",
 
-1. Data Plots:
-   • Attitude error plots show spacecraft pointing accuracy
-   • Reaction wheel speed plots show wheel behavior
-   • Fault-specific plots highlight the effects of each fault type:
-     - Friction plots show increased friction torque
-     - Power limit plots show power consumption vs. limits
-     - Encoder plots show commanded vs. actual wheel speeds
-     - Battery plots show charge level and power consumption
-   • Target visibility plots show when ground locations are visible
+        "target": """Target Configuration
+==================
 
-2. 3D Visualization (Vizard):
-   • Requires the Vizard application (included with Basilisk)
-   • Shows detailed 3D model of the spacecraft
-   • Animates spacecraft motion throughout the simulation
-   • Displays Earth and configured target locations
-   • Visualizes reaction wheel rotation speeds
-   • For battery faults, shows battery charge level indicators
+The Target tab manages ground locations for satellite observations.
 
-Target Management:
-   • Add ground locations by name, latitude, and longitude
-   • Each target will appear in the 3D visualization and visibility plots
-   • Use targets to simulate ground stations, observation targets, or points of interest
-   • The simulator calculates when each target is visible from the spacecraft
+Target List:
+- Shows all defined targets with assignment status
+- Add/remove targets individually
+- Generate random targets at major cities
 
-Camera Settings:
-   • Control the viewpoint in the 3D visualization
-   • X, Y, Z coordinates define camera position in spacecraft body frame
-   • Presets provide common viewing angles:
-     - Side View: See spacecraft from the side
-     - Top View: Look down on the spacecraft
-     - Front View: See spacecraft from the front
-   • Custom positions allow precise control of visualization perspective
+Target Details:
+- Name: Identifier for the target location
+- Latitude: -90 to 90 degrees
+- Longitude: -180 to 180 degrees  
+- Priority: 1-5 (higher = more important)
+- Color: Visual marker color in Vizard
 
-Using Vizard:
-   1. Run a simulation with "Save Binary" enabled
-   2. Open the Vizard application
-   3. Load the binary file created by the simulation
-   4. Use Vizard controls to play, pause, and navigate the visualization
-   5. Observe spacecraft attitude changes in response to the fault
-"""
-}
+Target Assignment:
+- Assign targets to specific satellites
+- Multiple satellites can observe same target
+- Only assigned targets appear in Vizard visualization
+- Auto-assign distributes targets evenly
 
-# Fault type descriptions for the main interface
-FAULT_DESCRIPTIONS = {
-    "Friction": "Friction fault adds additional friction to the reaction wheel, simulating mechanical issues like bearing damage.",
-    "Power Limit": "Power limit fault restricts the maximum power available to the reaction wheel, simulating power system failures.",
-    "Encoder": "Encoder fault causes measurement errors in the reaction wheel speed feedback, leading to control issues.",
-    "Battery": "Battery fault simulates increased power consumption or battery degradation, which can lead to power system failure."
-}
+Coverage Map:
+- Visual representation of target locations
+- Shows assignment status with different markers
+- VISIBLE: Target can be seen by assigned satellite
+- ASSIGNED: Target assigned but may not be visible
+- NOT VISIBLE: Unassigned targets
 
-# Detailed parameter descriptions
-PARAMETER_DESCRIPTIONS = {
-    "friction": """Friction fault adds a constant friction torque to the reaction wheel, requiring more motor torque to overcome.
-Higher magnitude values create more severe effects. A typical spacecraft reaction wheel may experience
-friction values in the range of 0.0001 to 0.001 N·m.""",
-    "power_limit": """Power limit fault restricts how much electrical power is available to the reaction wheel motor.
-When the wheel requires more power than the limit, it cannot produce the required torque.
-A typical small spacecraft reaction wheel uses 0.5-5W, so limits below 1W create noticeable effects.""",
-    "encoder": """Encoder fault creates errors in the speed measurements fed back to the control system.
-The fault simulates a broken encoder, providing incorrect wheel speed information.
-This can lead to severe control issues as the spacecraft thinks the wheel is at a different speed than its actual value.""",
-    "battery": """Battery fault increases power consumption, simulating damaged or degraded power system components.
-Higher values (in kW) create more severe battery drain. For example, a value of 0.05 represents
-a 50W power drain, which can significantly impact small spacecraft with limited power generation capacity."""
-}
+Coverage Analysis:
+- Check Coverage button analyzes all targets
+- Reports which targets are visible based on satellite altitude
+- Satellites need >200km altitude for good coverage
+- Provides recommendations for improving coverage""",
 
-def get_help_content(topic):
-    """Get help content for a specific topic"""
-    if topic in HELP_CONTENT:
-        return HELP_CONTENT[topic]
-    return f"No help content available for topic: {topic}"
+        "output": """Output Settings
+=============
 
-def get_general_help(section):
-    """Get general help content for a section"""
-    if section in GENERAL_HELP:
-        return GENERAL_HELP[section]
-    return f"No general help available for section: {section}"
+The Output tab controls simulation parameters and logging.
 
-def get_fault_description(fault_type):
-    """Get description for a fault type"""
-    if fault_type in FAULT_DESCRIPTIONS:
-        return FAULT_DESCRIPTIONS[fault_type]
-    return "Unknown fault type"
+Simulation Settings:
+- Simulation Time: Total duration in minutes
+- Quick presets: 10, 30, 60, 90 minute buttons
+- Typical simulations run 30-60 minutes
 
-def get_parameter_description(fault_type):
-    """Get parameter description for a fault type"""
-    key = fault_type.lower().replace(" ", "_")
-    if key in PARAMETER_DESCRIPTIONS:
-        return PARAMETER_DESCRIPTIONS[key]
-    return ""
+Output Options:
+- Show Plots: Display graphs during/after simulation
+- Save Plots: Store plot images to disk
+- Save Binary: Create Vizard visualization file
+
+File Directories:
+- Logs Directory: Simulation summaries and data
+- Plots Directory: Generated graphs and charts
+- Vizard Files Directory: Binary files for 3D visualization
+- Reset to Defaults: Restore standard directory paths
+
+Binary Filename:
+- Name for the Vizard visualization file
+- Don't include extension (.bin added automatically)
+- File saved in Vizfile/_VizFiles/ directory
+
+Simulation Log:
+- Real-time updates during simulation
+- Shows configuration changes and progress
+- Save log to file for record keeping
+- Clear log to remove old messages
+- Auto-scroll keeps latest messages visible
+
+The simulation generates:
+- Summary text files with configuration details
+- Plot images showing spacecraft behavior
+- Binary file for Vizard 3D visualization""",
+
+        "results": """Results Tab
+===========
+
+The Results tab displays simulation outputs and analysis.
+
+Plot List:
+- Shows all generated plots from simulations
+- Sorted by creation time (newest first)
+- Click to view plot in main display
+
+Plot Viewer:
+- Displays selected plot with zoom/pan controls
+- Navigation toolbar for plot interaction
+- Export plot in various formats (PNG, PDF, SVG)
+
+Available Plots:
+- Constellation orbit plots
+- Inter-satellite distance graphs
+- Fault effect visualizations
+- Reaction wheel behavior
+- Attitude control performance
+
+Plot Information:
+- Filename and creation timestamp
+- File size
+- Analysis notes
+
+Using Results:
+1. Run simulation to generate plots
+2. Select plot from list to view
+3. Use toolbar to zoom/pan for details
+4. Export plots for reports/presentations
+5. Open results folder to access all files
+
+The plots help analyze:
+- Fault impact on spacecraft performance
+- Constellation geometry over time
+- Target visibility windows
+- System behavior during failures"""
+    }
+
+    return help_sections.get(section, help_sections["overview"])
