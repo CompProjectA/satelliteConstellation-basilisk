@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 from Basilisk.utilities import (orbitalMotion, macros, vizSupport)
 from faults.rw_fault import RWFaultScenario
 
-
 # Set paths
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
@@ -179,6 +178,20 @@ def pull_outputs(scenario, showPlots, faultIndex):
     plt.xlabel("Time (min)")
     plt.ylabel("Attitude Error Norm")
     plt.title(f"Attitude Error (Encoder Fault on RW {faultIndex})")
+    plt.legend()
+    plt.grid(True)
+
+    # New Plot: Difference in RW Speeds Post-Fault
+    plt.figure(figsize=(8, 2))
+    diff_start_idx = np.argmax(timeData >= fault_time_min)
+    rw_diff = RW_speeds[diff_start_idx:] - RW_speeds[diff_start_idx]
+
+    for i in range(num_RW):
+        plt.plot(timeData[diff_start_idx:], rw_diff[:, i], label=f"RW {i+1} Δ Speed")
+
+    plt.xlabel("Time (min)")
+    plt.ylabel("Δ RW Speed (rad/s)")
+    plt.title(f"Change in RW Speeds After Encoder Fault on RW {faultIndex}")
     plt.legend()
     plt.grid(True)
 

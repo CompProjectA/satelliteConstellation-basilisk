@@ -1,58 +1,84 @@
-# satellite_network.py
 
+import numpy as np
 from Basilisk.simulation import spacecraft, spacecraftLocation
-from Basilisk.utilities import orbitalMotion, macros
-
-class LeadingSatellite:
-    def __init__(self, index, mu, model_tag="LeadingSat"):
-        self.index = index
-        self.model_tag = model_tag
-        self.sc = spacecraft.Spacecraft()
-        self.sc.ModelTag = self.model_tag
-        self.comm_module = spacecraftLocation.SpacecraftLocation()
-        self.comm_module.ModelTag = f"CommCheck_{model_tag}"
-        self.mu = mu
-        self.children = []
-
-    def set_orbit(self, oe):
-        oe.f = self.index * 0.0  
-        rN, vN = orbitalMotion.elem2rv(self.mu, oe)
-        self.sc.hub.r_CN_NInit = rN
-        self.sc.hub.v_CN_NInit = vN
-
-    def setup_comm(self, earth_radius):
-        self.comm_module.primaryScStateInMsg.subscribeTo(self.sc.scStateOutMsg)
-        self.comm_module.rEquator = earth_radius
-        self.comm_module.rPolar = earth_radius * 0.98
-        self.comm_module.aHat_B = [1.0, 0.0, 0.0]
-        self.comm_module.theta = macros.D2R * 180.0
-        self.comm_module.maximumRange = 2e7
-
-    def add_child(self, child_sat):
-        self.children.append(child_sat)
-        self.comm_module.addSpacecraftToModel(child_sat.sc.scStateOutMsg)
-
+from Basilisk.simulation import simpleBattery 
+from Basilisk.architecture import messaging
+from message_data import MessageData
 
 class ChildSatellite:
-    def __init__(self, index, mu):
+    def initializeBattery(self):
+        self.battery = simpleBattery.SimpleBattery()
+        self.battery.ModelTag = f"satBattery {self.index}"
+        self.battery.storageCapacity   = 100.0 
+        self.battery.storedCharge_Init = 50.0 
+        self.batteryReader = messaging.PowerStorageStatusMsgReader()
+        self.batteryReader.subscribeTo(self.battery.batPowerOutMsg)
+
+    def __init__(self, index, rN, vN,gravFactory, leading_sat):
         self.index = index
-        self.model_tag = f"ChildSat{index+1}"
+        self.battery = None
+        self.batteryReader = None
+        self.initializeBattery()
+        self.model_tag = f"Satellite{index+1}"
+        self.messageInHistory: list[MessageData] = []
+        self.messageOutHistory: list[MessageData] = []
         self.sc = spacecraft.Spacecraft()
+        gravFactory.addBodiesTo(self.sc)
         self.sc.ModelTag = self.model_tag
+        self.sc.hub.r_CN_NInit=rN
+        self.sc.hub.v_CN_NInit=vN
+        self.leader = leading_sat
+        self.comm_module = leading_sat.comm_module
+    
+    def setup_comm(self):
+        self.comm_module.addSpacecraftToModel(self.sc.scStateOutMsg)
+    
+    def sendMessage(self, message,timeSent):
+        self.writeOut(MessageData(message, timeSent, self.leader))
+        self.leader.writeIn(MessageData(message, timeSent, self))
+        
+    def writeIn(self, message:MessageData):
+        self.messageInHistory.append(message)
+    def writeOut(self, message:MessageData):
+        self.messageOutHistory.append(message)
+
+class LeadingSatellite:
+    def __init__(self, index, rN, vN,gravFactory, model_tag="LeadingSat"):
+        self.index = index
+        self.model_tag = model_tag
+        self.messageInHistory: list[MessageData] = []
+        self.messageOutHistory: list[MessageData] = []
+        self.sc = spacecraft.Spacecraft()
+        gravFactory.addBodiesTo(self.sc)
+        self.sc.ModelTag = self.model_tag
+        self.sc.hub.r_CN_NInit=rN
+        self.sc.hub.v_CN_NInit=vN
+        self.aHat_B=[0.0,0.0,0.0]
         self.comm_module = spacecraftLocation.SpacecraftLocation()
-        self.comm_module.ModelTag = f"CommCheck_{self.model_tag}"
-        self.mu = mu
+        self.comm_module.ModelTag = f"CommCheck_{model_tag}"
+        self.children = []
 
-    def set_orbit(self, oe, phase_deg):
-        oe.f = phase_deg * macros.D2R
-        rN, vN = orbitalMotion.elem2rv(self.mu, oe)
-        self.sc.hub.r_CN_NInit = rN
-        self.sc.hub.v_CN_NInit = vN
-
-    def setup_comm(self, earth_radius):
+    def setup_comm(self, earth_radius,aHat_B, maximum_range):
+        self.aHat_B=aHat_B
         self.comm_module.primaryScStateInMsg.subscribeTo(self.sc.scStateOutMsg)
         self.comm_module.rEquator = earth_radius
         self.comm_module.rPolar = earth_radius * 0.98
-        self.comm_module.aHat_B = [1.0, 0.0, 0.0]
-        self.comm_module.theta = macros.D2R * 180.0
-        self.comm_module.maximumRange = 2e7
+        self.comm_module.aHat_B = aHat_B
+        self.comm_module.theta = np.radians(30.0)
+        self.comm_module.maximumRange = maximum_range
+        
+    def add_child(self, child_sat):
+        self.children.append(child_sat)
+    def sendMessageToLead(self, message, timeSent, lead):
+        self.writeOut(MessageData(message, timeSent, lead))
+        lead.writeIn(MessageData(message, timeSent, self))
+    def sendMessage(self, message,timeSent, child_sat):
+        if(child_sat in self.children):
+            self.writeOut(MessageData(message, timeSent, child_sat))
+            child_sat.writeIn(MessageData(message, timeSent, self))
+    
+    def writeOut(self, message:MessageData):
+        self.messageOutHistory.append(message)
+
+    def writeIn(self, message:MessageData):
+        self.messageInHistory.append(message)

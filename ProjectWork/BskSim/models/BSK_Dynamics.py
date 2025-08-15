@@ -16,6 +16,9 @@
 #  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+from Basilisk.utilities import macros
+
+
 import numpy as np
 from Basilisk import __path__
 from Basilisk.simulation import ephemerisConverter
@@ -27,6 +30,7 @@ from Basilisk.utilities import macros as mc
 from Basilisk.utilities import simIncludeRW, simIncludeGravBody
 from Basilisk.utilities import simIncludeThruster
 from Basilisk.utilities import unitTestSupport as sp
+from Basilisk.utilities import macros 
 
 bskPath = __path__[0]
 
@@ -80,15 +84,15 @@ class BSKDynamicModels():
         SimBase.AddModelToTask(self.taskName, self.rwStateEffector, 301)
         SimBase.AddModelToTask(self.taskName, self.extForceTorqueObject, 300)
         
-        SimBase.createNewEvent("addOneTimeRWFault", self.processTasksTimeStep, True,
-            ["self.TotalSim.CurrentNanos>=self.oneTimeFaultTime and self.oneTimeRWFaultFlag==1"],
-            ["self.DynModels.AddRWFault('friction',0.05,1, self.TotalSim.CurrentNanos)", "self.oneTimeRWFaultFlag=0"])
+       # SimBase.createNewEvent("addOneTimeRWFault", self.processTasksTimeStep, True,
+        ##   ["self.DynModels.AddRWFault('friction',0.05,1, self.TotalSim.CurrentNanos)", "self.oneTimeRWFaultFlag=0"])
 
         
-        SimBase.createNewEvent("addRepeatedRWFault", self.processTasksTimeStep, True,
-            ["self.repeatRWFaultFlag==1"],
-            ["self.DynModels.PeriodicRWFault(1./3000,'friction',0.005,2, self.TotalSim.CurrentNanos)", "self.setEventActivity('addRepeatedRWFault',True)"])
+        #SimBase.createNewEvent("addRepeatedRWFault", self.processTasksTimeStep, True,
+         #   ["self.repeatRWFaultFlag==1"],
+          #  ["self.DynModels.PeriodicRWFault(1./3000,'friction',0.005,2, self.TotalSim.CurrentNanos)", "self.setEventActivity('addRepeatedRWFault',True)"])
 
+        self.RWFaultLog = []
     # ------------------------------------------------------------------------------------------- #
     # These are module-initialization methods
 
@@ -147,10 +151,14 @@ class BSKDynamicModels():
         self.simpleNavObject.ModelTag = "SimpleNavigation"
         self.simpleNavObject.scStateInMsg.subscribeTo(self.scObject.scStateOutMsg)
 
+
     def SetReactionWheelDynEffector(self):
         """Set the 4 reaction wheel devices."""
         # specify RW momentum capacity
         maxRWMomentum = 50.  # Nms
+        
+        # Store default Coulomb friction value
+        self.default_coulomb_friction = 0.0005  # N⋅m
 
         # Define orthogonal RW pyramid
         # -- Pointing directions
@@ -166,27 +174,50 @@ class BSKDynamicModels():
         self.RW1 = self.rwFactory.create('Honeywell_HR16',
                                          gsHat,
                                          maxMomentum=maxRWMomentum,
-                                         rWB_B=rwPosVector[0])
+                                         rWB_B=rwPosVector[0],
+                                         fCoulomb=self.default_coulomb_friction)  # Set default friction
         
         gsHat = (rbk.Mi(-rwAzimuthAngle[1], 3).dot(rbk.Mi(rwElAngle[1], 2))).dot(np.array([1, 0, 0]))
         self.RW2 = self.rwFactory.create('Honeywell_HR16',
                                          gsHat,
                                          maxMomentum=maxRWMomentum,
-                                         rWB_B=rwPosVector[1])
+                                         rWB_B=rwPosVector[1],
+                                         fCoulomb=self.default_coulomb_friction)  # Set default friction
 
         gsHat = (rbk.Mi(-rwAzimuthAngle[2], 3).dot(rbk.Mi(rwElAngle[2], 2))).dot(np.array([1, 0, 0]))
         self.RW3 = self.rwFactory.create('Honeywell_HR16',
                                          gsHat,
                                          maxMomentum=maxRWMomentum,
-                                         rWB_B=rwPosVector[2])
+                                         rWB_B=rwPosVector[2],
+                                         fCoulomb=self.default_coulomb_friction)  # Set default friction
             
         gsHat = (rbk.Mi(-rwAzimuthAngle[3], 3).dot(rbk.Mi(rwElAngle[3], 2))).dot(np.array([1, 0, 0]))
         self.RW4 = self.rwFactory.create('Honeywell_HR16',
                                          gsHat,
                                          maxMomentum=maxRWMomentum,
-                                         rWB_B=rwPosVector[3])
+                                         rWB_B=rwPosVector[3],
+                                         fCoulomb=self.default_coulomb_friction)  # Set default friction
 
         self.rwFactory.addToSpacecraft("RWA", self.rwStateEffector, self.scObject)
+        
+        print(f"Reaction wheels configured with default Coulomb friction: {self.default_coulomb_friction} N⋅m")
+
+
+# 3. Add a method to get current friction values (useful for diagnostics):
+
+    def get_rw_friction_values(self):
+        """Get current friction values for all reaction wheels"""
+        friction_values = {}
+        if hasattr(self, 'RW1') and self.RW1:
+            friction_values['RW1'] = self.RW1.fCoulomb
+        if hasattr(self, 'RW2') and self.RW2:
+            friction_values['RW2'] = self.RW2.fCoulomb
+        if hasattr(self, 'RW3') and self.RW3:
+            friction_values['RW3'] = self.RW3.fCoulomb
+        if hasattr(self, 'RW4') and self.RW4:
+            friction_values['RW4'] = self.RW4.fCoulomb
+        return friction_values
+
 
     def SetThrusterStateEffector(self):
         """Set the 8 ACS thrusters."""
@@ -263,32 +294,140 @@ class BSKDynamicModels():
         self.CSSConstellationObject.sensorList = coarseSunSensor.CSSVector(cssList)
 
     # Method for adding reaction wheel faults
+
+    def AddRWFault(self, faultType, fault, faultRW, currentTime):
+        """
+        Adds a friction fault to the reaction wheel with proper GUI parameter handling.
+        
+        Parameters:
+        faultType (str): Type of fault ('friction', 'power_limit', etc.)
+        fault (float): Fault magnitude value
+        faultRW (int): Reaction wheel index (0-3, displayed as RW 1-4)
+        currentTime (int): Current simulation time in nanoseconds
+        
+        Returns:
+        bool: True if fault was successfully applied
+        """
+        # Ensure RWFaultLog exists
+        if not hasattr(self, 'RWFaultLog'):
+            self.RWFaultLog = []
+            
+        # Log the fault with proper time conversion
+        fault_time_min = currentTime * macros.NANO2MIN
+        self.RWFaultLog.append([faultType, fault, faultRW, fault_time_min])
+        
+        # Validate RW index
+        if faultRW < 0 or faultRW > 3:
+            print(f"ERROR: Invalid RW index {faultRW}. Must be 0-3.")
+            return False
+        
+        # Get the reaction wheel list
+        rw_list = [self.RW1, self.RW2, self.RW3, self.RW4]
+        
+        if faultType == "friction":
+            # Apply friction fault to the specified wheel
+            if rw_list[faultRW] is not None:
+                # Get current friction value
+                current_friction = rw_list[faultRW].fCoulomb
+                
+                # Apply the fault (add to existing friction)
+                rw_list[faultRW].fCoulomb = current_friction + fault
+                
+                # Log the fault application with user-friendly numbering
+                print(f"FRICTION FAULT APPLIED:")
+                print(f"  - Reaction Wheel: RW{faultRW + 1}")
+                print(f"  - Previous friction: {current_friction:.6f} N⋅m")
+                print(f"  - Fault magnitude: {fault:.6f} N⋅m")
+                print(f"  - New total friction: {rw_list[faultRW].fCoulomb:.6f} N⋅m")
+                print(f"  - Time: {fault_time_min:.2f} minutes")
+                
+                return True
+            else:
+                print(f"ERROR: RW{faultRW + 1} not available")
+                return False
+                
+        elif faultType == "power_limit":
+            # Power limit fault implementation
+            print(f"POWER LIMIT FAULT APPLIED:")
+            print(f"  - Reaction Wheel: RW{faultRW + 1}")
+            print(f"  - Power limit: {fault} W")
+            print(f"  - Time: {fault_time_min:.2f} minutes")
+            
+            # Store power limit for use in control logic
+            if not hasattr(self, 'power_limits'):
+                self.power_limits = {}
+            self.power_limits[faultRW] = fault
+            
+            return True
+            
+        elif faultType == "encoder":
+            # Encoder fault implementation
+            print(f"ENCODER FAULT APPLIED:")
+            print(f"  - Reaction Wheel: RW{faultRW + 1}")
+            print(f"  - Error magnitude: {fault}%")
+            print(f"  - Time: {fault_time_min:.2f} minutes")
+            
+            # Store encoder error for use in measurement
+            if not hasattr(self, 'encoder_errors'):
+                self.encoder_errors = {}
+            self.encoder_errors[faultRW] = fault / 100.0  # Convert percentage to fraction
+            
+            return True
+            
+        elif faultType == "battery":
+            # Battery fault is handled separately in the main simulation
+            print(f"BATTERY FAULT NOTED (handled by battery simulation):")
+            print(f"  - Additional drain: {fault} W")
+            print(f"  - Time: {fault_time_min:.2f} minutes")
+            return True
+            
+        else:
+            print(f"ERROR: Unknown fault type '{faultType}'")
+            return False
+
+
+    def get_rw_friction_values(self):
+        """
+        Get current friction values for all reaction wheels with RW 1-4 labels
+        
+        Returns:
+        dict: Dictionary with RW1-4 labels and current friction values
+        """
+        friction_values = {}
+        
+        if hasattr(self, 'RW1') and self.RW1:
+            friction_values['RW1'] = self.RW1.fCoulomb
+        if hasattr(self, 'RW2') and self.RW2:
+            friction_values['RW2'] = self.RW2.fCoulomb
+        if hasattr(self, 'RW3') and self.RW3:
+            friction_values['RW3'] = self.RW3.fCoulomb
+        if hasattr(self, 'RW4') and self.RW4:
+            friction_values['RW4'] = self.RW4.fCoulomb
+            
+        return friction_values
+
+
     def PeriodicRWFault(self, probability, faultType, fault, faultRW, currentTime):
         """
-        Adds a fault periodically. Probability is the chance of the fault occurring per update.
+        Adds a fault periodically based on probability.
+        
+        Parameters:
+        probability (float): Chance of fault occurring per update (0.0 to 1.0)
+        faultType (str): Type of fault
+        fault (float): Fault magnitude
+        faultRW (int): Reaction wheel index (0-3)
+        currentTime (int): Current time in nanoseconds
         """
         if np.random.uniform() < probability:
+            print(f"PERIODIC FAULT TRIGGERED (probability {probability:.2%})")
             self.AddRWFault(faultType, fault, faultRW, currentTime)
+            return True
+        return False
         
         
     
-    def AddRWFault(self, faultType, fault, faultRW, currentTime):
-        """
-        Adds a static friction fault to the reaction wheel.
-        """
-        self.RWFaultLog.append([faultType, fault, faultRW, currentTime*mc.NANO2MIN])
-        if faultType == "friction":
-            if faultRW == 1:
-                self.RW1.fCoulomb += fault
-            elif faultRW == 2:
-                self.RW2.fCoulomb += fault
-            elif faultRW == 3:
-                self.RW3.fCoulomb += fault
-            elif faultRW == 4:
-                self.RW4.fCoulomb += fault
-        else:
-            print("Invalid fault type. No fault added.")
 
+    
     # Global call to initialize every module
     def InitAllDynObjects(self):
         """

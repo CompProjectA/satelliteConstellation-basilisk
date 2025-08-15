@@ -1,0 +1,344 @@
+File Documentation
+
+
+Core Module Files
+
+BSK_masters.py
+Purpose: Master orchestrator for Basilisk simulations
+•	Functionality: 
+o	Initializes Basilisk simulation environment
+o	Provides base classes BSKSim and BSKScenario
+o	Manages simulation execution flow
+
+•	Key Components: 
+o	BSKSim: Base simulation class with Basilisk integration
+o	BSKScenario: Scenario management with configuration support
+•	Connections: Used by all fault modules as parent class
+
+spacecraft_simulation.py
+Purpose: Core simulation engine that bridges GUI with Basilisk
+•	Functionality: 
+o	Creates and configures spacecraft objects
+o	Sets up orbital dynamics and gravity
+o	Manages fault injection timing
+o	Generates visualization data
+
+•	Key Components: 
+o	SimulationConfig: Configuration data structure
+o	run_custom_simulation(): Main simulation execution
+o	inject_fault_into_spacecraft(): Fault injection handler
+•	Implementation Details: 
+o	Dynamic fault loading with fallback mechanisms
+o	Real-time telemetry recording
+o	Battery visualization for power faults
+o	Multi-satellite support 
+
+spacecraft_simulator_gui.py
+Purpose: Main GUI application using Tkinter
+•	Functionality: 
+o	Provides user interface for all simulation features
+o	Manages application state and data
+o	Coordinates between different GUI tabs
+o	Handles simulation execution in separate thread
+
+•	Key Components: 
+o	SatelliteSimulatorApp: Main application class
+o	Tab management system
+o	Event handling and callbacks
+•	Implementation Details: 
+o	Non-blocking simulation execution
+o	Real-time status updates
+o	Configuration import/export
+o	Integrated help system
+
+fault_loader.py
+Purpose: Dynamic fault module loading system
+•	Functionality: 
+o	Discovers available fault modules at runtime
+o	Provides unified interface for fault execution
+o	Handles fault data extraction for plotting
+o	Manages fault scenario execution
+
+•	Key Components: 
+o	get_fault_scenario_class(): Dynamic class loading
+o	run_scenario(): Unified execution interface
+o	extract_fault_data_from_scenario(): Data extraction
+•	Implementation Details: 
+o	Plugin architecture for extensibility
+o	Graceful fallback for missing modules
+o	Parameter passing to fault scenarios
+o	Support for both legacy and new interfaces
+
+plots.py
+Purpose: Centralized plotting engine for all visualizations
+•	Functionality: 
+o	Generates fault-specific plots
+o	Creates constellation visualizations
+o	Produces inter-satellite distance analysis
+o	Interfaces with real fault simulations
+
+•	Key Components: 
+o	generate_fault_plots(): Fault visualization dispatcher
+o	generate_constellation_plots(): Orbital visualization
+o	generate_inter_satellite_distance_plots(): Formation analysis
+•	Implementation Details: 
+o	Attempts real simulation data when available
+o	Falls back to synthetic data if needed
+o	Matplotlib-based rendering
+o	Automatic plot categorization
+
+
+GUI Tab Modules
+
+base_tab.py
+Purpose: Base class for all GUI tabs
+•	Functionality: 
+o	Common UI helper methods
+o	Help system integration
+o	Message passing to main app
+o	Error handling framework
+•	Implementation: Abstract base class pattern
+
+constellation_tab.py
+Purpose: Satellite constellation configuration interface
+•	Functionality: 
+o	Multiple orbit management
+o	Satellite CRUD operations
+o	Quick constellation presets
+o	Orbital parameter editing
+•	Key Features: 
+o	Support for LEO, MEO, GEO orbits
+o	Even satellite distribution
+o	Real-time parameter validation
+o	Coverage calculation
+
+fault_tab.py
+Purpose: Fault configuration and management
+•	Functionality: 
+o	Fault type selection and configuration
+o	Per-satellite fault assignment
+o	Fault timing control
+o	Magnitude scaling for different fault types
+•	Key Features: 
+o	Dynamic UI based on fault type
+o	Fault summary view
+o	Batch fault application
+o	Real-time fault status
+
+target_tab.py
+Purpose: Ground target management and assignment
+•	Functionality: 
+o	Target location definition
+o	Satellite-target assignment
+o	Coverage analysis
+o	Visibility calculations
+•	Key Features: 
+o	Interactive world map
+o	Auto-assignment algorithms
+o	Coverage reporting
+o	Priority-based assignment
+
+visualization_tab.py
+Purpose: 3D visualization configuration
+•	Functionality: 
+o	Camera setup for each satellite
+o	Orbit display controls
+o	Color scheme selection
+o	Preview rendering
+•	Key Features: 
+o	Multiple camera presets
+o	Real-time 3D preview
+o	Per-satellite visualization
+o	Export settings for Vizard
+
+output_tab.py
+Purpose: Simulation output configuration
+•	Functionality: 
+o	Simulation time control
+o	Output directory management
+o	Real-time log display
+o	Binary file configuration
+•	Key Features: 
+o	Time presets for quick setup
+o	Auto-scrolling log
+o	Directory validation
+o	Progress monitoring
+
+results_tab.py
+Purpose: Post-simulation analysis interface
+•	Functionality: 
+o	Plot browsing and viewing
+o	Interactive plot manipulation
+o	Plot export functionality
+o	Result categorization
+•	Key Features: 
+o	Embedded matplotlib canvas
+o	Navigation toolbar
+o	Multiple export formats
+o	Automatic plot discovery
+
+Fault Module Files
+
+friction_fault.py
+Purpose: Simulates mechanical friction in reaction wheels
+•	Physical Model: 
+o	Increases Coulomb friction coefficient
+o	Temperature rise calculation
+o	Power loss estimation
+•	Implementation: 
+o	Uses BSK_Dynamics wheel friction model
+o	Calculates cumulative energy loss
+o	Tracks temperature evolution
+•	Outputs: 
+o	Wheel speed degradation plots
+o	Temperature evolution graphs
+o	Power consumption analysis
+
+powerlimit_fault.py
+Purpose: Simulates power system constraints
+•	Physical Model: 
+o	Limits maximum motor torque
+o	Models power saturation effects
+o	Implements backup wheel activation
+•	Implementation: 
+o	Modifies maxMotorTorque parameter
+o	Phased simulation approach
+o	RW4 activation after delay
+•	Outputs: 
+o	Power consumption plots
+o	Control effectiveness analysis
+o	Energy conservation metrics
+
+encoder_fault.py
+Purpose: Simulates sensor measurement errors
+•	Physical Model: 
+o	Introduces measurement bias/noise
+o	Creates control loop instability
+o	Models feedback corruption
+•	Implementation: 
+o	Modifies wheel speed feedback
+o	Increases effective friction
+o	Generates control oscillations
+•	Outputs: 
+o	Control torque oscillations
+o	Attitude error growth
+o	RMS control effort analysis
+
+battery_fault.py
+Purpose: Simulates battery degradation and power system failures
+•	Physical Model: 
+o	Increased power consumption
+o	Battery state-of-charge tracking
+o	Safe mode triggering
+•	Implementation: 
+o	SimpleBattery module integration
+o	Power sink fault injection
+o	Solar panel modeling
+•	Outputs: 
+o	Battery discharge curves
+o	Power balance analysis
+o	Safe mode activation timing
+
+Support Module Files
+
+run_fault_simulator.py
+Purpose: Application entry point and environment setup
+•	Functionality: 
+o	Path configuration
+o	Dependency checking
+o	GUI launch
+o	Error handling
+•	Key Features: 
+o	Automatic directory creation
+o	Basilisk verification
+o	Clean startup sequence
+
+rw_fault_help.py
+Purpose: Comprehensive help documentation system
+•	Content Structure: 
+o	Overview documentation
+o	Tab-specific help
+o	Troubleshooting guides
+o	Technical details
+•	Implementation: 
+o	Dictionary-based content
+o	Context-sensitive help
+o	Markdown-compatible formatting
+
+style.py
+Purpose: GUI theme and visual styling
+•	Functionality: 
+o	Tkinter theme configuration
+o	Color scheme definitions
+o	Font specifications
+o	Widget styling
+•	Key Features: 
+o	Modern flat design
+o	Consistent color palette
+o	Responsive layouts
+o	Platform adaptation
+
+rw_fault.py
+Purpose: Legacy compatibility layer
+•	Functionality: 
+o	Backward compatibility for old code
+o	Fault type switching
+o	Module dispatching
+•	Implementation: 
+o	Wrapper for new fault modules
+o	Command-line interface
+o	Legacy API preservation
+
+Model Files
+
+BSK_Dynamics.py
+Purpose: Spacecraft dynamics configuration
+•	Functionality: 
+o	Reaction wheel setup
+o	Mass properties definition
+o	Disturbance torque configuration
+o	Sensor suite initialization
+•	Key Components: 
+o	4 reaction wheels in pyramid configuration
+o	External torque module
+o	Simple navigation sensor
+
+BSK_Fsw.py
+Purpose: Flight software implementation
+•	Functionality: 
+o	Attitude control algorithms
+o	Hill pointing guidance
+o	Reaction wheel control logic
+o	MRP feedback control
+•	Key Components: 
+o	MRP feedback controller
+o	Attitude tracking error
+o	Control allocation to wheels
+
+Contributing
+Adding New Fault Types
+1.	Create new module in faults/ directory
+2.	Inherit from BSKScenario class
+3.	Implement required methods: 
+o	__init__(): Initialize parameters
+o	inject_fault(): Apply fault to dynamics
+o	pull_outputs(): Generate plots
+4.	Register in fault_loader.py
+
+Extending GUI Features
+1.	Create new tab class inheriting from BaseTab
+2.	Implement UI creation in create_tab_ui()
+3.	Add to main GUI in spacecraft_simulator_gui.py
+4.	Update help documentation
+
+License
+This simulator is developed as part of an academic project at Swinburne University of Technology. The Basilisk Astrodynamics Framework is used under its separate license terms.
+
+Acknowledgments
+•	Basilisk Development Team: For the excellent astrodynamics framework
+•	Swinburne University: For project support and resources
+•	Contributors: All students of Team
+
+________________________________________
+Last Updated: December 2024
+
