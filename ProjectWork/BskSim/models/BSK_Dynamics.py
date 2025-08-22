@@ -84,13 +84,15 @@ class BSKDynamicModels():
         SimBase.AddModelToTask(self.taskName, self.rwStateEffector, 301)
         SimBase.AddModelToTask(self.taskName, self.extForceTorqueObject, 300)
         
-       # SimBase.createNewEvent("addOneTimeRWFault", self.processTasksTimeStep, True,
-        ##   ["self.DynModels.AddRWFault('friction',0.05,1, self.TotalSim.CurrentNanos)", "self.oneTimeRWFaultFlag=0"])
+
+        SimBase.createNewEvent("addOneTimeRWFault", self.processTasksTimeStep, True,
+            ["self.TotalSim.CurrentNanos>=self.oneTimeFaultTime and self.oneTimeRWFaultFlag==1"],
+            ["self.DynModels.AddRWFault('friction',0.05,2, self.TotalSim.CurrentNanos)", "self.oneTimeRWFaultFlag=0"])
 
         
-        #SimBase.createNewEvent("addRepeatedRWFault", self.processTasksTimeStep, True,
-         #   ["self.repeatRWFaultFlag==1"],
-          #  ["self.DynModels.PeriodicRWFault(1./3000,'friction',0.005,2, self.TotalSim.CurrentNanos)", "self.setEventActivity('addRepeatedRWFault',True)"])
+        SimBase.createNewEvent("addRepeatedRWFault", self.processTasksTimeStep, True,
+            ["self.repeatRWFaultFlag==1"],
+            ["self.DynModels.PeriodicRWFault(1./3000,'friction',0.005,3, self.TotalSim.CurrentNanos)", "self.setEventActivity('addRepeatedRWFault',True)"])
 
         self.RWFaultLog = []
     # ------------------------------------------------------------------------------------------- #

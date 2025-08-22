@@ -491,7 +491,7 @@ def run(planetCase):
         # Configure vizard settings
         viz = vizSupport.enableUnityVisualization(scSim, simTaskName, scObject,
                                           transceiverList=transceiverHUD,
-                                          liveStream=True)
+                                          )
         viz.epochInMsg.subscribeTo(gravFactory.epochMsg)
         viz.settings.orbitLinesOn = -1
         viz.settings.keyboardAngularRate = np.deg2rad(0.5)
