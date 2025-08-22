@@ -68,6 +68,13 @@ except ImportError as e:
     print(f"Warning: Could not import ResultsTab: {e}")
     ResultsTab = None
 
+# NEW: Import CommunicationTab
+try:
+    from .communication_tab import CommunicationTab
+except ImportError as e:
+    print(f"Warning: Could not import CommunicationTab: {e}")
+    CommunicationTab = None
+
 # Export all available classes
 __all__ = []
 
@@ -85,5 +92,5 @@ if OutputTab:
     __all__.append('OutputTab')
 if ResultsTab:
     __all__.append('ResultsTab')
-
-  
+if CommunicationTab:
+    __all__.append('CommunicationTab')

@@ -19,6 +19,7 @@ import logging
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend 
 from PIL import ImageTk, Image
+from communication_visualization import show_communication_visualization
 
 # Set up paths
 import inspect
@@ -57,7 +58,8 @@ class SatelliteSimulatorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Spacecraft Constellation Fault Simulator")
-        self.root.geometry("1200x900")
+        self.root.update_idletasks()
+        self.root.state("zoomed")
         self.root.minsize(1000, 800)
         
         # Setup logging
@@ -81,6 +83,10 @@ class SatelliteSimulatorApp:
         # Update initial state
         self.update_status("Ready")
         self.update_status_counts()
+
+        self.debug_cluster_plots()
+
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
     def _on_closing(self):
         """Handle window closing"""
@@ -122,7 +128,117 @@ class SatelliteSimulatorApp:
         # Create _VizFiles subdirectory
         viz_files_dir = os.path.join(self.VIZ_DIR, "_VizFiles")
         os.makedirs(viz_files_dir, exist_ok=True)
+
+    def check_cluster_plots(self):
+        """Check why cluster plots aren't generating"""
+        print("\n=== CHECKING CLUSTER CONFIGURATION ===")
         
+        # Check constellation tab clusters
+        if hasattr(self, 'constellation_tab'):
+            clusters = self.constellation_tab.clusters
+            print(f"Clusters in constellation tab: {len(clusters)}")
+            for c in clusters:
+                print(f"  - {c['name']}: {len(c.get('satellites', []))} satellites")
+        
+        # Check satellites for cluster membership
+        cluster_sats = [s for s in self.satellites if s.get('cluster')]
+        print(f"Satellites with cluster assignment: {len(cluster_sats)}")
+        for s in cluster_sats[:5]:  # Show first 5
+            print(f"  - {s['name']}: cluster={s.get('cluster')}, role={s.get('role')}")
+        
+        print("=====================================\n")
+
+    def on_tab_changed(self, event):
+        """Handle tab change events"""
+        selected_tab = event.widget.tab('current')['text']
+        
+        if selected_tab == 'Constellation':
+            # Check if Communication sub-tab is selected
+            if hasattr(self, 'constellation_tab'):
+                current_subtab = self.constellation_tab.constellation_notebook.index('current')
+                if current_subtab == 3:  # Communication sub-tab index
+                    self.constellation_tab.update_communication_plot()
+                    
+        elif selected_tab == 'Results':
+            # Refresh results if needed
+            if hasattr(self, 'results_tab'):
+                self.results_tab.refresh_plot_list()
+
+    def show_communication_window(self):
+        """Show communication visualization window"""
+        # Get cluster manager if using clusters
+        cluster_manager = None
+        
+        # Check if we're using the cluster integration
+        if hasattr(self, 'constellation_tab'):
+            # Create a simple cluster manager from the constellation tab data
+            class SimpleClusterManager:
+                def __init__(self, clusters):
+                    self.clusters = {}
+                    for cluster in clusters:
+                        self.clusters[cluster['name']] = {
+                            'leader': type('obj', (object,), {'model_tag': cluster.get('leader', 'Unknown')})(),
+                            'children': [type('obj', (object,), {'model_tag': child})() for child in cluster.get('children', [])]
+                        }
+            
+            if hasattr(self.constellation_tab, 'clusters'):
+                cluster_manager = SimpleClusterManager(self.constellation_tab.clusters)
+        
+        # Show visualization
+        self.comm_visualizer = show_communication_visualization(self.root, cluster_manager)
+        
+    
+  
+
+    def debug_cluster_plots(self):
+        """Debug why cluster plots aren't generating"""
+        print("\n" + "="*60)
+        print("CLUSTER PLOT DEBUGGING")
+        print("="*60)
+        
+        # Check satellites for cluster membership
+        print("\n1. CHECKING SATELLITE CLUSTER ASSIGNMENTS:")
+        cluster_sats = {}
+        for sat in self.satellites:
+            if sat.get('cluster'):
+                cluster = sat['cluster']
+                role = sat.get('role', 'unknown')
+                if cluster not in cluster_sats:
+                    cluster_sats[cluster] = {'leader': None, 'children': []}
+                
+                if role == 'leader':
+                    cluster_sats[cluster]['leader'] = sat['name']
+                elif role == 'child':
+                    cluster_sats[cluster]['children'].append(sat['name'])
+                
+                print(f"  {sat['name']}: cluster='{cluster}', role='{role}'")
+        
+        print(f"\n2. CLUSTER SUMMARY:")
+        for cluster_name, info in cluster_sats.items():
+            print(f"  Cluster '{cluster_name}':")
+            print(f"    Leader: {info['leader']}")
+            print(f"    Children ({len(info['children'])}): {info['children']}")
+        
+        print(f"\n3. CLUSTER DATA STRUCTURE CHECK:")
+        if hasattr(self, 'constellation_tab'):
+            clusters = self.constellation_tab.clusters
+            print(f"  Clusters in constellation_tab: {len(clusters)}")
+            for c in clusters:
+                print(f"    - {c['name']}: leader={c.get('leader')}, children={len(c.get('children', []))}")
+        
+        print(f"\n4. SOLUTION:")
+        if not cluster_sats:
+            print("  ❌ NO SATELLITES HAVE CLUSTER ASSIGNMENTS!")
+            print("  Fix: Make sure satellites have 'cluster' and 'role' fields set")
+        elif all(info['leader'] is None for info in cluster_sats.values()):
+            print("  ❌ NO CLUSTER LEADERS FOUND!")
+            print("  Fix: Make sure at least one satellite per cluster has role='leader'")
+        else:
+            print("  ✓ Cluster structure looks correct")
+            print("  If plots still don't generate, check spacecraft_simulation.py line ~700")
+        
+        print("="*60 + "\n")
+    
     def _initialize_data(self):
         """Initialize application data structures"""
         # Paths
@@ -331,6 +447,8 @@ class SatelliteSimulatorApp:
         menu_bar.add_cascade(label="Simulation", menu=sim_menu)
         sim_menu.add_command(label="Run Simulation", command=self.run_simulation)
         sim_menu.add_separator()
+        sim_menu.add_command(label="Communication Visualization", command=self.show_communication_window)
+        sim_menu.add_separator()
         sim_menu.add_command(label="View Results", command=self._view_results)
         sim_menu.add_command(label="Open Results Folder", command=self.open_results_folder)
         
@@ -341,10 +459,14 @@ class SatelliteSimulatorApp:
         help_menu.add_command(label="About", command=self.show_about)
         
     # Public methods
+
     def add_satellite(self, name, true_anomaly=0.0, altitude=600):
-        """Add a new satellite to the constellation"""
+        """Add a new satellite to the constellation with all required fields"""
         satellite = {
             "name": name,
+            "type": "individual",  # Add type field for compatibility
+            "cluster": None,       # Not part of a cluster
+            "role": "independent", # Independent satellite
             "orbit": {
                 "a": 6371 + altitude,
                 "e": 0.01,
@@ -370,6 +492,11 @@ class SatelliteSimulatorApp:
                 "position": [0.0, 0.0, 15.0],
                 "fov": 80.0,
                 "enabled": name == "Satellite1"
+            },
+            "communication": {  # Add communication settings
+                "range": 2000.0,  # km
+                "fov": 30.0,      # degrees
+                "aHat_B": [0.0, 0.0, -1.0]
             },
             "targets": [],
             "orbit_name": "Default Orbit"
