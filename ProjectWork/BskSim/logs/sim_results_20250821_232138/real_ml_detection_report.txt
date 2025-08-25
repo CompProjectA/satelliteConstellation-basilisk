@@ -1,0 +1,993 @@
+REAL ML FAULT DETECTION REPORT
+CLIENT'S MODEL ON BASILISK DATA
+============================================================
+
+Analysis Date: 2025-08-21 23:22:18
+Data Source: Real Basilisk Simulation
+ML Model: Client's anomaly_detection_model.keras
+
+SUMMARY:
+  Spacecraft Analyzed: 4
+  Total ML Detections: 240
+  Spacecraft with Faults: 4
+  Success Rate: 400.0%
+
+  Average Confidence: 0.257
+  Max Confidence: 0.302
+  Min Confidence: 0.217
+
+SPACECRAFT ANALYSIS:
+
+Satellite1:
+  Real ML Detections: 60
+    1. Time: 0.00 min
+       Confidence: 0.270
+       Anomaly Score: 0.270
+       Data Points: 20
+    2. Time: 0.50 min
+       Confidence: 0.263
+       Anomaly Score: 0.263
+       Data Points: 40
+    3. Time: 1.00 min
+       Confidence: 0.244
+       Anomaly Score: 0.244
+       Data Points: 40
+    4. Time: 1.50 min
+       Confidence: 0.258
+       Anomaly Score: 0.258
+       Data Points: 40
+    5. Time: 2.00 min
+       Confidence: 0.259
+       Anomaly Score: 0.259
+       Data Points: 40
+    6. Time: 2.50 min
+       Confidence: 0.286
+       Anomaly Score: 0.286
+       Data Points: 40
+    7. Time: 3.00 min
+       Confidence: 0.260
+       Anomaly Score: 0.260
+       Data Points: 40
+    8. Time: 3.50 min
+       Confidence: 0.267
+       Anomaly Score: 0.267
+       Data Points: 40
+    9. Time: 4.00 min
+       Confidence: 0.256
+       Anomaly Score: 0.256
+       Data Points: 40
+    10. Time: 4.50 min
+       Confidence: 0.278
+       Anomaly Score: 0.278
+       Data Points: 40
+    11. Time: 5.00 min
+       Confidence: 0.248
+       Anomaly Score: 0.248
+       Data Points: 40
+    12. Time: 5.50 min
+       Confidence: 0.249
+       Anomaly Score: 0.249
+       Data Points: 40
+    13. Time: 6.00 min
+       Confidence: 0.255
+       Anomaly Score: 0.255
+       Data Points: 40
+    14. Time: 6.50 min
+       Confidence: 0.250
+       Anomaly Score: 0.250
+       Data Points: 40
+    15. Time: 7.00 min
+       Confidence: 0.244
+       Anomaly Score: 0.244
+       Data Points: 40
+    16. Time: 7.50 min
+       Confidence: 0.266
+       Anomaly Score: 0.266
+       Data Points: 40
+    17. Time: 8.00 min
+       Confidence: 0.255
+       Anomaly Score: 0.255
+       Data Points: 40
+    18. Time: 8.50 min
+       Confidence: 0.268
+       Anomaly Score: 0.268
+       Data Points: 40
+    19. Time: 9.01 min
+       Confidence: 0.267
+       Anomaly Score: 0.267
+       Data Points: 40
+    20. Time: 9.51 min
+       Confidence: 0.253
+       Anomaly Score: 0.253
+       Data Points: 40
+    21. Time: 10.01 min
+       Confidence: 0.251
+       Anomaly Score: 0.251
+       Data Points: 40
+    22. Time: 10.51 min
+       Confidence: 0.270
+       Anomaly Score: 0.270
+       Data Points: 40
+    23. Time: 11.01 min
+       Confidence: 0.258
+       Anomaly Score: 0.258
+       Data Points: 40
+    24. Time: 11.51 min
+       Confidence: 0.282
+       Anomaly Score: 0.282
+       Data Points: 40
+    25. Time: 12.01 min
+       Confidence: 0.256
+       Anomaly Score: 0.256
+       Data Points: 40
+    26. Time: 12.51 min
+       Confidence: 0.273
+       Anomaly Score: 0.273
+       Data Points: 40
+    27. Time: 13.01 min
+       Confidence: 0.272
+       Anomaly Score: 0.272
+       Data Points: 40
+    28. Time: 13.51 min
+       Confidence: 0.239
+       Anomaly Score: 0.239
+       Data Points: 40
+    29. Time: 14.01 min
+       Confidence: 0.221
+       Anomaly Score: 0.221
+       Data Points: 40
+    30. Time: 14.51 min
+       Confidence: 0.261
+       Anomaly Score: 0.261
+       Data Points: 40
+    31. Time: 15.01 min
+       Confidence: 0.277
+       Anomaly Score: 0.277
+       Data Points: 40
+    32. Time: 15.51 min
+       Confidence: 0.262
+       Anomaly Score: 0.262
+       Data Points: 40
+    33. Time: 16.01 min
+       Confidence: 0.274
+       Anomaly Score: 0.274
+       Data Points: 40
+    34. Time: 16.51 min
+       Confidence: 0.259
+       Anomaly Score: 0.259
+       Data Points: 40
+    35. Time: 17.01 min
+       Confidence: 0.300
+       Anomaly Score: 0.300
+       Data Points: 40
+    36. Time: 17.51 min
+       Confidence: 0.255
+       Anomaly Score: 0.255
+       Data Points: 40
+    37. Time: 18.01 min
+       Confidence: 0.256
+       Anomaly Score: 0.256
+       Data Points: 40
+    38. Time: 18.51 min
+       Confidence: 0.274
+       Anomaly Score: 0.274
+       Data Points: 40
+    39. Time: 19.01 min
+       Confidence: 0.277
+       Anomaly Score: 0.277
+       Data Points: 40
+    40. Time: 19.51 min
+       Confidence: 0.253
+       Anomaly Score: 0.253
+       Data Points: 40
+    41. Time: 20.01 min
+       Confidence: 0.282
+       Anomaly Score: 0.282
+       Data Points: 40
+    42. Time: 20.51 min
+       Confidence: 0.271
+       Anomaly Score: 0.271
+       Data Points: 40
+    43. Time: 21.01 min
+       Confidence: 0.250
+       Anomaly Score: 0.250
+       Data Points: 40
+    44. Time: 21.51 min
+       Confidence: 0.265
+       Anomaly Score: 0.265
+       Data Points: 40
+    45. Time: 22.01 min
+       Confidence: 0.258
+       Anomaly Score: 0.258
+       Data Points: 40
+    46. Time: 22.51 min
+       Confidence: 0.273
+       Anomaly Score: 0.273
+       Data Points: 40
+    47. Time: 23.01 min
+       Confidence: 0.255
+       Anomaly Score: 0.255
+       Data Points: 40
+    48. Time: 23.51 min
+       Confidence: 0.252
+       Anomaly Score: 0.252
+       Data Points: 40
+    49. Time: 24.01 min
+       Confidence: 0.252
+       Anomaly Score: 0.252
+       Data Points: 40
+    50. Time: 24.51 min
+       Confidence: 0.255
+       Anomaly Score: 0.255
+       Data Points: 40
+    51. Time: 25.01 min
+       Confidence: 0.253
+       Anomaly Score: 0.253
+       Data Points: 40
+    52. Time: 25.51 min
+       Confidence: 0.270
+       Anomaly Score: 0.270
+       Data Points: 40
+    53. Time: 26.01 min
+       Confidence: 0.258
+       Anomaly Score: 0.258
+       Data Points: 40
+    54. Time: 26.51 min
+       Confidence: 0.247
+       Anomaly Score: 0.247
+       Data Points: 40
+    55. Time: 27.02 min
+       Confidence: 0.255
+       Anomaly Score: 0.255
+       Data Points: 40
+    56. Time: 27.52 min
+       Confidence: 0.251
+       Anomaly Score: 0.251
+       Data Points: 40
+    57. Time: 28.02 min
+       Confidence: 0.251
+       Anomaly Score: 0.251
+       Data Points: 40
+    58. Time: 28.52 min
+       Confidence: 0.227
+       Anomaly Score: 0.227
+       Data Points: 40
+    59. Time: 29.02 min
+       Confidence: 0.252
+       Anomaly Score: 0.252
+       Data Points: 40
+    60. Time: 29.52 min
+       Confidence: 0.251
+       Anomaly Score: 0.251
+       Data Points: 40
+
+Satellite2:
+  Real ML Detections: 60
+    1. Time: 0.00 min
+       Confidence: 0.262
+       Anomaly Score: 0.262
+       Data Points: 20
+    2. Time: 0.50 min
+       Confidence: 0.261
+       Anomaly Score: 0.261
+       Data Points: 40
+    3. Time: 1.00 min
+       Confidence: 0.248
+       Anomaly Score: 0.248
+       Data Points: 40
+    4. Time: 1.50 min
+       Confidence: 0.284
+       Anomaly Score: 0.284
+       Data Points: 40
+    5. Time: 2.00 min
+       Confidence: 0.261
+       Anomaly Score: 0.261
+       Data Points: 40
+    6. Time: 2.50 min
+       Confidence: 0.240
+       Anomaly Score: 0.240
+       Data Points: 40
+    7. Time: 3.00 min
+       Confidence: 0.261
+       Anomaly Score: 0.261
+       Data Points: 40
+    8. Time: 3.50 min
+       Confidence: 0.244
+       Anomaly Score: 0.244
+       Data Points: 40
+    9. Time: 4.00 min
+       Confidence: 0.274
+       Anomaly Score: 0.274
+       Data Points: 40
+    10. Time: 4.50 min
+       Confidence: 0.264
+       Anomaly Score: 0.264
+       Data Points: 40
+    11. Time: 5.00 min
+       Confidence: 0.258
+       Anomaly Score: 0.258
+       Data Points: 40
+    12. Time: 5.50 min
+       Confidence: 0.268
+       Anomaly Score: 0.268
+       Data Points: 40
+    13. Time: 6.00 min
+       Confidence: 0.259
+       Anomaly Score: 0.259
+       Data Points: 40
+    14. Time: 6.50 min
+       Confidence: 0.274
+       Anomaly Score: 0.274
+       Data Points: 40
+    15. Time: 7.00 min
+       Confidence: 0.247
+       Anomaly Score: 0.247
+       Data Points: 40
+    16. Time: 7.50 min
+       Confidence: 0.279
+       Anomaly Score: 0.279
+       Data Points: 40
+    17. Time: 8.00 min
+       Confidence: 0.263
+       Anomaly Score: 0.263
+       Data Points: 40
+    18. Time: 8.50 min
+       Confidence: 0.273
+       Anomaly Score: 0.273
+       Data Points: 40
+    19. Time: 9.01 min
+       Confidence: 0.264
+       Anomaly Score: 0.264
+       Data Points: 40
+    20. Time: 9.51 min
+       Confidence: 0.279
+       Anomaly Score: 0.279
+       Data Points: 40
+    21. Time: 10.01 min
+       Confidence: 0.285
+       Anomaly Score: 0.285
+       Data Points: 40
+    22. Time: 10.51 min
+       Confidence: 0.252
+       Anomaly Score: 0.252
+       Data Points: 40
+    23. Time: 11.01 min
+       Confidence: 0.259
+       Anomaly Score: 0.259
+       Data Points: 40
+    24. Time: 11.51 min
+       Confidence: 0.253
+       Anomaly Score: 0.253
+       Data Points: 40
+    25. Time: 12.01 min
+       Confidence: 0.276
+       Anomaly Score: 0.276
+       Data Points: 40
+    26. Time: 12.51 min
+       Confidence: 0.246
+       Anomaly Score: 0.246
+       Data Points: 40
+    27. Time: 13.01 min
+       Confidence: 0.254
+       Anomaly Score: 0.254
+       Data Points: 40
+    28. Time: 13.51 min
+       Confidence: 0.258
+       Anomaly Score: 0.258
+       Data Points: 40
+    29. Time: 14.01 min
+       Confidence: 0.250
+       Anomaly Score: 0.250
+       Data Points: 40
+    30. Time: 14.51 min
+       Confidence: 0.243
+       Anomaly Score: 0.243
+       Data Points: 40
+    31. Time: 15.01 min
+       Confidence: 0.264
+       Anomaly Score: 0.264
+       Data Points: 40
+    32. Time: 15.51 min
+       Confidence: 0.261
+       Anomaly Score: 0.261
+       Data Points: 40
+    33. Time: 16.01 min
+       Confidence: 0.251
+       Anomaly Score: 0.251
+       Data Points: 40
+    34. Time: 16.51 min
+       Confidence: 0.260
+       Anomaly Score: 0.260
+       Data Points: 40
+    35. Time: 17.01 min
+       Confidence: 0.271
+       Anomaly Score: 0.271
+       Data Points: 40
+    36. Time: 17.51 min
+       Confidence: 0.243
+       Anomaly Score: 0.243
+       Data Points: 40
+    37. Time: 18.01 min
+       Confidence: 0.255
+       Anomaly Score: 0.255
+       Data Points: 40
+    38. Time: 18.51 min
+       Confidence: 0.247
+       Anomaly Score: 0.247
+       Data Points: 40
+    39. Time: 19.01 min
+       Confidence: 0.252
+       Anomaly Score: 0.252
+       Data Points: 40
+    40. Time: 19.51 min
+       Confidence: 0.249
+       Anomaly Score: 0.249
+       Data Points: 40
+    41. Time: 20.01 min
+       Confidence: 0.241
+       Anomaly Score: 0.241
+       Data Points: 40
+    42. Time: 20.51 min
+       Confidence: 0.271
+       Anomaly Score: 0.271
+       Data Points: 40
+    43. Time: 21.01 min
+       Confidence: 0.240
+       Anomaly Score: 0.240
+       Data Points: 40
+    44. Time: 21.51 min
+       Confidence: 0.248
+       Anomaly Score: 0.248
+       Data Points: 40
+    45. Time: 22.01 min
+       Confidence: 0.254
+       Anomaly Score: 0.254
+       Data Points: 40
+    46. Time: 22.51 min
+       Confidence: 0.258
+       Anomaly Score: 0.258
+       Data Points: 40
+    47. Time: 23.01 min
+       Confidence: 0.243
+       Anomaly Score: 0.243
+       Data Points: 40
+    48. Time: 23.51 min
+       Confidence: 0.260
+       Anomaly Score: 0.260
+       Data Points: 40
+    49. Time: 24.01 min
+       Confidence: 0.233
+       Anomaly Score: 0.233
+       Data Points: 40
+    50. Time: 24.51 min
+       Confidence: 0.234
+       Anomaly Score: 0.234
+       Data Points: 40
+    51. Time: 25.01 min
+       Confidence: 0.259
+       Anomaly Score: 0.259
+       Data Points: 40
+    52. Time: 25.51 min
+       Confidence: 0.244
+       Anomaly Score: 0.244
+       Data Points: 40
+    53. Time: 26.01 min
+       Confidence: 0.274
+       Anomaly Score: 0.274
+       Data Points: 40
+    54. Time: 26.51 min
+       Confidence: 0.222
+       Anomaly Score: 0.222
+       Data Points: 40
+    55. Time: 27.02 min
+       Confidence: 0.248
+       Anomaly Score: 0.248
+       Data Points: 40
+    56. Time: 27.52 min
+       Confidence: 0.259
+       Anomaly Score: 0.259
+       Data Points: 40
+    57. Time: 28.02 min
+       Confidence: 0.245
+       Anomaly Score: 0.245
+       Data Points: 40
+    58. Time: 28.52 min
+       Confidence: 0.244
+       Anomaly Score: 0.244
+       Data Points: 40
+    59. Time: 29.02 min
+       Confidence: 0.223
+       Anomaly Score: 0.223
+       Data Points: 40
+    60. Time: 29.52 min
+       Confidence: 0.245
+       Anomaly Score: 0.245
+       Data Points: 40
+
+Satellite3:
+  Real ML Detections: 60
+    1. Time: 0.00 min
+       Confidence: 0.267
+       Anomaly Score: 0.267
+       Data Points: 20
+    2. Time: 0.50 min
+       Confidence: 0.275
+       Anomaly Score: 0.275
+       Data Points: 40
+    3. Time: 1.00 min
+       Confidence: 0.267
+       Anomaly Score: 0.267
+       Data Points: 40
+    4. Time: 1.50 min
+       Confidence: 0.243
+       Anomaly Score: 0.243
+       Data Points: 40
+    5. Time: 2.00 min
+       Confidence: 0.286
+       Anomaly Score: 0.286
+       Data Points: 40
+    6. Time: 2.50 min
+       Confidence: 0.255
+       Anomaly Score: 0.255
+       Data Points: 40
+    7. Time: 3.00 min
+       Confidence: 0.253
+       Anomaly Score: 0.253
+       Data Points: 40
+    8. Time: 3.50 min
+       Confidence: 0.261
+       Anomaly Score: 0.261
+       Data Points: 40
+    9. Time: 4.00 min
+       Confidence: 0.270
+       Anomaly Score: 0.270
+       Data Points: 40
+    10. Time: 4.50 min
+       Confidence: 0.251
+       Anomaly Score: 0.251
+       Data Points: 40
+    11. Time: 5.00 min
+       Confidence: 0.265
+       Anomaly Score: 0.265
+       Data Points: 40
+    12. Time: 5.50 min
+       Confidence: 0.229
+       Anomaly Score: 0.229
+       Data Points: 40
+    13. Time: 6.00 min
+       Confidence: 0.257
+       Anomaly Score: 0.257
+       Data Points: 40
+    14. Time: 6.50 min
+       Confidence: 0.254
+       Anomaly Score: 0.254
+       Data Points: 40
+    15. Time: 7.00 min
+       Confidence: 0.252
+       Anomaly Score: 0.252
+       Data Points: 40
+    16. Time: 7.50 min
+       Confidence: 0.302
+       Anomaly Score: 0.302
+       Data Points: 40
+    17. Time: 8.00 min
+       Confidence: 0.260
+       Anomaly Score: 0.260
+       Data Points: 40
+    18. Time: 8.50 min
+       Confidence: 0.268
+       Anomaly Score: 0.268
+       Data Points: 40
+    19. Time: 9.01 min
+       Confidence: 0.256
+       Anomaly Score: 0.256
+       Data Points: 40
+    20. Time: 9.51 min
+       Confidence: 0.228
+       Anomaly Score: 0.228
+       Data Points: 40
+    21. Time: 10.01 min
+       Confidence: 0.252
+       Anomaly Score: 0.252
+       Data Points: 40
+    22. Time: 10.51 min
+       Confidence: 0.263
+       Anomaly Score: 0.263
+       Data Points: 40
+    23. Time: 11.01 min
+       Confidence: 0.267
+       Anomaly Score: 0.267
+       Data Points: 40
+    24. Time: 11.51 min
+       Confidence: 0.270
+       Anomaly Score: 0.270
+       Data Points: 40
+    25. Time: 12.01 min
+       Confidence: 0.259
+       Anomaly Score: 0.259
+       Data Points: 40
+    26. Time: 12.51 min
+       Confidence: 0.272
+       Anomaly Score: 0.272
+       Data Points: 40
+    27. Time: 13.01 min
+       Confidence: 0.242
+       Anomaly Score: 0.242
+       Data Points: 40
+    28. Time: 13.51 min
+       Confidence: 0.262
+       Anomaly Score: 0.262
+       Data Points: 40
+    29. Time: 14.01 min
+       Confidence: 0.252
+       Anomaly Score: 0.252
+       Data Points: 40
+    30. Time: 14.51 min
+       Confidence: 0.278
+       Anomaly Score: 0.278
+       Data Points: 40
+    31. Time: 15.01 min
+       Confidence: 0.243
+       Anomaly Score: 0.243
+       Data Points: 40
+    32. Time: 15.51 min
+       Confidence: 0.248
+       Anomaly Score: 0.248
+       Data Points: 40
+    33. Time: 16.01 min
+       Confidence: 0.261
+       Anomaly Score: 0.261
+       Data Points: 40
+    34. Time: 16.51 min
+       Confidence: 0.250
+       Anomaly Score: 0.250
+       Data Points: 40
+    35. Time: 17.01 min
+       Confidence: 0.252
+       Anomaly Score: 0.252
+       Data Points: 40
+    36. Time: 17.51 min
+       Confidence: 0.270
+       Anomaly Score: 0.270
+       Data Points: 40
+    37. Time: 18.01 min
+       Confidence: 0.236
+       Anomaly Score: 0.236
+       Data Points: 40
+    38. Time: 18.51 min
+       Confidence: 0.264
+       Anomaly Score: 0.264
+       Data Points: 40
+    39. Time: 19.01 min
+       Confidence: 0.242
+       Anomaly Score: 0.242
+       Data Points: 40
+    40. Time: 19.51 min
+       Confidence: 0.230
+       Anomaly Score: 0.230
+       Data Points: 40
+    41. Time: 20.01 min
+       Confidence: 0.248
+       Anomaly Score: 0.248
+       Data Points: 40
+    42. Time: 20.51 min
+       Confidence: 0.236
+       Anomaly Score: 0.236
+       Data Points: 40
+    43. Time: 21.01 min
+       Confidence: 0.254
+       Anomaly Score: 0.254
+       Data Points: 40
+    44. Time: 21.51 min
+       Confidence: 0.254
+       Anomaly Score: 0.254
+       Data Points: 40
+    45. Time: 22.01 min
+       Confidence: 0.236
+       Anomaly Score: 0.236
+       Data Points: 40
+    46. Time: 22.51 min
+       Confidence: 0.239
+       Anomaly Score: 0.239
+       Data Points: 40
+    47. Time: 23.01 min
+       Confidence: 0.244
+       Anomaly Score: 0.244
+       Data Points: 40
+    48. Time: 23.51 min
+       Confidence: 0.262
+       Anomaly Score: 0.262
+       Data Points: 40
+    49. Time: 24.01 min
+       Confidence: 0.254
+       Anomaly Score: 0.254
+       Data Points: 40
+    50. Time: 24.51 min
+       Confidence: 0.254
+       Anomaly Score: 0.254
+       Data Points: 40
+    51. Time: 25.01 min
+       Confidence: 0.260
+       Anomaly Score: 0.260
+       Data Points: 40
+    52. Time: 25.51 min
+       Confidence: 0.229
+       Anomaly Score: 0.229
+       Data Points: 40
+    53. Time: 26.01 min
+       Confidence: 0.254
+       Anomaly Score: 0.254
+       Data Points: 40
+    54. Time: 26.51 min
+       Confidence: 0.246
+       Anomaly Score: 0.246
+       Data Points: 40
+    55. Time: 27.02 min
+       Confidence: 0.254
+       Anomaly Score: 0.254
+       Data Points: 40
+    56. Time: 27.52 min
+       Confidence: 0.230
+       Anomaly Score: 0.230
+       Data Points: 40
+    57. Time: 28.02 min
+       Confidence: 0.245
+       Anomaly Score: 0.245
+       Data Points: 40
+    58. Time: 28.52 min
+       Confidence: 0.217
+       Anomaly Score: 0.217
+       Data Points: 40
+    59. Time: 29.02 min
+       Confidence: 0.239
+       Anomaly Score: 0.239
+       Data Points: 40
+    60. Time: 29.52 min
+       Confidence: 0.232
+       Anomaly Score: 0.232
+       Data Points: 40
+
+Satellite4:
+  Real ML Detections: 60
+    1. Time: 0.00 min
+       Confidence: 0.273
+       Anomaly Score: 0.273
+       Data Points: 20
+    2. Time: 0.50 min
+       Confidence: 0.245
+       Anomaly Score: 0.245
+       Data Points: 40
+    3. Time: 1.00 min
+       Confidence: 0.250
+       Anomaly Score: 0.250
+       Data Points: 40
+    4. Time: 1.50 min
+       Confidence: 0.258
+       Anomaly Score: 0.258
+       Data Points: 40
+    5. Time: 2.00 min
+       Confidence: 0.261
+       Anomaly Score: 0.261
+       Data Points: 40
+    6. Time: 2.50 min
+       Confidence: 0.248
+       Anomaly Score: 0.248
+       Data Points: 40
+    7. Time: 3.00 min
+       Confidence: 0.239
+       Anomaly Score: 0.239
+       Data Points: 40
+    8. Time: 3.50 min
+       Confidence: 0.283
+       Anomaly Score: 0.283
+       Data Points: 40
+    9. Time: 4.00 min
+       Confidence: 0.263
+       Anomaly Score: 0.263
+       Data Points: 40
+    10. Time: 4.50 min
+       Confidence: 0.256
+       Anomaly Score: 0.256
+       Data Points: 40
+    11. Time: 5.00 min
+       Confidence: 0.255
+       Anomaly Score: 0.255
+       Data Points: 40
+    12. Time: 5.50 min
+       Confidence: 0.265
+       Anomaly Score: 0.265
+       Data Points: 40
+    13. Time: 6.00 min
+       Confidence: 0.268
+       Anomaly Score: 0.268
+       Data Points: 40
+    14. Time: 6.50 min
+       Confidence: 0.243
+       Anomaly Score: 0.243
+       Data Points: 40
+    15. Time: 7.00 min
+       Confidence: 0.282
+       Anomaly Score: 0.282
+       Data Points: 40
+    16. Time: 7.50 min
+       Confidence: 0.266
+       Anomaly Score: 0.266
+       Data Points: 40
+    17. Time: 8.00 min
+       Confidence: 0.251
+       Anomaly Score: 0.251
+       Data Points: 40
+    18. Time: 8.50 min
+       Confidence: 0.266
+       Anomaly Score: 0.266
+       Data Points: 40
+    19. Time: 9.01 min
+       Confidence: 0.253
+       Anomaly Score: 0.253
+       Data Points: 40
+    20. Time: 9.51 min
+       Confidence: 0.256
+       Anomaly Score: 0.256
+       Data Points: 40
+    21. Time: 10.01 min
+       Confidence: 0.284
+       Anomaly Score: 0.284
+       Data Points: 40
+    22. Time: 10.51 min
+       Confidence: 0.269
+       Anomaly Score: 0.269
+       Data Points: 40
+    23. Time: 11.01 min
+       Confidence: 0.249
+       Anomaly Score: 0.249
+       Data Points: 40
+    24. Time: 11.51 min
+       Confidence: 0.266
+       Anomaly Score: 0.266
+       Data Points: 40
+    25. Time: 12.01 min
+       Confidence: 0.241
+       Anomaly Score: 0.241
+       Data Points: 40
+    26. Time: 12.51 min
+       Confidence: 0.276
+       Anomaly Score: 0.276
+       Data Points: 40
+    27. Time: 13.01 min
+       Confidence: 0.272
+       Anomaly Score: 0.272
+       Data Points: 40
+    28. Time: 13.51 min
+       Confidence: 0.280
+       Anomaly Score: 0.280
+       Data Points: 40
+    29. Time: 14.01 min
+       Confidence: 0.256
+       Anomaly Score: 0.256
+       Data Points: 40
+    30. Time: 14.51 min
+       Confidence: 0.261
+       Anomaly Score: 0.261
+       Data Points: 40
+    31. Time: 15.01 min
+       Confidence: 0.279
+       Anomaly Score: 0.279
+       Data Points: 40
+    32. Time: 15.51 min
+       Confidence: 0.256
+       Anomaly Score: 0.256
+       Data Points: 40
+    33. Time: 16.01 min
+       Confidence: 0.262
+       Anomaly Score: 0.262
+       Data Points: 40
+    34. Time: 16.51 min
+       Confidence: 0.261
+       Anomaly Score: 0.261
+       Data Points: 40
+    35. Time: 17.01 min
+       Confidence: 0.252
+       Anomaly Score: 0.252
+       Data Points: 40
+    36. Time: 17.51 min
+       Confidence: 0.267
+       Anomaly Score: 0.267
+       Data Points: 40
+    37. Time: 18.01 min
+       Confidence: 0.254
+       Anomaly Score: 0.254
+       Data Points: 40
+    38. Time: 18.51 min
+       Confidence: 0.235
+       Anomaly Score: 0.235
+       Data Points: 40
+    39. Time: 19.01 min
+       Confidence: 0.250
+       Anomaly Score: 0.250
+       Data Points: 40
+    40. Time: 19.51 min
+       Confidence: 0.248
+       Anomaly Score: 0.248
+       Data Points: 40
+    41. Time: 20.01 min
+       Confidence: 0.261
+       Anomaly Score: 0.261
+       Data Points: 40
+    42. Time: 20.51 min
+       Confidence: 0.257
+       Anomaly Score: 0.257
+       Data Points: 40
+    43. Time: 21.01 min
+       Confidence: 0.246
+       Anomaly Score: 0.246
+       Data Points: 40
+    44. Time: 21.51 min
+       Confidence: 0.245
+       Anomaly Score: 0.245
+       Data Points: 40
+    45. Time: 22.01 min
+       Confidence: 0.262
+       Anomaly Score: 0.262
+       Data Points: 40
+    46. Time: 22.51 min
+       Confidence: 0.256
+       Anomaly Score: 0.256
+       Data Points: 40
+    47. Time: 23.01 min
+       Confidence: 0.254
+       Anomaly Score: 0.254
+       Data Points: 40
+    48. Time: 23.51 min
+       Confidence: 0.250
+       Anomaly Score: 0.250
+       Data Points: 40
+    49. Time: 24.01 min
+       Confidence: 0.273
+       Anomaly Score: 0.273
+       Data Points: 40
+    50. Time: 24.51 min
+       Confidence: 0.231
+       Anomaly Score: 0.231
+       Data Points: 40
+    51. Time: 25.01 min
+       Confidence: 0.266
+       Anomaly Score: 0.266
+       Data Points: 40
+    52. Time: 25.51 min
+       Confidence: 0.252
+       Anomaly Score: 0.252
+       Data Points: 40
+    53. Time: 26.01 min
+       Confidence: 0.269
+       Anomaly Score: 0.269
+       Data Points: 40
+    54. Time: 26.51 min
+       Confidence: 0.248
+       Anomaly Score: 0.248
+       Data Points: 40
+    55. Time: 27.02 min
+       Confidence: 0.231
+       Anomaly Score: 0.231
+       Data Points: 40
+    56. Time: 27.52 min
+       Confidence: 0.268
+       Anomaly Score: 0.268
+       Data Points: 40
+    57. Time: 28.02 min
+       Confidence: 0.245
+       Anomaly Score: 0.245
+       Data Points: 40
+    58. Time: 28.52 min
+       Confidence: 0.230
+       Anomaly Score: 0.230
+       Data Points: 40
+    59. Time: 29.02 min
+       Confidence: 0.256
+       Anomaly Score: 0.256
+       Data Points: 40
+    60. Time: 29.52 min
+       Confidence: 0.246
+       Anomaly Score: 0.246
+       Data Points: 40
+
+REAL DATA INTEGRATION:

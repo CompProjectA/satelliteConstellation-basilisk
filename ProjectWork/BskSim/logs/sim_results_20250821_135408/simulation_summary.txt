@@ -1,0 +1,103 @@
+SPACECRAFT CONSTELLATION SIMULATION SUMMARY
+==================================================
+
+Date: 2025-08-21 13:54:11
+
+FAULT MODULE STATUS:
+  - Available faults: ['friction', 'power_limit', 'encoder', 'battery']
+  - Failed faults: []
+  - Fault loader: Available
+  - Plots module: Available
+
+REAL FAULT SIMULATION:
+  - Automatic real simulation attempts for fault-enabled spacecraft
+  - Graceful fallback to synthetic plots when real simulation fails
+  - Clear plot categorization (real, synthetic, constellation)
+  - Detailed logging and user feedback
+
+VISUALIZATION FEATURES:
+  - Higher satellite altitudes for better target coverage
+  - Target visibility at 50km altitude
+  - Better camera positioning for target viewing
+  - Spacecraft size increased 8x for visibility
+  - Target range increased to 2000km for visibility
+  - Orbit lines enabled for all spacecraft
+  - Battery visualization panels for battery faults
+
+TIME CONFIGURATION:
+  - Requested duration: 30.0 minutes (1800 seconds)
+  - Nanoseconds: 1800000000000 ns
+  - Actual duration: 30.00 minutes (1800 seconds)
+  - Time accuracy: GOOD
+  - Wall-clock time: 0.47 seconds
+
+CONSTELLATION CONFIGURATION:
+  - Number of spacecraft: 4
+  - Active camera: Satellite1
+  - Spacecraft with faults: 0
+
+Spacecraft 1: Satellite1
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+    - Arg. of Periapsis: 30.0°
+    - True Anomaly: 0.0°
+    - Orbital period: 96.5 minutes
+  Fault: DISABLED
+
+Spacecraft 2: Satellite2
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+    - Arg. of Periapsis: 30.0°
+    - True Anomaly: 90.0°
+    - Orbital period: 96.5 minutes
+  Fault: DISABLED
+
+Spacecraft 3: Satellite3
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+    - Arg. of Periapsis: 30.0°
+    - True Anomaly: 180.0°
+    - Orbital period: 96.5 minutes
+  Fault: DISABLED
+
+Spacecraft 4: Satellite4
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+    - Arg. of Periapsis: 30.0°
+    - True Anomaly: 270.0°
+    - Orbital period: 96.5 minutes
+  Fault: DISABLED
+
+OUTPUT CONFIGURATION:
+  - Results directory: C:\Uni\Uni\satelliteConstellation-basilisk\ProjectWork\BskSim\logs\sim_results_20250821_135408
+  - Plots generated: 0
+  - Binary file: C:\Uni\Uni\satelliteConstellation-basilisk\ProjectWork\BskSim\Vizfile\_VizFiles\spacecraft_viz_UnityViz.bin (1.60 MB)
+
+VIZARD FEATURES:
+1. Open Vizard application
+2. Load binary file: C:\Uni\Uni\satelliteConstellation-basilisk\ProjectWork\BskSim\Vizfile\_VizFiles\spacecraft_viz_UnityViz.bin
+3. You should now see:
+   - Spacecraft names labeled
+   - Orbit lines visible
+   - Target markers at 50km altitude (better visibility)
+   - Larger spacecraft (8x size)
+   - Camera optimized for target viewing
+   - Higher satellite altitudes for better coverage
+   - Battery panels for spacecraft with battery faults
+4. Simulation duration: 1800 seconds

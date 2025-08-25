@@ -50,6 +50,15 @@ except Exception as e:
     BASILISK_AVAILABLE = False
     BSK_INSTALL_PATH = None
 
+# Real ML fault detection integration
+try:
+    from real_ml_fault_detection import run_real_ml_detection_on_scenario
+    REAL_ML_AVAILABLE = True
+    print("Real ML fault detection available")
+except ImportError as e:
+    REAL_ML_AVAILABLE = False
+    print(f"Real ML fault detection not available: {e}")
+
 # Cluster integration (new feature)
 try:
     from cluster_integration import ClusterManager, integrate_clusters_with_simulation
@@ -836,7 +845,6 @@ def run_custom_simulation(config):
         print("WARNING: Simulation time mismatch!")
     
     # ============= GENERATE PLOTS WITH REAL FAULT SIMULATION =============
-# ============= GENERATE PLOTS WITH REAL FAULT SIMULATION =============
     figureList = {}
     if (config.show_plots or config.save_plots) and PLOTS_AVAILABLE:
         print("\n" + "-"*50)
@@ -1119,6 +1127,35 @@ def run_custom_simulation(config):
             self.cluster_manager = cluster_manager
     
     scenario = ConstellationScenario(scSim, sc_objects, config, cluster_manager)
+    
+    # ============= REAL ML FAULT DETECTION =============
+    print("\n" + "="*60)
+    print("SPRINT 4: REAL ML FAULT DETECTION")
+    print("="*60)
+
+    ml_results = None
+    if REAL_ML_AVAILABLE:
+        try:
+            print("Running client's ML model on REAL Basilisk data...")
+            
+            ml_results = run_real_ml_detection_on_scenario(
+                scenario=scenario,
+                scenario_config=config,
+                output_dir=output_dir
+            )
+            
+            if ml_results:
+                print("REAL ML FAULT DETECTION COMPLETED!")
+                summary = ml_results['summary']
+                print(f"   Spacecraft: {summary['total_spacecraft']}")
+                print(f"   ML Detections: {summary['total_detections']}")
+                if summary['detection_times']:
+                    print(f"   First Detection: {min(summary['detection_times']):.1f} min")
+            
+        except Exception as e:
+            print(f"Real ML detection error: {e}")
+    else:
+        print("Copy client's model: anomaly_detection_model.keras")
     
     # ============= SAVE SIMULATION SUMMARY =============
     try:
