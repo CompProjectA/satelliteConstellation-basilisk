@@ -45,6 +45,12 @@ except ImportError as e:
     FaultTab = None
 
 try:
+    from .fault_detection_tab import FaultDetectionTab
+except ImportError as e:
+    print(f"Warning: Could not import FaultDetectionTab: {e}")
+    FaultDetectionTab = None
+
+try:
     from .target_tab import TargetTab
 except ImportError as e:
     print(f"Warning: Could not import TargetTab: {e}")
@@ -68,6 +74,13 @@ except ImportError as e:
     print(f"Warning: Could not import ResultsTab: {e}")
     ResultsTab = None
 
+# NEW: Import CommunicationTab
+try:
+    from .communication_tab import CommunicationTab
+except ImportError as e:
+    print(f"Warning: Could not import CommunicationTab: {e}")
+    CommunicationTab = None
+
 # Export all available classes
 __all__ = []
 
@@ -77,6 +90,8 @@ if ConstellationTab:
     __all__.append('ConstellationTab')
 if FaultTab:
     __all__.append('FaultTab')
+if FaultDetectionTab:
+    __all__.append('FaultDetectionTab')
 if TargetTab:
     __all__.append('TargetTab')
 if VisualizationTab:
@@ -85,5 +100,5 @@ if OutputTab:
     __all__.append('OutputTab')
 if ResultsTab:
     __all__.append('ResultsTab')
-
-  
+if CommunicationTab:
+    __all__.append('CommunicationTab')

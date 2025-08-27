@@ -19,6 +19,7 @@ import logging
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend 
 from PIL import ImageTk, Image
+from communication_visualization import show_communication_visualization
 
 # Set up paths
 import inspect
@@ -38,6 +39,7 @@ from spacecraft_simulation import SimulationConfig, TargetDefinition, run_custom
 from gui_tab import (
     ConstellationTab,
     FaultTab,
+    FaultDetectionTab,
     TargetTab,
     VisualizationTab,
     OutputTab,
@@ -57,7 +59,8 @@ class SatelliteSimulatorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Spacecraft Constellation Fault Simulator")
-        self.root.geometry("1200x900")
+        self.root.update_idletasks()
+        self.root.state("zoomed")
         self.root.minsize(1000, 800)
         
         # Setup logging
@@ -81,6 +84,10 @@ class SatelliteSimulatorApp:
         # Update initial state
         self.update_status("Ready")
         self.update_status_counts()
+
+        self.debug_cluster_plots()
+
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
     def _on_closing(self):
         """Handle window closing"""
@@ -122,7 +129,117 @@ class SatelliteSimulatorApp:
         # Create _VizFiles subdirectory
         viz_files_dir = os.path.join(self.VIZ_DIR, "_VizFiles")
         os.makedirs(viz_files_dir, exist_ok=True)
+
+    def check_cluster_plots(self):
+        """Check why cluster plots aren't generating"""
+        print("\n=== CHECKING CLUSTER CONFIGURATION ===")
         
+        # Check constellation tab clusters
+        if hasattr(self, 'constellation_tab'):
+            clusters = self.constellation_tab.clusters
+            print(f"Clusters in constellation tab: {len(clusters)}")
+            for c in clusters:
+                print(f"  - {c['name']}: {len(c.get('satellites', []))} satellites")
+        
+        # Check satellites for cluster membership
+        cluster_sats = [s for s in self.satellites if s.get('cluster')]
+        print(f"Satellites with cluster assignment: {len(cluster_sats)}")
+        for s in cluster_sats[:5]:  # Show first 5
+            print(f"  - {s['name']}: cluster={s.get('cluster')}, role={s.get('role')}")
+        
+        print("=====================================\n")
+
+    def on_tab_changed(self, event):
+        """Handle tab change events"""
+        selected_tab = event.widget.tab('current')['text']
+        
+        if selected_tab == 'Constellation':
+            # Check if Communication sub-tab is selected
+            if hasattr(self, 'constellation_tab'):
+                current_subtab = self.constellation_tab.constellation_notebook.index('current')
+                if current_subtab == 3:  # Communication sub-tab index
+                    self.constellation_tab.update_communication_plot()
+                    
+        elif selected_tab == 'Results':
+            # Refresh results if needed
+            if hasattr(self, 'results_tab'):
+                self.results_tab.refresh_plot_list()
+
+    def show_communication_window(self):
+        """Show communication visualization window"""
+        # Get cluster manager if using clusters
+        cluster_manager = None
+        
+        # Check if we're using the cluster integration
+        if hasattr(self, 'constellation_tab'):
+            # Create a simple cluster manager from the constellation tab data
+            class SimpleClusterManager:
+                def __init__(self, clusters):
+                    self.clusters = {}
+                    for cluster in clusters:
+                        self.clusters[cluster['name']] = {
+                            'leader': type('obj', (object,), {'model_tag': cluster.get('leader', 'Unknown')})(),
+                            'children': [type('obj', (object,), {'model_tag': child})() for child in cluster.get('children', [])]
+                        }
+            
+            if hasattr(self.constellation_tab, 'clusters'):
+                cluster_manager = SimpleClusterManager(self.constellation_tab.clusters)
+        
+        # Show visualization
+        self.comm_visualizer = show_communication_visualization(self.root, cluster_manager)
+        
+    
+  
+
+    def debug_cluster_plots(self):
+        """Debug why cluster plots aren't generating"""
+        print("\n" + "="*60)
+        print("CLUSTER PLOT DEBUGGING")
+        print("="*60)
+        
+        # Check satellites for cluster membership
+        print("\n1. CHECKING SATELLITE CLUSTER ASSIGNMENTS:")
+        cluster_sats = {}
+        for sat in self.satellites:
+            if sat.get('cluster'):
+                cluster = sat['cluster']
+                role = sat.get('role', 'unknown')
+                if cluster not in cluster_sats:
+                    cluster_sats[cluster] = {'leader': None, 'children': []}
+                
+                if role == 'leader':
+                    cluster_sats[cluster]['leader'] = sat['name']
+                elif role == 'child':
+                    cluster_sats[cluster]['children'].append(sat['name'])
+                
+                print(f"  {sat['name']}: cluster='{cluster}', role='{role}'")
+        
+        print(f"\n2. CLUSTER SUMMARY:")
+        for cluster_name, info in cluster_sats.items():
+            print(f"  Cluster '{cluster_name}':")
+            print(f"    Leader: {info['leader']}")
+            print(f"    Children ({len(info['children'])}): {info['children']}")
+        
+        print(f"\n3. CLUSTER DATA STRUCTURE CHECK:")
+        if hasattr(self, 'constellation_tab'):
+            clusters = self.constellation_tab.clusters
+            print(f"  Clusters in constellation_tab: {len(clusters)}")
+            for c in clusters:
+                print(f"    - {c['name']}: leader={c.get('leader')}, children={len(c.get('children', []))}")
+        
+        print(f"\n4. SOLUTION:")
+        if not cluster_sats:
+            print("  NO SATELLITES HAVE CLUSTER ASSIGNMENTS!")
+            print("  Fix: Make sure satellites have 'cluster' and 'role' fields set")
+        elif all(info['leader'] is None for info in cluster_sats.values()):
+            print("  NO CLUSTER LEADERS FOUND!")
+            print("  Fix: Make sure at least one satellite per cluster has role='leader'")
+        else:
+            print("  Cluster structure looks correct")
+            print("  If plots still don't generate, check spacecraft_simulation.py line ~700")
+        
+        print("="*60 + "\n")
+    
     def _initialize_data(self):
         """Initialize application data structures"""
         # Paths
@@ -158,6 +275,9 @@ class SatelliteSimulatorApp:
         # State
         self.is_running = False
         self.latest_plots = []
+        
+        # ML Detection results storage
+        self.ml_detection_results = None
         
     def _initialize_default_satellites(self):
         """Create default satellite constellation"""
@@ -236,6 +356,7 @@ class SatelliteSimulatorApp:
         # Create tab frames
         self.constellation_frame = ttk.Frame(self.notebook)
         self.fault_frame = ttk.Frame(self.notebook)
+        self.fault_detection_frame = ttk.Frame(self.notebook)
         self.target_frame = ttk.Frame(self.notebook)
         self.visualization_frame = ttk.Frame(self.notebook)
         self.output_frame = ttk.Frame(self.notebook)
@@ -244,6 +365,7 @@ class SatelliteSimulatorApp:
         # Add tabs
         self.notebook.add(self.constellation_frame, text="Constellation")
         self.notebook.add(self.fault_frame, text="Fault Configuration")
+        self.notebook.add(self.fault_detection_frame, text="Fault Detection")
         self.notebook.add(self.target_frame, text="Targets")
         self.notebook.add(self.visualization_frame, text="Visualization")
         self.notebook.add(self.output_frame, text="Output Settings")
@@ -252,6 +374,7 @@ class SatelliteSimulatorApp:
         # Create tab objects
         self.constellation_tab = ConstellationTab(self, self.constellation_frame)
         self.fault_tab = FaultTab(self, self.fault_frame)
+        self.fault_detection_tab = FaultDetectionTab(self, self.fault_detection_frame)
         self.target_tab = TargetTab(self, self.target_frame)
         self.visualization_tab = VisualizationTab(self, self.visualization_frame)
         self.output_tab = OutputTab(self, self.output_frame)
@@ -284,6 +407,15 @@ class SatelliteSimulatorApp:
         )
         self.target_status.pack(side=tk.LEFT, padx=20)
         
+        # ML Detection Status
+        self.ml_detection_status = ttk.Label(
+            status_frame,
+            text="ML: Not Ready",
+            style='Status.TLabel',
+            foreground='gray'
+        )
+        self.ml_detection_status.pack(side=tk.LEFT, padx=20)
+        
         # Simulation time
         sim_time_frame = ttk.Frame(status_frame)
         sim_time_frame.pack(side=tk.LEFT, padx=20)
@@ -308,9 +440,6 @@ class SatelliteSimulatorApp:
         )
         self.time_label.pack(side=tk.RIGHT, padx=10)
 
-
-    
-
     def _create_menu_bar(self):
         """Create the application menu bar"""
         menu_bar = tk.Menu(self.root)
@@ -331,20 +460,28 @@ class SatelliteSimulatorApp:
         menu_bar.add_cascade(label="Simulation", menu=sim_menu)
         sim_menu.add_command(label="Run Simulation", command=self.run_simulation)
         sim_menu.add_separator()
+        sim_menu.add_command(label="Communication Visualization", command=self.show_communication_window)
+        sim_menu.add_separator()
         sim_menu.add_command(label="View Results", command=self._view_results)
+        sim_menu.add_command(label="View Fault Detection", command=self._view_fault_detection)
         sim_menu.add_command(label="Open Results Folder", command=self.open_results_folder)
         
         # Help menu
         help_menu = tk.Menu(menu_bar, tearoff=0)
         menu_bar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="User Guide", command=self.show_help)
+        help_menu.add_command(label="Fault Detection Help", command=self.show_fault_detection_help)
         help_menu.add_command(label="About", command=self.show_about)
-        
+
     # Public methods
+
     def add_satellite(self, name, true_anomaly=0.0, altitude=600):
-        """Add a new satellite to the constellation"""
+        """Add a new satellite to the constellation with all required fields"""
         satellite = {
             "name": name,
+            "type": "individual",  # Add type field for compatibility
+            "cluster": None,       # Not part of a cluster
+            "role": "independent", # Independent satellite
             "orbit": {
                 "a": 6371 + altitude,
                 "e": 0.01,
@@ -371,10 +508,22 @@ class SatelliteSimulatorApp:
                 "fov": 80.0,
                 "enabled": name == "Satellite1"
             },
+            "communication": {  # Add communication settings
+                "range": 2000.0,  # km
+                "fov": 30.0,      # degrees
+                "aHat_B": [0.0, 0.0, -1.0]
+            },
             "targets": [],
             "orbit_name": "Default Orbit"
         }
         self.satellites.append(satellite)
+        
+        # Update fault detection tab satellite list
+        if hasattr(self, 'fault_detection_tab'):
+            self.fault_detection_tab.monitoring_spacecraft_combo['values'] = (
+                ["All Spacecraft"] + [sat["name"] for sat in self.satellites]
+            )
+        
         return satellite
         
     def update_status(self, message):
@@ -392,6 +541,15 @@ class SatelliteSimulatorApp:
             assigned = len([t for t in self.targets if t.get('assigned_to', [])])
             total = len(self.targets)
             self.target_status.config(text=f"{assigned}/{total} targets assigned")
+            
+            # ML Detection status
+            if hasattr(self, 'fault_detection_tab'):
+                if self.fault_detection_tab.is_ml_ready():
+                    self.ml_detection_status.config(text="ML: Ready", foreground='green')
+                elif self.fault_detection_tab.ml_available:
+                    self.ml_detection_status.config(text="ML: Available", foreground='orange')
+                else:
+                    self.ml_detection_status.config(text="ML: Not Available", foreground='red')
         except:
             pass
             
@@ -426,6 +584,12 @@ class SatelliteSimulatorApp:
             self.fault_tab.update_satellite_dropdown()
             self.visualization_tab.update_satellite_dropdown()
             self.target_tab.update_satellite_dropdown()
+            
+            # Update fault detection tab spacecraft list
+            if hasattr(self, 'fault_detection_tab'):
+                self.fault_detection_tab.monitoring_spacecraft_combo['values'] = (
+                    ["All Spacecraft"] + [sat["name"] for sat in self.satellites]
+                )
         except:
             pass
             
@@ -515,11 +679,23 @@ class SatelliteSimulatorApp:
             self.add_log(f"Simulation: {len(config.spacecraft_list)} satellites, "
                         f"{len(config.targets)} targets, {config.simulation_time} minutes")
             
-            # Run simulation
-            scenario, viz, figureList, output_dir = run_custom_simulation(config)
+            # Run simulation - this now returns ML results too
+            result = run_custom_simulation(config)
+            
+            # Handle the return value (could be 4 or 5 elements)
+            if len(result) == 5:
+                scenario, viz, figureList, output_dir, ml_results = result
+                self.ml_detection_results = ml_results
+            else:
+                scenario, viz, figureList, output_dir = result
+                self.ml_detection_results = None
             
             # Handle results
             self._handle_simulation_results(figureList, output_dir, config)
+            
+            # Handle ML detection results
+            if self.ml_detection_results:
+                self._handle_ml_detection_results(self.ml_detection_results)
             
             # Show completion message
             self._show_completion_message(config, output_dir)
@@ -586,6 +762,32 @@ class SatelliteSimulatorApp:
         # Switch to results if plots created
         if self.latest_plots and self.save_plots.get():
             self.notebook.select(self.results_frame)
+    
+    def _handle_ml_detection_results(self, ml_results):
+        """Handle ML detection results and display them in the fault detection tab"""
+        try:
+            # Update the fault detection tab with results
+            if hasattr(self, 'fault_detection_tab') and ml_results:
+                self.fault_detection_tab.display_ml_results(ml_results)
+                self.add_log("ML detection results processed and displayed")
+                
+                # Update ML status in status bar
+                summary = ml_results.get('summary', {})
+                total_detections = summary.get('total_detections', 0)
+                
+                if total_detections > 0:
+                    self.ml_detection_status.config(
+                        text=f"ML: {total_detections} Detections", 
+                        foreground='red'
+                    )
+                else:
+                    self.ml_detection_status.config(
+                        text="ML: No Faults", 
+                        foreground='green'
+                    )
+                    
+        except Exception as e:
+            self.add_log(f"Error processing ML detection results: {e}")
             
     def _show_completion_message(self, config, output_dir):
         """Show simulation completion message"""
@@ -597,6 +799,11 @@ class SatelliteSimulatorApp:
         
         if self.latest_plots:
             message += f"\n{len(self.latest_plots)} plots saved"
+            
+        if self.ml_detection_results:
+            summary = self.ml_detection_results.get('summary', {})
+            ml_detections = summary.get('total_detections', 0)
+            message += f"\nML Detection: {ml_detections} faults detected"
             
         messagebox.showinfo("Simulation Complete", message)
         
@@ -611,6 +818,11 @@ class SatelliteSimulatorApp:
             # Reset targets
             for i, target in enumerate(self.targets):
                 target["assigned_to"] = [f"Satellite{i+1}"] if i < 4 else []
+                
+            # Reset ML detection results
+            self.ml_detection_results = None
+            if hasattr(self, 'fault_detection_tab'):
+                self.fault_detection_tab.clear_results()
                 
             # Update UI
             self.constellation_tab.update_satellite_listbox()
@@ -671,7 +883,7 @@ class SatelliteSimulatorApp:
             
     def _create_configuration(self):
         """Create configuration dictionary"""
-        return {
+        config = {
             "version": "1.0",
             "simulation_time": self.simulation_time.get(),
             "show_plots": self.show_plots.get(),
@@ -682,6 +894,23 @@ class SatelliteSimulatorApp:
             "targets": self.targets,
             "active_satellite_index": self.current_satellite_index.get()
         }
+        
+        # Add ML detection configuration if available
+        if hasattr(self, 'fault_detection_tab'):
+            config["ml_detection"] = {
+                "model_path": self.fault_detection_tab.model_path_var.get(),
+                "threshold": self.fault_detection_tab.threshold_var.get(),
+                "methods_enabled": {
+                    "ml": self.fault_detection_tab.ml_detection_var.get(),
+                    "statistical": self.fault_detection_tab.statistical_detection_var.get(),
+                    "trend": self.fault_detection_tab.trend_detection_var.get(),
+                    "threshold": self.fault_detection_tab.threshold_detection_var.get()
+                },
+                "realtime_enabled": self.fault_detection_tab.realtime_var.get(),
+                "update_interval": self.fault_detection_tab.update_interval_var.get()
+            }
+        
+        return config
         
     def _apply_configuration(self, config):
         """Apply loaded configuration"""
@@ -707,6 +936,21 @@ class SatelliteSimulatorApp:
         if 0 <= index < len(self.satellites):
             self.current_satellite_index.set(index)
             self.fault_tab.set_active_satellite(index)
+            
+        # ML detection configuration
+        if "ml_detection" in config and hasattr(self, 'fault_detection_tab'):
+            ml_config = config["ml_detection"]
+            self.fault_detection_tab.model_path_var.set(ml_config.get("model_path", ""))
+            self.fault_detection_tab.threshold_var.set(ml_config.get("threshold", 0.5))
+            
+            methods = ml_config.get("methods_enabled", {})
+            self.fault_detection_tab.ml_detection_var.set(methods.get("ml", True))
+            self.fault_detection_tab.statistical_detection_var.set(methods.get("statistical", True))
+            self.fault_detection_tab.trend_detection_var.set(methods.get("trend", True))
+            self.fault_detection_tab.threshold_detection_var.set(methods.get("threshold", False))
+            
+            self.fault_detection_tab.realtime_var.set(ml_config.get("realtime_enabled", False))
+            self.fault_detection_tab.update_interval_var.set(ml_config.get("update_interval", 5))
             
         self.update_status_counts()
         
@@ -767,6 +1011,69 @@ class SatelliteSimulatorApp:
             
         # Close button
         ttk.Button(help_window, text="Close", command=help_window.destroy).pack(pady=10)
+    
+    def show_fault_detection_help(self):
+        """Show fault detection specific help"""
+        help_window = tk.Toplevel(self.root)
+        help_window.title("AI Fault Detection Help")
+        help_window.geometry("700x500")
+        help_window.transient(self.root)
+        help_window.grab_set()
+        
+        frame = ttk.Frame(help_window, padding=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Title
+        ttk.Label(
+            frame,
+            text="AI Fault Detection System Help",
+            font=('Segoe UI', 14, 'bold')
+        ).pack(pady=(0, 20))
+        
+        # Help content
+        help_content = """AI FAULT DETECTION OVERVIEW:
+The AI Fault Detection system uses machine learning to automatically detect spacecraft faults in real-time during simulation.
+
+SETUP PROCESS:
+1. Load ML Model: Browse and select your trained Keras model file (.keras or .h5)
+2. Configure Detection Methods: Enable ML, statistical, trend, or threshold-based detection
+3. Set Detection Threshold: Adjust sensitivity (0.01 = very sensitive, 1.0 = less sensitive)
+4. Run Simulation: The system will automatically analyze telemetry data
+
+DETECTION METHODS:
+• ML Autoencoder: Uses neural networks to detect anomalies in spacecraft behavior
+• Statistical Analysis: Compares pre/post fault statistics 
+• Trend Analysis: Detects changes in data trends over time
+• Threshold-based: Simple threshold crossing detection
+
+INTERPRETING RESULTS:
+• Detection confidence: Higher values indicate stronger fault detection
+• Spacecraft affected: Shows which satellites experienced faults
+• Fault timing: When faults were detected during simulation
+• Analysis plots: Visual representation of detection performance
+
+REAL-TIME MONITORING:
+Enable to see live fault detection during simulation with updating plots and statistics.
+
+TROUBLESHOOTING:
+• "ML Not Available": Install TensorFlow (pip install tensorflow)
+• "Model Load Failed": Check model file path and format
+• "No Detections": Fault signatures may be too weak or threshold too high
+
+The system integrates with your existing fault injection to provide comprehensive fault analysis."""
+        
+        text_widget = tk.Text(frame, wrap=tk.WORD, font=('Segoe UI', 10))
+        scrollbar = ttk.Scrollbar(frame, command=text_widget.yview)
+        text_widget.config(yscrollcommand=scrollbar.set)
+        
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        text_widget.insert(tk.END, help_content)
+        text_widget.config(state=tk.DISABLED)
+        
+        # Close button
+        ttk.Button(help_window, text="Close", command=help_window.destroy).pack(pady=10)
         
     def show_about(self):
         """Show about dialog"""
@@ -797,8 +1104,9 @@ Features:
 • Comprehensive fault injection
 • 3D visualization with Vizard
 • Advanced data analysis
+• AI-powered fault detection
 
-Built with Python, Tkinter, Matplotlib, and Basilisk
+Built with Python, Tkinter, Matplotlib, TensorFlow, and Basilisk
 
 © 2025 Spacecraft Dynamics Lab"""
         
@@ -829,6 +1137,10 @@ Built with Python, Tkinter, Matplotlib, and Basilisk
     def _view_results(self):
         """Switch to results tab"""
         self.notebook.select(self.results_frame)
+        
+    def _view_fault_detection(self):
+        """Switch to fault detection tab"""
+        self.notebook.select(self.fault_detection_frame)
 
 
 # Main entry point
