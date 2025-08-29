@@ -3,7 +3,7 @@ from message_data import MessageData
 import numpy as np
 import matplotlib.pyplot as plt
 
-from Basilisk.simulation import spacecraft, spacecraftLocation, simSynch,extForceTorque,simpleNav
+from Basilisk.simulation import spacecraft, spacecraftLocation, simSynch,extForceTorque,simpleNav, simpleBattery, simplePowerSink, simpleSolarPanel
 from Basilisk.utilities import (SimulationBaseClass, macros, orbitalMotion, simIncludeGravBody, unitTestSupport, vizSupport)
 from Basilisk import __path__
 from Basilisk.architecture import messaging
@@ -22,6 +22,7 @@ def thereIsOne(value, lst):
         if item == value:
             return True
     return False
+
 #return the first index that matches value
 def getFirstMatch(value, lst):
     for i,item in enumerate(lst):
@@ -54,6 +55,7 @@ def run(show_plots=True):
                 {"name": "Sri Lanka",      "lat":   6.9271, "lon":  79.8612, "color": "orange"},
                 {"name": "Central Africa", "lat":   1.5333, "lon":  17.6667, "color": "purple"}
     ]
+    gsList = []
     #Define variables and parameters for battery fault
     numDataPoints = 100
     solarPanel = None
@@ -203,26 +205,142 @@ def run(show_plots=True):
                 scSim.AddModelToTask(simTaskName, recorder)
 
    
+    battery = simpleBattery.SimpleBattery()
+    battery.ModelTag = "satBattery"
+    battery.storageCapacity = 100.0 
+    battery.storedCharge_Init = 80.0
+    scSim.AddModelToTask(simTaskName, battery)
+
+    powerSink = simplePowerSink.SimplePowerSink()
+    powerSink.ModelTag = "powerSink"
+    powerSink.nodePowerOut = -0.01  # sink 10 W
+    scSim.AddModelToTask(simTaskName, powerSink)
+    battery.addPowerNodeToModel(powerSink.nodePowerOutMsg)
+
+    # Secondary (fault-injection) load
+    powerSinkFault = simplePowerSink.SimplePowerSink()
+    powerSinkFault.ModelTag = "powerSinkFault"
+    powerSinkFault.nodePowerOut = 0.0  # start off
+    scSim.AddModelToTask(simTaskName, powerSinkFault)
+    battery.addPowerNodeToModel(powerSinkFault.nodePowerOutMsg)
+
+    # Expose components for event access
+    scSim.powerSink = powerSink
+    scSim.powerSinkFault = powerSinkFault
+
+    battRec = battery.batPowerOutMsg.recorder(simulationTimeStep)
+    scSim.battRec = battRec
+    scSim.AddModelToTask(simTaskName, battRec)
+
+    # === Battery fault config (choose which sat to label this for) ===
+    FAULT_SAT_INDEX   = 3        # 0-based; 3 == "Satellite4"
+    FAULT_TIME_MIN    = 10.0     # inject at t = 15 minutes
+    FAULT_EXTRA_WATTS = 50.0     # +50 W draw when fault hits
+    FAULT_START_MIN  = 5.0        # start degrading after 5 minutes of sim time
+    DEGRADE_PERIOD_S = 60.0 
+    fault_applied     = False
+    TARGET_SAT_INDEX = 3          # 0-based index; 3 ==> "Satellite4" (rename if needed)
+            # apply degradation once every minute
+    MODE             = "percent"  # "percent" or "absolute"
+
+        # If MODE == "percent": shrink capacity by this fraction each minute
+    DEGRADE_PERCENT  = 0.10       # 10% per minute
+
+        # If MODE == "absolute": subtract this many kWh each minute (1 kWh = 3.6e6 J)
+    DEGRADE_ABS_KWH  = 10.0       # e.g., 10 kWh per minute
+
+        # Safety: never let capacity drop below this (J)
+    MIN_CAPACITY_J   = 1.0e3
+    # Keep a handle to the target battery.
+# If you have a list/array of batteries per sat, pick the one you want:
+# battery = battery_list[TARGET_SAT_INDEX]
+# Otherwise, if you already named it 'battery', keep that:
+# battery = battery
+
+# Record initial capacity (Joules)
+    INITIAL_CAPACITY_J = float(battery.storageCapacity)
+
+    # Degradation schedule bookkeeping
+    fault_active       = False
+    next_degrade_t_s   = FAULT_START_MIN * 60.0
+    minute_counter     = 0
+
+    def _apply_battery_degradation():
+        """Apply one degradation step to the battery capacity."""
+        nonlocal minute_counter
+        prev_cap = float(battery.storageCapacity)
+
+        if MODE == "percent":
+            new_cap = prev_cap * (1.0 - DEGRADE_PERCENT)
+        else:  # MODE == "absolute"
+            hit_J  = DEGRADE_ABS_KWH * 3_600_000.0  # kWh -> J
+            new_cap = prev_cap - hit_J
+
+        # Clamp to a safe minimum
+        new_cap = max(new_cap, MIN_CAPACITY_J)
+        battery.storageCapacity = new_cap
+
+        # If runtime exposes stored energy, keep it within capacity (safe clamp)
+        try:
+            if battery.storedCharge > new_cap:
+                battery.storedCharge = new_cap
+        except AttributeError:
+            pass  # not all builds expose this; it's fine
+
+        minute_counter += 1
+        print(f"[BATTERY FAULT] Satellite{TARGET_SAT_INDEX+1}: "
+            f"minute {minute_counter}, capacity {prev_cap:.3e} J -> {new_cap:.3e} J")
 
     # Battery state logger
- 
+    faultTime = macros.min2nano(15.0)
+    # adjust 
+    print(f"Fault will be injected at {15} minutes ({15 * 60} seconds)")
     # Visualization
     if vizSupport.vizFound:
         print("Vizard Visualization Found. Enabling live streaming...")
         clockSync = simSynch.ClockSynch()
         clockSync.accelFactor = 50.0
         scSim.AddModelToTask(simTaskName, clockSync)
-        
-        viz = vizSupport.enableUnityVisualization(scSim,
-                                                 simTaskName,
-                                                 satellites,
-            
-                                                 liveStream=True,
+        # Build one GenericStorage panel for the target satellite
+        gsList = [[] for _ in satellites]   # one sublist per spacecraft
 
-                                                 )
+        # Make the same-style bar as the working example
+        panel = vizSupport.vizInterface.GenericStorage()
+        panel.label = "bskSat Storage"      # this is the name you’ll see in Devices
+        panel.units = "%"
+        panel.minValue = 0
+        panel.maxValue = 100
+        panel.useStorageLevel = True
 
-     
-        
+        reader = messaging.PowerStorageStatusMsgReader()
+        reader.subscribeTo(battery.batPowerOutMsg)
+        panel.batteryStateInMsg = reader
+        panel.this.disown()
+
+        # (optional) thresholds/colors like the example
+        panel.thresholds = vizSupport.vizInterface.IntVector([20, 50, 80])
+        panel.color = vizSupport.vizInterface.IntVector(
+            vizSupport.toRGBA255("red") +
+            vizSupport.toRGBA255("orange") +
+            vizSupport.toRGBA255("yellow") +
+            vizSupport.toRGBA255("green")
+        )
+
+        # Attach to the ONE spacecraft you want the bar on
+        gsList[TARGET_SAT_INDEX] = [panel]
+
+        # --- enable viz and pass the list ---
+        viz = vizSupport.enableUnityVisualization(
+            scSim, simTaskName, satellites,
+            liveStream=True,
+            genericStorageList=gsList
+        )
+        # keep your GUI toggle
+        vizSupport.setInstrumentGuiSetting(
+            viz,
+            spacecraftName=satellites[TARGET_SAT_INDEX].ModelTag,
+            showGenericStoragePanel=True
+        )
         for i, scLocation in enumerate(leaders):
             vizSupport.addLocation(
                 viz,
@@ -259,7 +377,15 @@ def run(show_plots=True):
         nextStopTime = macros.sec2nano(currentTime + stepSize)
         scSim.ConfigureStopTime(nextStopTime)
         scSim.ExecuteSimulation()
-
+        if (not fault_applied) and (currentTime + stepSize >= FAULT_TIME_MIN * 60.0):
+        # nodePowerOut is in kW; W -> kW by /1000
+            scSim.powerSinkFault.nodePowerOut = -(FAULT_EXTRA_WATTS / 1000.0)
+            print(f"[BATTERY FAULT] Satellite{FAULT_SAT_INDEX+1}: +{FAULT_EXTRA_WATTS} W load at t={currentTime+stepSize:.1f} s")
+            fault_applied = True
+            fault_active = True
+        if fault_active and currentTime >= next_degrade_t_s:
+            _apply_battery_degradation()
+            next_degrade_t_s += DEGRADE_PERIOD_S
         # Get the time array and find indices for the last 10 seconds
         times = accessRecorders[0].times() * macros.NANO2SEC
         hasAccesstoSat2 = accessRecorders[0].hasAccess
@@ -297,7 +423,7 @@ def run(show_plots=True):
                 leadReceiver = leaders[1]
                 timeSent = (getFirstMatch(1,hasAccesstoLeader3to2[leadCheckindices])+10)/60
                 message = MessageData(f"Hello from{leadSender.model_tag}", timeSent, leadReceiver)
-                #Send a message from the leader1 to second child
+                #Send a message from the lead3 tolead 1
                 leadSender.sendMessageToLead(f"Hello from{leadSender.model_tag}", timeSent, leadReceiver )
                 if(message in leadSender.messageOutHistory):
                     print("Sending message from lead 3( sat 9) to lead 2 ( sat 2) successful!")
