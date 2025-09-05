@@ -4,7 +4,6 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 from Basilisk.utilities import macros, unitTestSupport
 import numpy as np
 import matplotlib.pyplot as plt
-from Envs import BasiliskEnv
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, SubprocVecEnv
 

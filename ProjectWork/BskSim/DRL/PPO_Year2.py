@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 from typing import Dict, Any
 
-from bsk_rl_develop.act.actions import ActionBuilder
+from bsk_rl.act.actions import ActionBuilder
 import numpy as np
 import matplotlib.pyplot as plt
 import gymnasium as gym
@@ -25,15 +25,15 @@ from Basilisk.architecture import messaging
 from collections import Counter  
 
 
-from bsk_rl_develop import ConstellationTasking
-from bsk_rl_develop.sats import ImagingSatellite
-from bsk_rl_develop.act import Action, Image
-from bsk_rl_develop import obs
-from bsk_rl_develop.sim import dyn, fsw
-from bsk_rl_develop.scene.targets import UniformTargets, Target
-from bsk_rl_develop.data import UniqueImageReward
-from bsk_rl_develop.comm import LOSCommunication
-from bsk_rl_develop.utils.orbital import walker_delta_args
+from bsk_rl import ConstellationTasking
+from bsk_rl.sats import ImagingSatellite
+from bsk_rl.act import Action, Image
+from bsk_rl import obs
+from bsk_rl_devel.sim import dyn, fsw
+from bsk_rl.scene.targets import UniformTargets, Target
+from bsk_rl.data import UniqueImageReward
+from bsk_rl.comm import LOSCommunication
+from bsk_rl.utils.orbital import walker_delta_args
 
 
 
