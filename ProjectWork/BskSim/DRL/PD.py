@@ -27,7 +27,7 @@ import Tools
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from Envs import BasiliskModel, DynamicModel
+from Envs import BasiliskModel
 from Basilisk.utilities import RigidBodyKinematics
 
 import numpy as np
