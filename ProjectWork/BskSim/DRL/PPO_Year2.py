@@ -5,10 +5,11 @@ import os
 from datetime import datetime
 from typing import Dict, Any
 
-from bsk_rl_develop.act.actions import ActionBuilder
+from bsk_rl.act.actions import ActionBuilder
 import numpy as np
 import matplotlib.pyplot as plt
 import gymnasium as gym
+
 
 # ---- Excel export deps (optional but recommended) ----
 try:
@@ -25,20 +26,20 @@ from Basilisk.architecture import messaging
 from collections import Counter  
 
 
-from bsk_rl_develop import ConstellationTasking
-from bsk_rl_develop.sats import ImagingSatellite
-from bsk_rl_develop.act import Action, Image
-from bsk_rl_develop import obs
-from bsk_rl_develop.sim import dyn, fsw
-from bsk_rl_develop.scene.targets import UniformTargets, Target
-from bsk_rl_develop.data import UniqueImageReward
-from bsk_rl_develop.comm import LOSCommunication
-from bsk_rl_develop.utils.orbital import walker_delta_args
+from bsk_rl import ConstellationTasking
+from bsk_rl.sats import ImagingSatellite
+from bsk_rl.act import Action, Image
+from bsk_rl import obs
+from bsk_rl.sim import dyn, fsw
+from bsk_rl.scene.targets import UniformTargets, Target
+from bsk_rl.data import UniqueImageReward
+from bsk_rl.comm import LOSCommunication
+from bsk_rl.utils.orbital import walker_delta_args
 
 
 
 class TargetAreas(UniformTargets):
-    def __init__(self, n_targets: int = 40, priority_distribution=None, radius=6378136.6):
+    def __init__(self, n_targets: int = 20, priority_distribution=None, radius=6378136.6):
         super().__init__(n_targets, priority_distribution, radius)
         self.lat_min, self.lat_max = -38.0, -25.0
         self.lon_min, self.lon_max = 129.0, 141.0
@@ -99,9 +100,9 @@ class AdvancedImagingSatellite(ImagingSatellite):
 
 
 def _tune_access_generation(sat,
-                            initial=1800.0,   # ~30 min initial generation
-                            step=120.0,       # 2-min stride
-                            max_dur=3600.0):  # clamp lookahead to 1 hour
+                            initial=600.0,   # ~30 min initial generation
+                            step=60.0,       # 2-min stride
+                            max_dur=1200.0):  # clamp lookahead to 1 hour
     """
     Tries common locations/attributes for the opportunity/access generator.
     Silently no-ops if attributes don't exist in your build.
@@ -299,7 +300,7 @@ def env_creator(env_config):
 
     return CustomConstellationTasking(
         satellites=satellites,
-        scenario=TargetAreas(n_targets=40),
+        scenario=TargetAreas(n_targets=20),
         rewarder=CustomUniqueImageReward(),
         communicator=LOSCommunication(),
         sat_arg_randomizer=sat_arg_randomizer,
@@ -350,7 +351,7 @@ algo = PPO(config=config)
 
 
 
-num_iterations = 100
+num_iterations = 10
 for i in range(num_iterations):
     result = algo.train()
     print(f"Iteration {i}: mean reward = {result.get('episode_reward_mean', 'N/A')}")
@@ -374,8 +375,8 @@ def inject_failure(sat_index: int):
         return _sat.dynamics.is_alive(log_failure=log_failure) and _sat.fsw.is_alive(log_failure=log_failure)
     sat.is_alive = isnt_alive
 
-max_steps = 40
-max_wallclock_s = 120  # hard cap to ensure we reach plots
+max_steps = 20
+max_wallclock_s = 30  # hard cap to ensure we reach plots
 fail_plan = {5: 0, 15: 2, 25: 3}  # step -> satellite index
 
 # Logs
