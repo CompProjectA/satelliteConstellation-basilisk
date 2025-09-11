@@ -302,9 +302,6 @@ class SimulationConfig:
         
         # Spacecraft list for constellation support
         self.spacecraft_list = []
-
-        # Inside your run path (before run_custom_simulation builds/uses config)
-        config.targets = generate_targets_box(-38.0, -25.0, 129.0, 141.0, n=40)
         
         # Default fault magnitudes for proper scaling
         self.DEFAULT_FAULT_MAGNITUDES = {
@@ -1307,6 +1304,7 @@ if __name__ == "__main__":
     
     if BASILISK_AVAILABLE:
         config = SimulationConfig()
+        config.targets = generate_targets_box(-38.0, -25.0, 129.0, 141.0, n=40)
         config.simulation_time = 5.0
         config.spacecraft_list = [
             {
