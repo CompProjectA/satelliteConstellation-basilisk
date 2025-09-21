@@ -264,6 +264,16 @@ def calculate_target_visibility(spacecraft_pos, target_pos, earth_radius=6371000
         return False
     except Exception:
         return False
+    
+def generate_targets_box(lat_min, lat_max, lon_min, lon_max, n=40):
+
+    names = []
+    targets = []
+    for i in range(n):
+        lat = float(np.random.uniform(lat_min, lat_max))
+        lon = float(np.random.uniform(lon_min, lon_max))
+        targets.append(TargetDefinition(f"Target_{i}", lat, lon, "red"))
+    return targets
 
 class TargetDefinition:
     """Class to hold target location definitions"""
@@ -273,6 +283,7 @@ class TargetDefinition:
         self.longitude = longitude
         self.color = color
         self.assigned_to = []
+
     
     def to_dict(self):
         return {
@@ -1293,6 +1304,7 @@ if __name__ == "__main__":
     
     if BASILISK_AVAILABLE:
         config = SimulationConfig()
+        config.targets = generate_targets_box(-38.0, -25.0, 129.0, 141.0, n=40)
         config.simulation_time = 5.0
         config.spacecraft_list = [
             {
