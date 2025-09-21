@@ -1,15 +1,21 @@
 # message_data.py
-class MessageData:
-    def __init__(self, message_content: str, timeSent, objectActive):
-        self.message_content = message_content
-        self.timeSent = timeSent
-        self.objectActive = objectActive
+from dataclasses import dataclass
+from typing import Any, Union
 
-    def __eq__(self, other):
-        if isinstance(other, MessageData):
-            return (
-                self.message_content == other.message_content
-                and self.timeSent == other.timeSent
-                and self.objectActive == other.objectActive
-            )
-        return False
+@dataclass(frozen=True)
+class MessageData:
+    """
+    Lightweight container for inter-satellite messages.
+
+    Fields:
+        message_content: The message payload (text).
+        timeSent:        Simulation time when the message was sent (minutes, or any numeric).
+        objectActive:    The target/peer object involved in the message (e.g., leader/child instance).
+
+    Equality:
+        Two MessageData objects are equal only if all three fields match,
+        including the exact same 'objectActive' reference.
+    """
+    message_content: str
+    timeSent: Union[float, int]
+    objectActive: Any

@@ -62,8 +62,9 @@ class ClusterManager:
             rN, vN = orbitalMotion.elem2rv(mu, oe)
 
             # optional position offset (formation)
-            if 'position_offset' in sat_cfg:
-                rN = rN + np.array(sat_cfg['position_offset'], dtype=float) * 1000.0
+            offset_km = sat_cfg.get('position_offset_km') or sat_cfg.get('position_offset')
+            if offset_km is not None:
+                rN = rN + np.array(offset_km, dtype=float) * 1000.0
 
             if SATELLITE_CLASSES_AVAILABLE and sat_cfg.get('role') == 'leader':
                 # leader
@@ -74,6 +75,11 @@ class ClusterManager:
                 comm_range = sat_cfg['communication']['range'] * 1000.0
                 aHat_B = sat_cfg['communication']['aHat_B']
                 leader.setup_comm(earth_radius, aHat_B, comm_range)
+
+                fov_deg = sat_cfg.get('communication', {}).get('fov')
+                if fov_deg is not None:
+                    leader.comm_module.theta = np.radians(float(fov_deg))
+
 
                 self.leaders.append(leader)
                 cluster_sats.append(leader)
@@ -92,6 +98,14 @@ class ClusterManager:
 
                 child = ChildSatellite(index=sat_index, rN=rN, vN=vN, gravFactory=gravFactory, leading_sat=leader)
                 child.setup_comm()
+
+                # index of the most recently-added target
+                child.access_idx = len(leader.comm_module.accessOutMsgs) - 1
+
+                child.access_rec = leader.comm_module.accessOutMsgs[child.access_idx].recorder()
+                child.access_rec.ModelTag = f"Access_{leader.model_tag}_{child.model_tag}"
+                scSim.AddModelToTask(simTaskName, child.access_rec)
+
 
                 leader.add_child(child)
                 children.append(child)
@@ -123,6 +137,42 @@ class ClusterManager:
         }
         return cluster_sats
 
+
+    def has_access_child(self, cluster_name: str, child_index: int) -> bool:
+        cl = self.clusters.get(cluster_name)
+        if not cl or child_index < 0 or child_index >= len(cl.get('children', [])):
+            return False
+        child = cl['children'][child_index]
+        rec = getattr(child, 'access_rec', None)
+        # If recorder has data, use the latest sample; otherwise assume accessible
+        if rec is not None and getattr(rec, 'hasAccess', None) is not None and rec.hasAccess.size:
+            return bool(rec.hasAccess[-1])
+        return True
+    
+
+
+    def send_message_in_cluster(self, cluster_name, message_content, time_min,
+                                from_leader=True, to_child_index=0, require_access=False):
+        cluster = self.clusters.get(cluster_name)
+        if not cluster or not cluster.get('leader'):
+            print(f"Cluster '{cluster_name}' not found or has no leader.")
+            return False
+
+        leader = cluster['leader']
+        children = cluster.get('children', [])
+        if not (0 <= to_child_index < len(children)):
+            return False
+
+        if require_access and not self.has_access_child(cluster_name, to_child_index):
+            print("No access: message not sent.")
+            return False
+
+        if from_leader:
+            leader.sendMessage(message_content, time_min, children[to_child_index])
+        else:
+            children[to_child_index].sendMessage(message_content, time_min)
+        return True
+
     def create_individual_satellite(self, sat_cfg, scSim, simTaskName, gravFactory, mu):
         """Create a non-cluster spacecraft."""
         oe = orbitalMotion.ClassicElements()
@@ -150,7 +200,35 @@ class ClusterManager:
 
         return sc
 
-    # ---- comms between cluster leaders ----
+
+    @staticmethod
+    def build_basilisk_cluster_from_gui(cluster_dict, gravFactory, anchor_rN_m=None, anchor_vN_m=None):
+        """Create one leader + children from a GUI cluster dict (cartesian offsets)."""
+        if anchor_rN_m is None:
+            anchor_rN_m = np.array([7000e3, 0.0, 0.0])
+        if anchor_vN_m is None:
+            anchor_vN_m = np.array([0.0, 0.0, 0.0])
+
+        leader_name = cluster_dict['leader']
+        # create leader at anchor
+        L = LeadingSatellite(0, anchor_rN_m, anchor_vN_m, gravFactory, model_tag=leader_name)
+
+        # Use constant Earth radius to avoid creating duplicate grav bodies
+        EARTH_RADIUS_M = 6371000.0
+        L.setup_comm(EARTH_RADIUS_M, [0.2, -0.4, 0.2], max(1.0, cluster_dict.get('separation', 10.0)) * 1000.0)
+
+        children_objs = []
+        for k, sat_name in enumerate(cluster_dict['children'], start=1):
+            sat_gui = next(s for s in cluster_dict['_members'] if s['name'] == sat_name)
+            d_km = sat_gui.get('position_offset_km', [k * 5.0, 0.0, 0.0])
+            rN = anchor_rN_m + np.array(d_km, dtype=float) * 1000.0
+            vN = anchor_vN_m.copy()
+            C = ChildSatellite(k, rN, vN, gravFactory, L)
+            L.add_child(C)
+            children_objs.append(C)
+
+        return L, children_objs
+
     def setup_inter_cluster_communication(self, scSim, simTaskName, earth_radius=6371000.0):
         """Create wide-FOV comm location models on each leader and connect to other leaders."""
         if len(self.leaders) < 2:
@@ -223,24 +301,6 @@ class ClusterManager:
                 s_list.append(sc)
         return s_list
 
-    def send_message_in_cluster(self, cluster_name, message_content, time_min, from_leader=True, to_child_index=0):
-        """Send a message within a cluster using the classes' messaging API."""
-        cluster = self.clusters.get(cluster_name)
-        if not cluster or not cluster.get('leader'):
-            print(f"Cluster '{cluster_name}' not found or has no leader.")
-            return False
-
-        leader = cluster['leader']
-        children = cluster.get('children', [])
-        if from_leader:
-            if 0 <= to_child_index < len(children):
-                leader.sendMessage(message_content, time_min, children[to_child_index])
-                return True
-        else:
-            if 0 <= to_child_index < len(children):
-                children[to_child_index].sendMessage(message_content, time_min)
-                return True
-        return False
 
     def send_inter_cluster_message(self, from_cluster, to_cluster, message_content, time_min):
         """Send a message between leaders of two clusters."""

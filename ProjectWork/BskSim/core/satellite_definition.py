@@ -32,9 +32,12 @@ class ChildSatellite:
         self.batteryReader = messaging.PowerStorageStatusMsgReader()
         self.batteryReader.subscribeTo(self.battery.batPowerOutMsg)
 
+
     def setup_comm(self):
-        # register self as a target in the shared comm model
+        # index of the next accessOutMsg before adding this child
+        idx = len(self.comm_module.accessOutMsgs)
         self.comm_module.addSpacecraftToModel(self.sc.scStateOutMsg)
+        self.access_idx = idx
 
     # --- messaging API ---
     def sendMessage(self, message, timeSent):

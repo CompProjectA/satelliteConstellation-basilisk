@@ -5,17 +5,22 @@ spacecraft_simulation.py
 COMPLETE MERGED VERSION - Core simulation functionality for the Spacecraft Constellation Fault Simulator.
 Includes:
 - Cluster integration (ClusterManager) when available
+- 4-cluster validation + leader checks (Claude feature)
+- Enhanced Vizard styling per cluster (color/size/labels) (Claude feature)
+- Optional enhanced plot generation via ConstellationPlotter (Claude feature)
 - Real fault simulation for EACH satellite
 - Battery visualization panels
 - Full plotting coverage (supports both old/new plots APIs)
 - Detailed summary + binary verification + cameras/targets
 - Automatic real simulation attempts with synthetic fallback
 """
+
 import os
 import sys
 import inspect
 import numpy as np
 from datetime import datetime
+import traceback
 
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
@@ -39,7 +44,6 @@ try:
     from Basilisk.utilities import orbitalMotion
     from Basilisk.utilities import simIncludeGravBody
     from Basilisk.simulation import spacecraft
-    from Basilisk.utilities import RigidBodyKinematics as rbk
     from Basilisk.utilities import SimulationBaseClass
     from Basilisk import __path__ as bsk_path
     BASILISK_AVAILABLE = True
@@ -59,7 +63,7 @@ except ImportError as e:
     REAL_ML_AVAILABLE = False
     print(f"Real ML fault detection not available: {e}")
 
-# Cluster integration (new feature)
+# Cluster integration (existing feature)
 try:
     from cluster_integration import ClusterManager, integrate_clusters_with_simulation
     CLUSTER_INTEGRATION_AVAILABLE = True
@@ -70,10 +74,7 @@ except Exception as e:
 
 # Plotting imports - support BOTH old and new APIs
 PLOTS_AVAILABLE = False
-PLOTS_API = {
-    "new": False,
-    "old": False
-}
+PLOTS_API = {"new": False, "old": False}
 
 # Try new plots API
 try:
@@ -101,31 +102,41 @@ try:
 except Exception as e:
     print(f"Note: Old plotting API not fully available: {e}")
 
+# Optional enhanced plotter (Claude-style extras)
+CONSTELLATION_PLOTTER_AVAILABLE = False
+try:
+    from plots import ConstellationPlotter
+    CONSTELLATION_PLOTTER_AVAILABLE = True
+    print("ConstellationPlotter available")
+except Exception:
+    pass
+
 # Global fault status variables
 FAULT_IMPORT_STATUS = {}
 AVAILABLE_FAULTS = []
 FAILED_FAULTS = []
 FAULT_LOADER_AVAILABLE = False
 
+
 def check_fault_modules(verbose=True):
     """Check and report status of all fault modules"""
     global FAULT_IMPORT_STATUS, AVAILABLE_FAULTS, FAILED_FAULTS, FAULT_LOADER_AVAILABLE
-    
+
     FAULT_IMPORT_STATUS = {}
     AVAILABLE_FAULTS = []
     FAILED_FAULTS = []
-    
+
     if verbose:
         print("\n" + "="*60)
         print("FAULT MODULE IMPORT STATUS")
         print("="*60)
-    
+
     # Try to import the fault loader
     try:
         from fault_loader import (
-            get_fault_scenario_class, 
-            create_scenario, 
-            run_scenario, 
+            get_fault_scenario_class,
+            create_scenario,
+            run_scenario,
             apply_fault_to_spacecraft,
             extract_fault_data_from_scenario,
             get_available_fault_types
@@ -133,7 +144,7 @@ def check_fault_modules(verbose=True):
         if verbose:
             print("Fault loader imported successfully")
         FAULT_LOADER_AVAILABLE = True
-        
+
         # Get list of available fault types
         try:
             available_types = get_available_fault_types()
@@ -143,13 +154,13 @@ def check_fault_modules(verbose=True):
         except Exception as e:
             if verbose:
                 print(f"Could not get available fault types: {e}")
-                
+
     except ImportError as e:
         if verbose:
             print(f"Fault loader import failed: {e}")
             print("WARNING: Real fault simulation will not be available.")
         FAULT_LOADER_AVAILABLE = False
-    
+
     # Try to import each specific fault module for verification
     fault_modules_to_check = [
         ("friction_fault", "FrictionFaultScenario"),
@@ -157,10 +168,10 @@ def check_fault_modules(verbose=True):
         ("encoder_fault", "EncoderFaultScenario"),
         ("battery_fault", "BatteryFaultScenario")
     ]
-    
+
     if verbose:
         print("\nIndividual fault module status:")
-    
+
     for module_name, class_name in fault_modules_to_check:
         try:
             module = __import__(f"faults.{module_name}", fromlist=[class_name])
@@ -178,16 +189,17 @@ def check_fault_modules(verbose=True):
             FAILED_FAULTS.append(module_name)
             if verbose:
                 print(f"  {module_name}: Import failed - {e}")
-    
+
     if verbose:
         print("="*60 + "\n")
-    
+
     return FAULT_LOADER_AVAILABLE, AVAILABLE_FAULTS, FAILED_FAULTS
+
 
 def check_plots_module(verbose=True):
     """Verify plots module availability"""
     global PLOTS_AVAILABLE
-    
+
     if PLOTS_API["new"] or PLOTS_API["old"]:
         if verbose:
             apis = []
@@ -201,8 +213,9 @@ def check_plots_module(verbose=True):
         if verbose:
             print("Plots module NOT available")
         PLOTS_AVAILABLE = False
-    
+
     return PLOTS_AVAILABLE
+
 
 def inject_fault_into_spacecraft(sc_object, fault_config, current_time_nano):
     """
@@ -211,21 +224,21 @@ def inject_fault_into_spacecraft(sc_object, fault_config, current_time_nano):
     """
     if not fault_config.get("enabled", False):
         return False
-        
+
     fault_type = fault_config["type"]
     fault_magnitude = fault_config["magnitude"]
     fault_wheel = fault_config["wheel"]
     fault_time_nano = macros.min2nano(fault_config["time"])
-    
+
     if current_time_nano < fault_time_nano:
         return False  # Not time yet
-    
+
     # Check if this fault type is available
     if fault_type not in AVAILABLE_FAULTS and FAULT_LOADER_AVAILABLE:
         print(f"ERROR: Fault type '{fault_type}' is not available")
         print(f"Available types: {AVAILABLE_FAULTS}")
         return False
-        
+
     # Log the fault for later processing
     if FAULT_LOADER_AVAILABLE:
         try:
@@ -246,6 +259,7 @@ def inject_fault_into_spacecraft(sc_object, fault_config, current_time_nano):
         print(f"Fault loader not available for {fault_type}")
         return False
 
+
 def calculate_target_visibility(spacecraft_pos, target_pos, earth_radius=6371000):
     """Simple LOS check to a target"""
     try:
@@ -264,16 +278,7 @@ def calculate_target_visibility(spacecraft_pos, target_pos, earth_radius=6371000
         return False
     except Exception:
         return False
-    
-def generate_targets_box(lat_min, lat_max, lon_min, lon_max, n=40):
 
-    names = []
-    targets = []
-    for i in range(n):
-        lat = float(np.random.uniform(lat_min, lat_max))
-        lon = float(np.random.uniform(lon_min, lon_max))
-        targets.append(TargetDefinition(f"Target_{i}", lat, lon, "red"))
-    return targets
 
 class TargetDefinition:
     """Class to hold target location definitions"""
@@ -284,7 +289,6 @@ class TargetDefinition:
         self.color = color
         self.assigned_to = []
 
-    
     def to_dict(self):
         return {
             "name": self.name,
@@ -294,15 +298,16 @@ class TargetDefinition:
             "assigned_to": self.assigned_to
         }
 
+
 class SimulationConfig:
     """Configuration class for simulation parameters"""
     def __init__(self):
         # Default simulation time
         self.simulation_time = 30.0  # minutes
-        
+
         # Spacecraft list for constellation support
         self.spacecraft_list = []
-        
+
         # Default fault magnitudes for proper scaling
         self.DEFAULT_FAULT_MAGNITUDES = {
             "friction": 0.0005,    # N⋅m
@@ -310,30 +315,30 @@ class SimulationConfig:
             "encoder": 20.0,       # %
             "battery": 50.0        # W
         }
-        
+
         # Legacy fault parameters (for backward compatibility)
         self.fault_type = "friction"
         self.fault_magnitude = 0.0005
         self.fault_wheel_number = 3
         self.fault_time = 10.0  # minutes
-        
+
         # Periodic fault parameters
         self.enable_periodic_fault = False
         self.periodic_fault_interval = 360  # seconds
         self.periodic_fault_magnitude = 0.1
         self.periodic_fault_wheel = 1
-        
+
         # Output settings
         self.binary_filename = "spacecraft_viz"
         self.show_plots = True
         self.save_plots = True
         self.save_binary = True
-        
+
         # Camera configuration
         self.camera_position = [0.0, 0.0, 10.0]
         self.camera_fov = 80.0
         self.active_camera_name = None
-        
+
         # Target locations
         self.targets = [
             TargetDefinition("Melbourne", -37.8136, 144.9631, "red"),
@@ -341,15 +346,16 @@ class SimulationConfig:
             TargetDefinition("Tokyo", 35.68, 139.77, "green"),
             TargetDefinition("London", 51.51, -0.13, "yellow")
         ]
-        
+        # Optional: config.clusters (either lightweight or rich) can be attached by GUI
+
     def validate(self):
         """Validate configuration parameters"""
         if not BASILISK_AVAILABLE:
             raise ValueError("Basilisk is not available. Please install Basilisk to run simulations.")
-        
+
         if self.simulation_time <= 0:
             raise ValueError("Simulation time must be positive (in minutes)")
-            
+
         # Validate each spacecraft configuration if using constellation mode
         if self.spacecraft_list:
             for sc in self.spacecraft_list:
@@ -358,28 +364,254 @@ class SimulationConfig:
                     raise ValueError(f"Spacecraft {sc['name']}: Semi-major axis must be greater than Earth radius (6371 km)")
                 if sc["orbit"]["e"] < 0 or sc["orbit"]["e"] >= 1.0:
                     raise ValueError(f"Spacecraft {sc['name']}: Eccentricity must be between 0 and 1")
-                
+
                 # Validate fault parameters if enabled
                 if sc["fault"]["enabled"]:
                     if sc["fault"]["time"] >= self.simulation_time:
                         raise ValueError(f"Spacecraft {sc['name']}: Fault time must be less than simulation time")
                     if sc["fault"]["time"] < 0:
                         raise ValueError(f"Spacecraft {sc['name']}: Fault time cannot be negative")
-                    
+
                     # Check if fault type is available
                     if FAULT_LOADER_AVAILABLE and sc["fault"]["type"] not in AVAILABLE_FAULTS:
                         print(f"Warning: Spacecraft {sc['name']}: Fault type '{sc['fault']['type']}' may not be available")
-                    
+
                     if sc["fault"]["wheel"] not in range(4):
                         raise ValueError(f"Spacecraft {sc['name']}: Fault wheel number must be between 0 and 3")
+
+
+# ---------------------------
+# Helpers for cluster plotting (existing)
+# ---------------------------
+
+def _name_to_index_map(sc_objects):
+    """Return dict mapping ModelTag -> index for spacecraft list."""
+    mapping = {}
+    for idx, sc in enumerate(sc_objects):
+        tag = getattr(sc, "ModelTag", None)
+        if tag:
+            mapping[tag] = idx
+    return mapping
+
+
+def _cluster_data_from_manager(cluster_manager, sc_objects):
+    """
+    Build {cluster_name: {'leader': idx, 'children': [idx,...]}} from ClusterManager.
+    """
+    cluster_data = {}
+    if not cluster_manager:
+        return cluster_data
+
+    name_index = _name_to_index_map(sc_objects)
+    # cluster_manager.clusters entries look like:
+    # { 'leader': LeadingSatellite, 'children': [ChildSatellite, ...] }
+    for cname, cinfo in cluster_manager.clusters.items():
+        leader_obj = cinfo.get('leader')
+        child_objs = cinfo.get('children', [])
+        leader_idx = None
+        child_indices = []
+
+        if leader_obj is not None:
+            ltag = getattr(leader_obj, 'model_tag', None)
+            leader_idx = name_index.get(ltag, None)
+
+        for ch in child_objs:
+            ctag = getattr(ch, 'model_tag', None)
+            idx = name_index.get(ctag, None)
+            if idx is not None:
+                child_indices.append(idx)
+
+        if leader_idx is not None and child_indices:
+            cluster_data[cname] = {'leader': leader_idx, 'children': child_indices}
+
+    return cluster_data
+
+
+def _cluster_data_from_config(config, sc_objects):
+    """
+    Build {cluster_name: {'leader': idx, 'children': [idx,...]}} from config alone.
+    """
+    cluster_data = {}
+    if not hasattr(config, "spacecraft_list"):
+        return cluster_data
+
+    name_index = _name_to_index_map(sc_objects)
+
+    # Initialize clusters
+    for sc in config.spacecraft_list:
+        cname = sc.get('cluster')
+        if cname:
+            cluster_data.setdefault(cname, {'leader': None, 'children': []})
+
+    # Fill leader/children by name lookup
+    for sc in config.spacecraft_list:
+        cname = sc.get('cluster')
+        if not cname:
+            continue
+        idx = name_index.get(sc.get('name'))
+        if idx is None:
+            continue
+        if sc.get('role') == 'leader':
+            cluster_data[cname]['leader'] = idx
+        elif sc.get('role') == 'child':
+            cluster_data[cname]['children'].append(idx)
+
+    # Keep only valid clusters
+    cluster_data = {
+        k: v for k, v in cluster_data.items()
+        if v['leader'] is not None and len(v['children']) > 0
+    }
+    return cluster_data
+
+
+# ---------------------------
+# Claude-style rich cluster support (NEW)
+# ---------------------------
+
+ALLOWED_FORMATIONS = {"Line", "Triangle", "Diamond", "Leader-Follower"}
+
+def _build_rich_from_lightweight(lightweight, sc_objects, sc_list):
+    """Convert lightweight cluster map to 'rich' form with names and indices."""
+    rich = {}
+    idx_to_name = {i: getattr(sc, "ModelTag", f"SC{i}") for i, sc in enumerate(sc_objects)}
+
+    # Best-effort metadata per sat from spacecraft_list
+    meta = {sc["name"]: {
+        "formation": sc.get("formation"),
+        "orbit": sc.get("orbit_name", "LEO 600km"),
+        "separation": sc.get("separation", 10.0)}
+        for sc in sc_list
+    }
+
+    for cname, data in (lightweight or {}).items():
+        leader_idx = data.get("leader")
+        child_idx = data.get("children", [])
+        sats, leader_entry, children = [], None, []
+        if leader_idx is not None:
+            lname = idx_to_name.get(leader_idx, f"SC{leader_idx}")
+            m = meta.get(lname, {})
+            leader_entry = {"name": lname, "role": "leader", "index": leader_idx,
+                            "formation": m.get("formation"), "orbit": m.get("orbit"), "separation": m.get("separation")}
+            sats.append(leader_entry)
+        for ci in child_idx:
+            n = idx_to_name.get(ci, f"SC{ci}")
+            m = meta.get(n, {})
+            entry = {"name": n, "role": "child", "index": ci,
+                     "formation": m.get("formation"), "orbit": m.get("orbit"), "separation": m.get("separation")}
+            sats.append(entry); children.append(entry)
+        if sats:
+            formation = (leader_entry or {}).get("formation") or "Line"
+            rich[cname] = {
+                "satellites": sats,
+                "leader": leader_entry or sats[0],
+                "children": children,
+                "formation": formation,
+                "orbit": (leader_entry or {}).get("orbit") or "LEO 600km",
+                "separation": (leader_entry or {}).get("separation") or 10.0
+            }
+    return rich
+
+def _normalize_rich_clusters(config, sc_objects):
+    """
+    Returns a unified 'rich' cluster dict if clusters provided (either already rich
+    or converted from lightweight); empty dict if none.
+    """
+    clusters = getattr(config, "clusters", {}) or {}
+    # Already 'rich'?
+    if clusters and all(isinstance(v, dict) and "satellites" in v for v in clusters.values()):
+        return clusters
+    # Lightweight?
+    if clusters and all(isinstance(v, dict) and "leader" in v for v in clusters.values()):
+        return _build_rich_from_lightweight(clusters, sc_objects, getattr(config, "spacecraft_list", []))
+    return {}
+
+def validate_cluster_configuration_rich(rich_clusters):
+    """Enforce max 4 clusters + exactly one leader + optional formation check."""
+    if not rich_clusters:
+        return
+    if len(rich_clusters) > 4:
+        raise ValueError(f"ERROR: Maximum 4 clusters allowed per project requirements. Got {len(rich_clusters)}")
+    for cname, c in rich_clusters.items():
+        sats = c.get("satellites", [])
+        leader_count = sum(1 for s in sats if s.get("role") == "leader")
+        if leader_count != 1:
+            raise ValueError(f"ERROR: Cluster '{cname}' must have exactly 1 leader, found {leader_count}")
+        formation = c.get("formation")
+        if formation and formation not in ALLOWED_FORMATIONS:
+            raise ValueError(f"ERROR: Invalid formation '{formation}' for cluster '{cname}'")
+
+def _print_cluster_summary(rich_clusters):
+    if not rich_clusters:
+        return
+    print("\nCLUSTER CONFIGURATION:")
+    print("-" * 40)
+    parts = []
+    for name, data in rich_clusters.items():
+        leader = (data.get("leader") or {}).get("name", "?")
+        children = len(data.get("children", []))
+        formation = data.get("formation", "-")
+        parts.append(f"{name}[Leader={leader}, {children} children, {formation}]")
+        print(f"  {name}:")
+        print(f"    Formation: {formation}")
+        print(f"    Satellites: {len(data.get('satellites', []))}")
+        print(f"    Leader: {leader}")
+        print(f"    Separation: {data.get('separation', 10.0)} km")
+    print("\nClusters({}): {}".format(len(rich_clusters), ", ".join(parts)))
+    print("="*60 + "\n")
+
+# Vizard styling (Claude)
+def enhance_vizard_settings(viz, rich_clusters):
+    """Apply per-cluster color/size/labels if available."""
+    if not viz or not rich_clusters:
+        return viz
+    cluster_colors = {
+        0: [1.0, 0.42, 0.42, 1.0],  # Red
+        1: [0.31, 0.80, 0.77, 1.0],  # Teal
+        2: [0.58, 0.91, 0.49, 1.0],  # Green
+        3: [1.0, 0.85, 0.24, 1.0]   # Yellow
+    }
+    try:
+        cidx = 0
+        for cname, cdata in rich_clusters.items():
+            color = cluster_colors.get(cidx, [0.6, 0.6, 0.6, 1.0])
+            for sat in cdata.get('satellites', []):
+                idx = sat.get('index', 0)
+                try:
+                    viz.scData[idx].scColor = color
+                except Exception:
+                    pass
+                try:
+                    if sat.get('role') == 'leader':
+                        viz.scData[idx].spacecraftSize = 100.0
+                        viz.scData[idx].modelTag = f"{cname[:3]}_L"
+                    else:
+                        viz.scData[idx].spacecraftSize = 50.0
+                        viz.scData[idx].modelTag = sat.get('name', f"SC{idx}")[:12]
+                except Exception:
+                    pass
+                try:
+                    viz.scData[idx].showOrbitLine = True
+                    viz.scData[idx].orbitColor = color
+                except Exception:
+                    pass
+            cidx += 1
+        try:
+            viz.settings.showFormationLines = True
+            viz.settings.formationLineWidth = 2.0
+        except Exception:
+            pass
+    except Exception as e:
+        print(f"Vizard enhance error (non-fatal): {e}")
+    return viz
+
 
 def run_custom_simulation(config):
     """
     Run a customized simulation based on the configuration
-    
+
     Parameters:
     config (SimulationConfig): Simulation configuration object
-    
+
     Returns:
     tuple: (scenario, viz, figureList, output_dir)
     """
@@ -387,89 +619,36 @@ def run_custom_simulation(config):
     print("\nChecking module availability...")
     check_fault_modules(verbose=True)
     check_plots_module(verbose=True)
-    
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = os.path.join(LOGS_DIR, f"sim_results_{timestamp}")
     os.makedirs(output_dir, exist_ok=True)
-    
+
     # Validate configuration
     config.validate()
     print("Configuration validation passed")
-    
+
     if not config.spacecraft_list:
         print("ERROR: No spacecraft configured in simulation")
         return None, None, {}, output_dir
-    
+
     print("\n" + "="*60)
     print("SPACECRAFT CONSTELLATION SIMULATION")
     print("="*60)
     print(f"Simulation Duration: {config.simulation_time} minutes")
     print(f"Number of Spacecraft: {len(config.spacecraft_list)}")
-    
-    # Check for clusters
-    has_clusters = any(sc.get('type') == 'cluster_member' for sc in config.spacecraft_list)
-    if has_clusters:
-        try:
-            print(f"\nGenerating cluster communication plots...")
-            
-            # Build cluster data structure for plotting
-            cluster_data = {}
-                
-                # Method 1: Get clusters from spacecraft list
-            clusters_found = {}
-            for i, sc_config in enumerate(config.spacecraft_list):
-                cluster_name = sc_config.get('cluster')
-                if cluster_name:
-                    if cluster_name not in clusters_found:
-                        clusters_found[cluster_name] = {
-                            'leader_idx': None,
-                            'children_idx': []
-                            }
-                        
-                    if sc_config.get('role') == 'leader':
-                        clusters_found[cluster_name]['leader_idx'] = i
-                        print(f"  Found leader: {sc_config['name']} (index {i}) for cluster {cluster_name}")
-                    elif sc_config.get('role') == 'child':
-                        clusters_found[cluster_name]['children_idx'].append(i)
-                        print(f"  Found child: {sc_config['name']} (index {i}) for cluster {cluster_name}")
-                
-              # Convert to format expected by plot function
-            for cluster_name, cluster_info in clusters_found.items():
-                if cluster_info['leader_idx'] is not None and len(cluster_info['children_idx']) > 0:
-                    cluster_data[cluster_name] = {
-                          'leader': cluster_info['leader_idx'],
-                        'children': cluster_info['children_idx']
-                     }
-                    print(f"  Cluster '{cluster_name}' ready: leader at index {cluster_info['leader_idx']}, {len(cluster_info['children_idx'])} children")
-                
-            # Generate plots if we have valid clusters
-            if cluster_data:
-                print(f"Generating plots for {len(cluster_data)} clusters...")
-                cluster_plots = generate_cluster_communication_plots(
-                    cluster_data,
-                    sc_objects,
-                    time_data
-                )
-                figureList.update(cluster_plots)
-                print(f"✓ Generated {len(cluster_plots)} cluster communication plots")
-            else:
-                print("  WARNING: No valid cluster data found!")
-                print(f"  Clusters found: {list(clusters_found.keys())}")
-                for name, info in clusters_found.items():
-                    print(f"    {name}: leader={info['leader_idx']}, children={info['children_idx']}")
-                
-        except Exception as e:
-            print(f"✗ Cluster plots failed: {e}")
-            import traceback
-            traceback.print_exc()
-    
+
+    # Check for clusters (by 'cluster' key OR type flag)
+    has_clusters = any(sc.get('cluster') for sc in config.spacecraft_list) or \
+                   any(sc.get('type') == 'cluster_member' for sc in config.spacecraft_list)
+
     # Time setup
     simulationTime = macros.min2nano(config.simulation_time)
     print("\nTime Configuration:")
     print(f"  Input: {config.simulation_time} minutes")
     print(f"  Simulation: {simulationTime} nanoseconds")
     print(f"  Verification: {simulationTime/1e9/60:.1f} minutes")
-    
+
     # Create simulation
     simTaskName = "simTask"
     simProcessName = "simProcess"
@@ -478,19 +657,19 @@ def run_custom_simulation(config):
     simulationTimeStep = macros.sec2nano(1.0)  # 1 second step
     dynProcess.addTask(scSim.CreateNewTask(simTaskName, simulationTimeStep))
     print("Simulation time step: 1 second")
-    
+
     # Create gravitational bodies
     gravFactory = simIncludeGravBody.gravBodyFactory()
     planet = gravFactory.createEarth()
     planet.isCentralBody = True
     mu = planet.mu
     print(f"Earth gravity parameter: {mu/1e14:.3f} x 10^14 m³/s²")
-    
+
     # Create spacecraft objects
     sc_objects = []
     cluster_manager = None
     fault_spacecraft_count = 0
-    
+
     # Use cluster integration if available and needed
     if has_clusters and CLUSTER_INTEGRATION_AVAILABLE:
         print("\n" + "-"*50)
@@ -501,126 +680,113 @@ def run_custom_simulation(config):
             config, cluster_manager, scSim, simTaskName, gravFactory, mu
         )
         print(f"Created {len(sc_objects)} spacecraft objects using ClusterManager")
-        comm_status = cluster_manager.get_communication_status()
-        print(f"Communication setup: {comm_status}")
+        try:
+            comm_status = cluster_manager.get_communication_status()
+            print(f"Communication setup: {comm_status}")
+        except Exception:
+            pass
     else:
         # Create individual spacecraft
         print("\n" + "-"*50)
         print("CREATING INDIVIDUAL SPACECRAFT")
         print("-"*50)
-        
-        # Fixed RAAN for each orbit type to ensure separation
-        orbit_raan_values = {
-            "Default Orbit": 0.0,
-            "MEO Navigation": 60.0,
-            "High Coverage": 120.0
-        }
-        
+
         for i, sc_config in enumerate(config.spacecraft_list):
-            # Create spacecraft
             sc = spacecraft.Spacecraft()
             sc.ModelTag = sc_config["name"]
-            
-            # Add spacecraft to task
-            scSim.AddModelToTask(simTaskName, sc)
-            
-            # Add gravity
-            gravFactory.addBodiesTo(sc)
-            
-            # Set orbit parameters
+
+            # Use orbit directly as configured (km -> m conversion)
             oe = orbitalMotion.ClassicElements()
             orbit = sc_config["orbit"]
-            
-            # Get RAAN (prefer explicit Omega, fall back to orbit name mapping)
-            if "Omega" in orbit:
-                Omega_deg = orbit["Omega"]
-            else:
-                orbit_name = sc_config.get("orbit_name", "Default Orbit")
-                Omega_deg = orbit_raan_values.get(orbit_name, 0.0)
-            
-            # Convert orbital parameters
-            oe.a = max(orbit["a"] * 1000, 6571000)  # Convert km to m, minimum 200km altitude
-            oe.e = min(orbit["e"], 0.01)  # Keep eccentricity small
+            oe.a = orbit["a"] * 1000  # km -> m
+            oe.e = orbit["e"]
             oe.i = orbit["i"] * macros.D2R
-            oe.Omega = Omega_deg * macros.D2R
-            oe.omega = orbit.get("omega", 0.0) * macros.D2R
-            oe.f = orbit.get("f", 0.0) * macros.D2R
-            
-            # Convert to Cartesian coordinates
+            oe.Omega = orbit["Omega"] * macros.D2R
+            oe.omega = orbit["omega"] * macros.D2R
+            oe.f = orbit["f"] * macros.D2R
+
             rN, vN = orbitalMotion.elem2rv(mu, oe)
+
+            # Set initial conditions
             sc.hub.r_CN_NInit = rN
             sc.hub.v_CN_NInit = vN
             sc.hub.sigma_BNInit = [[0.01], [0.02], [-0.01]]
             sc.hub.omega_BN_BInit = [[0.0001], [-0.0002], [0.0001]]
-            
+
             sc_objects.append(sc)
-            
-            # Calculate and print orbital info
+
+            # Orbital info
             altitude_km = (oe.a / 1000) - 6371
             period_min = (2*np.pi*np.sqrt(oe.a**3/mu))/60.0
             print(f"Spacecraft '{sc.ModelTag}' - Orbit: {sc_config.get('orbit_name','N/A')}, Alt: {altitude_km:.1f}km, Period: {period_min:.1f} min")
-            
-            # Set up fault configuration
+
+            # Fault configuration scaling
             if sc_config["fault"]["enabled"]:
                 fault_type = sc_config["fault"]["type"]
                 fault_magnitude = sc_config["fault"]["magnitude"]
-                
-                # Scale fault magnitude based on type (CRITICAL FOR PROPER SIMULATION)
+
+                # Scale default magnitude if unchanged
                 if fault_magnitude == 0.0005 and fault_type in config.DEFAULT_FAULT_MAGNITUDES:
                     scaled_magnitude = config.DEFAULT_FAULT_MAGNITUDES[fault_type]
                     print(f"  Scaling fault magnitude from {fault_magnitude} to {scaled_magnitude} for {fault_type}")
                     sc_config["fault"]["magnitude"] = scaled_magnitude
                     fault_magnitude = scaled_magnitude
-                
+
                 print(f"\nFault Configuration for '{sc.ModelTag}':")
                 print(f"  Type: {fault_type} | Magnitude: {fault_magnitude} | Wheel: {sc_config['fault']['wheel']} | Time: {sc_config['fault']['time']} min")
-                
+
                 # Store fault config in spacecraft for later use
                 sc.faultConfig = sc_config["fault"].copy()
                 sc.faultInjected = False
                 fault_spacecraft_count += 1
-        
+
         print(f"\nTotal spacecraft with faults configured: {fault_spacecraft_count}")
-    
+
+    # -------- Claude: normalize/validate rich clusters ----------
+    rich_clusters = _normalize_rich_clusters(config, sc_objects)
+    if rich_clusters:
+        validate_cluster_configuration_rich(rich_clusters)
+        _print_cluster_summary(rich_clusters)
+
     # ============= VISUALIZATION SETUP =============
     viz = None
-    if config.save_binary and vizSupport.vizFound:
+    if config.save_binary and BASILISK_AVAILABLE and vizSupport.vizFound:
         print("\n" + "-"*50)
         print("SETTING UP VIZARD VISUALIZATION")
         print("-"*50)
-        
+
         # Create visualization directory
         viz_files_dir = os.path.join(VIZ_DIR, "_VizFiles")
         os.makedirs(viz_files_dir, exist_ok=True)
-        
+
         binary_filename = os.path.basename(config.binary_filename)
         binary_full_path = os.path.join(VIZ_DIR, binary_filename)
         print(f"Binary output: {binary_filename}_UnityViz.bin")
-        
+
         # Check for battery faults and set up battery panels
-        has_battery_fault = any(sat["fault"]["enabled"] and sat["fault"]["type"] == "battery" 
+        has_battery_fault = any(sat["fault"]["enabled"] and sat["fault"]["type"] == "battery"
                                 for sat in config.spacecraft_list)
         gsList = [[] for _ in range(len(config.spacecraft_list))]
         battery_components = {}
-        
+
         if has_battery_fault:
             try:
                 from Basilisk.simulation import simpleBattery, simpleSolarPanel, simplePowerSink
                 from Basilisk.architecture import messaging
-                
+
                 print("Battery fault detected - setting up battery visualization panels...")
-                
+
                 for i, sc_config in enumerate(config.spacecraft_list):
                     if sc_config["fault"]["enabled"] and sc_config["fault"]["type"] == "battery":
                         sc = sc_objects[i]
-                        
+
                         # Create battery
                         battery = simpleBattery.SimpleBattery()
                         battery.ModelTag = f"{sc.ModelTag}_battery"
                         battery.storageCapacity = 100.0  # Wh
                         battery.storedCharge_Init = 50.0  # Wh
                         scSim.AddModelToTask(simTaskName, battery)
-                        
+
                         # Create solar panel
                         solarPanel = simpleSolarPanel.SimpleSolarPanel()
                         solarPanel.ModelTag = f"{sc.ModelTag}_solarPanel"
@@ -628,26 +794,26 @@ def run_custom_simulation(config):
                         solarPanel.stateInMsg.subscribeTo(sc.scStateOutMsg)
                         scSim.AddModelToTask(simTaskName, solarPanel)
                         battery.addPowerNodeToModel(solarPanel.nodePowerOutMsg)
-                        
+
                         # Sun message
                         sunMsgData = messaging.SpicePlanetStateMsgPayload()
                         sunMsgData.PositionVector = [-1.0, 0.0, 0.0]
                         sunMsg = messaging.SpicePlanetStateMsg().write(sunMsgData)
                         solarPanel.sunInMsg.subscribeTo(sunMsg)
-                        
+
                         # Power sinks
                         powerSink = simplePowerSink.SimplePowerSink()
                         powerSink.ModelTag = f"{sc.ModelTag}_powerSink"
                         powerSink.nodePowerOut = -0.01  # 10W nominal
                         scSim.AddModelToTask(simTaskName, powerSink)
                         battery.addPowerNodeToModel(powerSink.nodePowerOutMsg)
-                        
+
                         powerSinkFault = simplePowerSink.SimplePowerSink()
                         powerSinkFault.ModelTag = f"{sc.ModelTag}_powerSinkFault"
                         powerSinkFault.nodePowerOut = 0.0  # Initially off
                         scSim.AddModelToTask(simTaskName, powerSinkFault)
                         battery.addPowerNodeToModel(powerSinkFault.nodePowerOutMsg)
-                        
+
                         # Store components
                         battery_components[sc.ModelTag] = {
                             'battery': battery,
@@ -655,7 +821,7 @@ def run_custom_simulation(config):
                             'powerSink': powerSink,
                             'powerSinkFault': powerSinkFault
                         }
-                        
+
                         # Create battery panel visualization
                         batteryPanel = vizSupport.vizInterface.GenericStorage()
                         batteryPanel.label = f"{sc.ModelTag} Battery (%)"
@@ -663,12 +829,12 @@ def run_custom_simulation(config):
                         batteryPanel.minValue = 0
                         batteryPanel.maxValue = 100
                         batteryPanel.useStorageLevel = True
-                        
-                        batteryInMsg = messaging.PowerStorageStatusMsgReader()
-                        batteryInMsg.subscribeTo(battery.batPowerOutMsg)
-                        batteryPanel.batteryStateInMsg = batteryInMsg
+
+                        batteryReader = messaging.PowerStorageStatusMsgReader()
+                        batteryReader.subscribeTo(battery.batPowerOutMsg)
+                        batteryPanel.batteryStateInMsg = batteryReader
                         batteryPanel.this.disown()
-                        
+
                         # Solar panel visualization
                         solarViz = vizSupport.vizInterface.GenericStorage()
                         solarViz.label = f"{sc.ModelTag} Solar Power"
@@ -676,19 +842,19 @@ def run_custom_simulation(config):
                         solarViz.minValue = 0.0
                         solarViz.maxValue = 60.0
                         solarViz.useStorageLevel = False
-                        
+
                         solarReader = messaging.PowerNodeUsageMsgReader()
                         solarReader.subscribeTo(solarPanel.nodePowerOutMsg)
                         solarViz.powerNodeUsageInMsg = solarReader
                         solarViz.this.disown()
-                        
+
                         # Add panels to the correct spacecraft's list
                         gsList[i] = [batteryPanel, solarViz]
-                        
+
                         # Schedule battery fault activation
                         fault_time_nano = macros.min2nano(sc_config["fault"]["time"])
                         scSim.__dict__[f'powerSinkFault_{i}'] = powerSinkFault
-                        
+
                         scSim.createNewEvent(
                             f"batteryFault_{sc.ModelTag}",
                             simulationTimeStep,
@@ -700,16 +866,16 @@ def run_custom_simulation(config):
                                 f"self.setEventActivity('batteryFault_{sc.ModelTag}', False)"
                             ]
                         )
-                        
+
                         print(f"Set up battery visualization for {sc.ModelTag}")
-                        
+
             except Exception as e:
                 print(f"Battery visualization setup failed (continuing without panels): {e}")
-        
+
         # Enable visualization
         try:
             has_generic_storage = any(len(panels) > 0 for panels in gsList)
-            
+
             if has_generic_storage:
                 # Enable with generic storage panels
                 viz = vizSupport.enableUnityVisualization(
@@ -720,7 +886,7 @@ def run_custom_simulation(config):
                     liveStream=False,
                     genericStorageList=gsList
                 )
-                
+
                 # Enable instrument GUI for spacecraft with battery faults
                 for i, sc in enumerate(sc_objects):
                     if sc.ModelTag in battery_components:
@@ -738,18 +904,26 @@ def run_custom_simulation(config):
                     saveFile=binary_full_path,
                     liveStream=False
                 )
-            
+
             print(f"Vizard enabled for {len(sc_objects)} spacecraft")
-            
-            # Configure visualization settings
+
+            # Configure visualization settings (original)
             if hasattr(viz, 'settings'):
                 viz.settings.showSpacecraftLabels = True
                 viz.settings.orbitLinesOn = 1
-                viz.settings.spacecraftSizeMultiplier = 8.0
+                viz.settings.spacecraftSizeMultiplier = 50.0
                 viz.settings.spacecraftCSOn = True
                 viz.settings.showCelestialBodyLabels = True
-                print("Vizard settings configured")
-            
+                viz.settings.planetCSon = 1
+                viz.settings.viewCelestialBodiesAsPoints = 0
+                viz.settings.showLocationCommLines = 1
+                viz.settings.showLocationCones = 1
+                viz.settings.showLocationLabels = 1
+                print("Vizard settings configured with size multiplier: 50.0")
+
+            # >>> Claude: enhance styling per cluster <<<
+            viz = enhance_vizard_settings(viz, rich_clusters)
+
             # Add targets
             targets_added = 0
             for target in config.targets:
@@ -763,7 +937,7 @@ def run_custom_simulation(config):
                         x = radius * np.cos(lat_rad) * np.cos(lon_rad)
                         y = radius * np.cos(lat_rad) * np.sin(lon_rad)
                         z = radius * np.sin(lat_rad)
-                        
+
                         vizSupport.addLocation(
                             viz,
                             stationName=target.name,
@@ -776,9 +950,9 @@ def run_custom_simulation(config):
                         print(f"Added target: {target.name}")
                     except Exception as e:
                         print(f"Could not add target {target.name}: {e}")
-            
+
             print(f"Added {targets_added} targets to visualization")
-            
+
             # Create cameras
             camera_created = False
             if config.active_camera_name:
@@ -799,75 +973,75 @@ def run_custom_simulation(config):
                             break
                         except Exception as e:
                             print(f"Could not create camera: {e}")
-            
+
             if not camera_created and sc_objects:
                 try:
                     vizSupport.createStandardCamera(
                         viz,
                         setMode=1,
                         spacecraftName=sc_objects[0].ModelTag,
-                        fieldOfView=config.camera_fov * macros.D2R,
+                        fieldOfView=60.0 * macros.D2R,
                         displayName="Default Camera",
-                        pointingVector_B=[0, 0, -1],
-                        position_B=config.camera_position
+                        pointingVector_B=[1, 0, 0],
+                        position_B=[0.0, 0.0, 100.0]
                     )
                     print("Created default camera")
                 except Exception:
                     pass
-                    
+
         except Exception as e:
             print(f"Failed to set up visualization: {e}")
             viz = None
     else:
-        if not vizSupport.vizFound:
+        if BASILISK_AVAILABLE and not vizSupport.vizFound:
             print("Vizard visualization module not found")
         if not config.save_binary:
             print("Binary file generation is disabled")
-    
+
     # ============= RUN SIMULATION =============
     print("\n" + "-"*50)
     print("RUNNING SIMULATION")
     print("-"*50)
-    
+
     print("Initializing simulation...")
     scSim.InitializeSimulation()
-    
+
     print(f"Setting stop time to {simulationTime} ns...")
     scSim.ConfigureStopTime(simulationTime)
-    
+
     print(f"Starting simulation for {config.simulation_time} minutes...")
     start_time = datetime.now()
-    
+
     # Execute the simulation
     scSim.ExecuteSimulation()
-    
+
     end_time = datetime.now()
     duration = (end_time - start_time).total_seconds()
-    
+
     print(f"Simulation completed!")
     print(f"Wall-clock time: {duration:.2f} s | Simulated: {config.simulation_time:.1f} min | Speed: {(config.simulation_time*60)/max(duration,1):.1f}x")
-    
+
     # Verify simulation time
     current_sim_time = scSim.TotalSim.CurrentNanos
     actual_sim_minutes = current_sim_time / 1e9 / 60
     print(f"Actual simulation time: {actual_sim_minutes:.2f} minutes")
-    
+
     if abs(actual_sim_minutes - config.simulation_time) > 0.1:
         print("WARNING: Simulation time mismatch!")
-    
+
     # ============= GENERATE PLOTS WITH REAL FAULT SIMULATION =============
     figureList = {}
     if (config.show_plots or config.save_plots) and PLOTS_AVAILABLE:
         print("\n" + "-"*50)
         print("GENERATING PLOTS WITH REAL FAULT SIMULATION ONLY")
         print("-"*50)
-        
+
         try:
             # Create time array for plotting
             time_data = np.linspace(0, config.simulation_time, max(100, int(config.simulation_time * 2)))
             print(f"Time data: 0 to {config.simulation_time} minutes ({len(time_data)} points)")
-            
-            # 1. Generate constellation plots FOR ALL SATELLITES
+
+            # 1. Constellation plots
             try:
                 print(f"\nGenerating constellation plots for ALL {len(sc_objects)} satellites...")
                 constellation_plots = generate_constellation_overview_plots(sc_objects, time_data, mu)
@@ -875,88 +1049,31 @@ def run_custom_simulation(config):
                 print(f"✓ Generated {len(constellation_plots)} constellation overview plots")
             except Exception as e:
                 print(f"✗ Constellation plots failed: {e}")
-            
-            # 2. Generate cluster communication plots
-            if has_clusters and cluster_manager:
+
+            # 2. Cluster communication plots (after we actually have sc_objects & time_data)
+            if has_clusters:
                 try:
-                    print(f"\nGenerating cluster communication plots...")
-                    # Build cluster data structure for plotting
-                    cluster_data = {}
-                    for cluster_name, cluster_info in cluster_manager.clusters.items():
-                        # Get leader and children indices
-                        leader_idx = None
-                        children_indices = []
-                        
-                        # Find leader index
-                        if 'leader_index' in cluster_info:
-                            leader_idx = cluster_info['leader_index']
-                        elif 'leader' in cluster_info:
-                            # Find index by name
-                            leader_name = cluster_info['leader']
-                            for idx, sc in enumerate(sc_objects):
-                                if hasattr(sc, 'ModelTag') and sc.ModelTag == leader_name:
-                                    leader_idx = idx
-                                    break
-                        
-                        # Find children indices
-                        if 'children_indices' in cluster_info:
-                            children_indices = cluster_info['children_indices']
-                        elif 'children' in cluster_info:
-                            # Find indices by names
-                            for child_name in cluster_info['children']:
-                                for idx, sc in enumerate(sc_objects):
-                                    if hasattr(sc, 'ModelTag') and sc.ModelTag == child_name:
-                                        children_indices.append(idx)
-                                        break
-                        
-                        cluster_data[cluster_name] = {
-                            'leader': leader_idx,
-                            'children': children_indices
-                        }
-                    
-                    cluster_plots = generate_cluster_communication_plots(
-                        cluster_data,
-                        sc_objects,
-                        time_data
-                    )
-                    figureList.update(cluster_plots)
-                    print(f"✓ Generated {len(cluster_plots)} cluster communication plots")
+                    # Prefer ClusterManager mapping; else fallback to config mapping
+                    cluster_data = _cluster_data_from_manager(cluster_manager, sc_objects) if cluster_manager else {}
+                    if not cluster_data:
+                        cluster_data = _cluster_data_from_config(config, sc_objects)
+
+                    if cluster_data:
+                        print(f"\nGenerating cluster communication plots for {len(cluster_data)} clusters...")
+                        cluster_plots = generate_cluster_communication_plots(
+                            cluster_data,
+                            sc_objects,
+                            time_data
+                        )
+                        figureList.update(cluster_plots)
+                        print(f"✓ Generated {len(cluster_plots)} cluster communication plots")
+                    else:
+                        print("  WARNING: No valid cluster data found for plotting!")
                 except Exception as e:
                     print(f"✗ Cluster plots failed: {e}")
-            elif has_clusters:
-                # Try to generate cluster plots from constellation tab data
-                try:
-                    if hasattr(config, 'spacecraft_list'):
-                        # Build cluster data from spacecraft list
-                        cluster_data = {}
-                        for sc_config in config.spacecraft_list:
-                            if sc_config.get('cluster') and sc_config['cluster'] not in cluster_data:
-                                cluster_data[sc_config['cluster']] = {
-                                    'leader': None,
-                                    'children': []
-                                }
-                        
-                        # Find leader and children
-                        for i, sc_config in enumerate(config.spacecraft_list):
-                            if sc_config.get('cluster'):
-                                cluster = cluster_data[sc_config['cluster']]
-                                if sc_config.get('role') == 'leader':
-                                    cluster['leader'] = i
-                                elif sc_config.get('role') == 'child':
-                                    cluster['children'].append(i)
-                        
-                        if cluster_data:
-                            cluster_plots = generate_cluster_communication_plots(
-                                cluster_data,
-                                sc_objects,
-                                time_data
-                            )
-                            figureList.update(cluster_plots)
-                            print(f"✓ Generated {len(cluster_plots)} cluster plots from config")
-                except Exception as e:
-                    print(f"Note: Could not generate cluster plots from config: {e}")
-            
-            # 3. Generate inter-satellite distance plots
+                    traceback.print_exc()
+
+            # 3. Inter-satellite distance plots
             try:
                 print(f"\nGenerating distance plots for ALL {len(sc_objects)} satellites...")
                 distance_plots = generate_inter_satellite_distance_plots(sc_objects, time_data, mu)
@@ -964,17 +1081,17 @@ def run_custom_simulation(config):
                 print(f"✓ Generated {len(distance_plots)} distance plots")
             except Exception as e:
                 print(f"✗ Distance plots failed: {e}")
-            
-            # 4. Generate REAL fault plots for EACH spacecraft with faults
+
+            # 4. REAL fault plots for EACH spacecraft with faults
             real_plots_count = 0
             failed_plots_count = 0
-            
+
             print(f"\n{'='*60}")
             print(f"REAL FAULT SIMULATION PLOT GENERATION")
             print(f"{'='*60}")
             print(f"Fault loader available: {FAULT_LOADER_AVAILABLE}")
             print(f"Available fault types: {AVAILABLE_FAULTS}")
-            
+
             if not FAULT_LOADER_AVAILABLE:
                 print("ERROR: Fault loader not available - cannot generate real fault plots!")
                 print("Please ensure fault modules are properly installed in the faults/ directory")
@@ -982,7 +1099,7 @@ def run_custom_simulation(config):
                 for i, sc_config in enumerate(config.spacecraft_list):
                     if sc_config["fault"]["enabled"]:
                         fault_type = sc_config["fault"]["type"]
-                        
+
                         print(f"\n{'='*50}")
                         print(f"GENERATING REAL PLOTS FOR {sc_config['name']}")
                         print(f"{'='*50}")
@@ -990,30 +1107,27 @@ def run_custom_simulation(config):
                         print(f"Magnitude: {sc_config['fault']['magnitude']}")
                         print(f"Wheel: RW{sc_config['fault']['wheel'] + 1}")
                         print(f"Time: {sc_config['fault']['time']} minutes")
-                        
+
                         # Check if fault type is available
                         if fault_type not in AVAILABLE_FAULTS:
                             print(f"ERROR: Fault type '{fault_type}' not available!")
                             print(f"Available types: {AVAILABLE_FAULTS}")
                             failed_plots_count += 1
                             continue
-                        
+
                         try:
-                            # Create real simulation configuration
-                            from plots import create_fault_config_for_real_simulation
-                            
                             fault_params = {
                                 'fault_magnitude': sc_config["fault"]["magnitude"],
                                 'fault_wheel': sc_config["fault"]["wheel"],
                                 'fault_time_min': sc_config["fault"]["time"],
                                 'simulation_time_min': config.simulation_time
                             }
-                            
+
                             # Force real simulation
                             real_fault_config = create_fault_config_for_real_simulation(fault_type, fault_params)
-                            
+
                             print(f"Running REAL {fault_type} simulation...")
-                            
+
                             # Generate plots using REAL simulation
                             fault_plots = generate_fault_plots(
                                 fault_type=fault_type,
@@ -1022,10 +1136,10 @@ def run_custom_simulation(config):
                                 fault_time_min=sc_config["fault"]["time"],
                                 spacecraft_name=sc_config["name"]
                             )
-                            
+
                             if fault_plots and len(fault_plots) > 0:
                                 figureList.update(fault_plots)
-                                
+
                                 # Count real plots
                                 real_plots = [name for name in fault_plots.keys() if "REAL" in name]
                                 if real_plots:
@@ -1039,59 +1153,63 @@ def run_custom_simulation(config):
                             else:
                                 print(f"✗ ERROR: No plots generated from real simulation")
                                 failed_plots_count += 1
-                                
+
                         except Exception as e:
                             print(f"✗ ERROR: Real simulation failed for {sc_config['name']}: {e}")
-                            import traceback
                             traceback.print_exc()
                             failed_plots_count += 1
-            
-            # Summary of plot generation
-            print(f"\n{'='*60}")
-            print(f"PLOT GENERATION SUMMARY")
-            print(f"{'='*60}")
-            total_plots = len(figureList)
-            constellation_count = len([k for k in figureList.keys() if 'Constellation' in k])
-            cluster_count = len([k for k in figureList.keys() if 'Cluster' in k])
-            distance_count = len([k for k in figureList.keys() if 'Distance' in k])
-            
-            print(f"Total plots generated: {total_plots}")
-            print(f"  ✓ Constellation plots: {constellation_count}")
-            print(f"  ✓ Cluster communication plots: {cluster_count}")
-            print(f"  ✓ Distance plots: {distance_count}")
-            print(f"  ✓ REAL fault simulation plots: {real_plots_count}")
-            if failed_plots_count > 0:
-                print(f"  ✗ Failed fault plots: {failed_plots_count}")
-            
-            if real_plots_count > 0:
-                print(f"\n{'='*60}")
-                print(f"SUCCESS: REAL FAULT SIMULATIONS COMPLETED!")
-                print(f"All fault plots use actual simulation data")
-                print(f"Look for plots marked with 'REAL' in the Results tab")
-                print(f"{'='*60}")
-            elif FAULT_LOADER_AVAILABLE:
-                print(f"\nWARNING: No real fault plots generated despite fault loader being available")
-                print(f"Check that fault modules are properly configured")
-            else:
-                print(f"\nERROR: Cannot generate real fault plots - fault loader not available!")
-            
-            # Save plots to files if requested
+
+            # ---- Claude: optional enhanced PNG plots outside Figure API ----
+            if CONSTELLATION_PLOTTER_AVAILABLE and rich_clusters:
+                try:
+                    print("\nGenerating enhanced plots (ConstellationPlotter)...")
+                    os.makedirs(PLOTTING_DIR, exist_ok=True)
+                    plotter = ConstellationPlotter()
+
+                    # Flatten satellites
+                    satellites_data = []
+                    for c in rich_clusters.values():
+                        satellites_data.extend(c.get("satellites", []))
+
+                    # 1. Constellation Overview
+                    overview_path = plotter.plot_constellation_overview(rich_clusters, satellites_data)
+                    print(f"  ✓ Constellation Overview -> {os.path.basename(overview_path)}")
+
+                    # 2. Formation Check per cluster
+                    for cname, cdata in rich_clusters.items():
+                        formation_path = plotter.plot_formation_check(cname, cdata)
+                        print(f"  ✓ Formation Check ({cname}) -> {os.path.basename(formation_path)}")
+
+                    # 3. Cluster Communication
+                    comm_path = plotter.plot_cluster_communication(
+                        rich_clusters, int(round(config.simulation_time))
+                    )
+                    print(f"  ✓ Cluster Communication -> {os.path.basename(comm_path)}")
+
+                    # 4. Distance Analysis
+                    distance_path = plotter.plot_distance_analysis(rich_clusters, satellites_data)
+                    print(f"  ✓ Distance Analysis -> {os.path.basename(distance_path)}")
+
+                except Exception as e:
+                    print(f"Enhanced plotter failed (non-fatal): {e}")
+
+            # Save plots to files if requested (Figure-based)
             if config.save_plots and figureList:
                 print(f"\nSaving plots to disk...")
                 os.makedirs(PLOTTING_DIR, exist_ok=True)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                
+
                 saved_count = 0
-                for name, fig in figureList.items():
+                for name, fig in list(figureList.items()):
                     try:
                         # Clean filename
                         clean_name = name.replace(" ", "_").replace("/", "_")
                         plot_filename = f"{timestamp}_{clean_name}.png"
                         plot_path = os.path.join(PLOTTING_DIR, plot_filename)
-                        
+
                         fig.savefig(plot_path, dpi=300, bbox_inches='tight')
                         saved_count += 1
-                        
+
                         # Report saved plots
                         if "REAL" in name:
                             print(f"  ✓ Saved REAL plot: {plot_filename}")
@@ -1099,34 +1217,31 @@ def run_custom_simulation(config):
                             print(f"  ✓ Saved constellation plot: {plot_filename}")
                         elif "Cluster" in name:
                             print(f"  ✓ Saved cluster plot: {plot_filename}")
-                        
+
                         plt.close(fig)
+                        del figureList[name]
                     except Exception as e:
                         print(f"  ✗ Error saving plot {name}: {e}")
-                
-                print(f"Saved {saved_count}/{len(figureList)} plots to {PLOTTING_DIR}")
-                figureList.clear()
+
+                print(f"Saved {saved_count} plots to {PLOTTING_DIR}")
             else:
                 # Close all figures to free memory
-                for name, fig in figureList.items():
+                for _, fig in figureList.items():
                     try:
                         plt.close(fig)
-                    except:
+                    except Exception:
                         pass
-                if not config.save_plots:
-                    figureList.clear()
-                
+                figureList.clear()
+
         except Exception as e:
             print(f"Critical error in plot generation: {e}")
-            import traceback
             traceback.print_exc()
-            
             # Ensure all figures are closed
             try:
                 plt.close('all')
-            except:
+            except Exception:
                 pass
-    
+
     # ============= CREATE SCENARIO OBJECT =============
     class ConstellationScenario:
         def __init__(self, scSim, sc_objects, config, cluster_manager=None):
@@ -1136,9 +1251,9 @@ def run_custom_simulation(config):
             self.fault_type = getattr(config, 'fault_type', None)
             self.actual_sim_time = actual_sim_minutes
             self.cluster_manager = cluster_manager
-    
+
     scenario = ConstellationScenario(scSim, sc_objects, config, cluster_manager)
-    
+
     # ============= REAL ML FAULT DETECTION =============
     print("\n" + "="*60)
     print("SPRINT 4: REAL ML FAULT DETECTION")
@@ -1148,13 +1263,13 @@ def run_custom_simulation(config):
     if REAL_ML_AVAILABLE:
         try:
             print("Running client's ML model on REAL Basilisk data...")
-            
+
             ml_results = run_real_ml_detection_on_scenario(
                 scenario=scenario,
                 scenario_config=config,
                 output_dir=output_dir
             )
-            
+
             if ml_results:
                 print("REAL ML FAULT DETECTION COMPLETED!")
                 summary = ml_results['summary']
@@ -1162,12 +1277,12 @@ def run_custom_simulation(config):
                 print(f"   ML Detections: {summary['total_detections']}")
                 if summary['detection_times']:
                     print(f"   First Detection: {min(summary['detection_times']):.1f} min")
-            
+
         except Exception as e:
             print(f"Real ML detection error: {e}")
     else:
         print("Copy client's model: anomaly_detection_model.keras")
-    
+
     # ============= SAVE SIMULATION SUMMARY =============
     try:
         summary_path = os.path.join(output_dir, "simulation_summary.txt")
@@ -1175,7 +1290,7 @@ def run_custom_simulation(config):
             f.write("SPACECRAFT CONSTELLATION SIMULATION SUMMARY\n")
             f.write("="*50 + "\n\n")
             f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-            
+
             f.write("MODULE STATUS:\n")
             f.write(f"  Basilisk: {'Available' if BASILISK_AVAILABLE else 'Not available'}\n")
             f.write(f"  Cluster Integration: {'Available' if CLUSTER_INTEGRATION_AVAILABLE else 'Not available'}\n")
@@ -1193,15 +1308,15 @@ def run_custom_simulation(config):
             if FAILED_FAULTS:
                 f.write(f"  Failed Faults: {FAILED_FAULTS}\n")
             f.write("\n")
-            
+
             f.write("SIMULATION CONFIGURATION:\n")
             f.write(f"  Duration: {config.simulation_time} minutes\n")
             f.write(f"  Time Step: 1 second\n")
             f.write(f"  Spacecraft: {len(config.spacecraft_list)}\n")
-            if has_clusters and cluster_manager:
-                f.write(f"  Clusters: {len(cluster_manager.clusters)}\n")
+            if rich_clusters:
+                f.write(f"  Clusters: {len(rich_clusters)}\n")
             f.write("\n")
-            
+
             f.write("SPACECRAFT DETAILS:\n")
             for i, sc in enumerate(config.spacecraft_list):
                 f.write(f"\nSpacecraft {i+1}: {sc['name']}\n")
@@ -1215,7 +1330,7 @@ def run_custom_simulation(config):
                 f.write(f"    - Eccentricity: {sc['orbit']['e']}\n")
                 f.write(f"    - Inclination: {sc['orbit']['i']}°\n")
                 f.write(f"    - RAAN: {sc['orbit'].get('Omega', 'NA')}°\n")
-                
+
                 if sc["fault"]["enabled"]:
                     f.write("  Fault: ENABLED\n")
                     f.write(f"    - Type: {sc['fault']['type']}\n")
@@ -1224,39 +1339,39 @@ def run_custom_simulation(config):
                     f.write(f"    - Injection time: {sc['fault']['time']} minutes\n")
                 else:
                     f.write("  Fault: DISABLED\n")
-            
+
             f.write("\nOUTPUT:\n")
             f.write(f"  Results Directory: {output_dir}\n")
             f.write(f"  Plots Generated: {len(figureList) if figureList else 0}\n")
-            
+
             if config.save_binary:
                 vizard_paths = [
                     os.path.join(VIZ_DIR, f"{config.binary_filename}_UnityViz.bin"),
                     os.path.join(VIZ_DIR, "_VizFiles", f"{config.binary_filename}_UnityViz.bin")
                 ]
-                
+
                 for vp in vizard_paths:
                     if os.path.exists(vp):
                         size_mb = os.path.getsize(vp)/(1024*1024)
                         f.write(f"  Binary File: {vp} ({size_mb:.2f} MB)\n")
                         break
-        
+
         print(f"Summary saved: {summary_path}")
-        
+
     except Exception as e:
         print(f"Could not save simulation summary: {e}")
-    
+
     # ============= BINARY FILE VERIFICATION =============
     if config.save_binary:
         print("\n" + "-"*50)
         print("BINARY FILE VERIFICATION")
         print("-"*50)
-        
+
         vizard_paths = [
             os.path.join(VIZ_DIR, f"{config.binary_filename}_UnityViz.bin"),
             os.path.join(VIZ_DIR, "_VizFiles", f"{config.binary_filename}_UnityViz.bin")
         ]
-        
+
         binary_found = False
         for vp in vizard_paths:
             if os.path.exists(vp):
@@ -1268,27 +1383,28 @@ def run_custom_simulation(config):
                 print(f"Duration: {config.simulation_time} minutes")
                 print(f"Spacecraft: {len(sc_objects)}")
                 break
-        
+
         if not binary_found:
             print("Binary file not found in expected locations")
-    
+
     print("\n" + "="*60)
     print("SIMULATION COMPLETED SUCCESSFULLY")
     print("="*60)
-    if has_clusters and cluster_manager:
-        print(f"Clusters: {len(cluster_manager.clusters)}")
+    if rich_clusters:
+        print(f"Clusters: {len(rich_clusters)}")
     print(f"Total Satellites: {len(sc_objects)}")
     print(f"Simulation Time: {config.simulation_time} minutes")
     print(f"Real Fault Simulations: {'Available' if FAULT_LOADER_AVAILABLE else 'Not available'}")
-    
+
     return scenario, viz, figureList, output_dir
+
 
 # ============= MODULE TEST =============
 if __name__ == "__main__":
     print("\nTesting spacecraft_simulation module...")
     check_fault_modules(verbose=True)
     check_plots_module(verbose=True)
-    
+
     print("\nModule status:")
     print(f"  Basilisk: {'Available' if BASILISK_AVAILABLE else 'Not available'}")
     print(f"  Cluster Integration: {'Available' if CLUSTER_INTEGRATION_AVAILABLE else 'Not available'}")
@@ -1301,17 +1417,16 @@ if __name__ == "__main__":
             apis.append("old")
         print(f"    APIs: {', '.join(apis)}")
     print(f"  Fault Loader: {'Available' if FAULT_LOADER_AVAILABLE else 'Not available'}")
-    
+
     if BASILISK_AVAILABLE:
         config = SimulationConfig()
-        config.targets = generate_targets_box(-38.0, -25.0, 129.0, 141.0, n=40)
         config.simulation_time = 5.0
         config.spacecraft_list = [
             {
                 "name": "TestSat1",
-                "type": "individual",
-                "cluster": None,
-                "role": "independent",
+                "type": "cluster_member",
+                "cluster": "ALPHA",
+                "role": "leader",
                 "orbit": {"a": 6971, "e": 0.01, "i": 55.0, "Omega": 0.0, "omega": 0.0, "f": 0.0},
                 "orbit_name": "Test Orbit",
                 "fault": {
@@ -1325,9 +1440,30 @@ if __name__ == "__main__":
                 "camera": {"position": [0.0, 0.0, 15.0], "fov": 80.0, "enabled": True},
                 "communication": {"range": 2000.0, "fov": 30.0, "aHat_B": [0.0, 0.0, -1.0]},
                 "targets": []
+            },
+            {
+                "name": "TestSat2",
+                "type": "cluster_member",
+                "cluster": "ALPHA",
+                "role": "child",
+                "orbit": {"a": 6971, "e": 0.01, "i": 55.0, "Omega": 0.0, "omega": 0.0, "f": 10.0},
+                "orbit_name": "Test Orbit",
+                "fault": {
+                    "type": "friction",
+                    "magnitude": 0.0005,
+                    "wheel": 2,
+                    "time": 3.0,
+                    "enabled": False,
+                    "periodic": {"enabled": False, "interval": 360, "magnitude": 0.1, "wheel": 3}
+                },
+                "camera": {"position": [0.0, 0.0, 15.0], "fov": 80.0, "enabled": False},
+                "communication": {"range": 2000.0, "fov": 30.0, "aHat_B": [0.0, 0.0, -1.0]},
+                "targets": []
             }
         ]
-        
+        # Lightweight cluster example (GUI path)
+        config.clusters = {"ALPHA": {"leader": 0, "children": [1]}}
+
         try:
             config.validate()
             print("Configuration validation passed")
@@ -1340,9 +1476,8 @@ if __name__ == "__main__":
                 print("\nTest simulation failed")
         except Exception as e:
             print(f"Test failed: {e}")
-            import traceback
             traceback.print_exc()
     else:
         print("\nCannot run test - Basilisk not available")
-    
+
     print("\nspacecraft_simulation.py module test complete!")
