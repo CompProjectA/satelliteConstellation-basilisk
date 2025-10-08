@@ -1,0 +1,40 @@
+{
+  "fault_detection": {
+    "ml_confidence_threshold": 0.5,
+    "anomaly_score_threshold": 30.0,
+    "speed_change_threshold_percent": 5.0,
+    "attitude_error_threshold_percent": 25.0,
+    "detection_window_minutes": 1.0,
+    "minimum_data_points": 30
+  },
+  "drl": {
+    "model_path": "core/Agent-based-Architecture-for-Proactive-Fault-Tolerance-and-Management-in-Small-Satellite-Missions/anomaly_detection_model.keras",
+    "state_dim": 10,
+    "action_dim": 3,
+    "learning_rate": 0.001,
+    "training_episodes": 500,
+    "max_steps_per_episode": 500,
+    "update_frequency": 20,
+    "use_pretrained": false
+  },
+  "task_reassignment": {
+    "reassignment_strategies": [
+      "even_distribution",
+      "capability_based",
+      "load_balanced"
+    ],
+    "max_load_increase_per_spacecraft": 0.5,
+    "priority_levels": [
+      "low",
+      "normal",
+      "high",
+      "critical"
+    ],
+    "task_redistribution_timeout_seconds": 30,
+    "fallback_to_rules": true
+  },
+  "simulation_time_limit_minutes": 30.0,
+  "enable_real_time_detection": false,
+  "enable_drl_logging": true,
+  "output_directory": "logs"
+}
