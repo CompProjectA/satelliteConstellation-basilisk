@@ -38,7 +38,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 def PD_test():
     # Load the saved LSTM model
-    model = load_model('anomaly_detection_mode.keras')
+    model = load_model('anomaly_detection_model.keras')
     print("Model loaded successfully")
 
     # Load reference data and fit the scaler on it (e.g., training data)
