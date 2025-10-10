@@ -1,1607 +1,1334 @@
 #!/usr/bin/env python
 """
-constellation_tab.py
+core/gui_tab/constellation_tab.py
 
-FULLY FIXED VERSION: Complete constellation tab with all working buttons and proper cluster support.
-Each satellite in cluster on different orbits as per requirements.
+
 """
+
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import numpy as np
+from datetime import datetime
+
+import matplotlib
+matplotlib.use("Agg")  # GUI is embedded; figures saved offscreen
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (needed by mpl for 3D proj)
+from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
 
-# Import base tab
+# Optional helper formations (kept from your code)
 try:
-    from .base_tab import BaseTab
-except ImportError:
+    from formation_geometry import FormationGeometry, CartesianFormations  # type: ignore
+except Exception:  # Safe fallback if module not present
+    FormationGeometry = None
+    class _Dummy:
+        def __getattr__(self, *_args, **_kwargs):
+            raise AttributeError("formation_geometry not available")
+    CartesianFormations = _Dummy()
+
+
+# --- BaseTab fallback (so this file can be imported directly) -----------------
+try:
+    from .base_tab import BaseTab  # type: ignore
+except Exception:  # pragma: no cover
     class BaseTab:
         def __init__(self, parent_app, parent_frame):
             self.parent_app = parent_app
             self.parent_frame = parent_frame
-        
+
         def add_log(self, message):
-            if hasattr(self.parent_app, 'add_log'):
+            if hasattr(self.parent_app, "add_log"):
                 self.parent_app.add_log(message)
 
+
 class ConstellationTab(BaseTab):
-    """FULLY FIXED Constellation Management tab with all features working"""
-    
+    """Constellation Management (clusters, orbits, individuals, comms)"""
+
+    # Project constraints (Claude)
+    ALLOWED_FORMATIONS = ["Leader-Follower", "Line", "Triangle", "Diamond"]
+    MAX_CLUSTERS = 4
+
+    # Stable palette (shared with plots/Vizard via config.cluster_colors)
+    PALETTE = ["#2ecc71", "#e74c3c", "#9b59b6", "#f39c12"]
+
     def __init__(self, parent_app, parent_frame):
-        """Initialize the constellation tab"""
         super().__init__(parent_app, parent_frame)
-        
-        # Store references to parent app data
+
+        # References to app-wide data
         self.satellites = parent_app.satellites
         self.current_satellite_index = parent_app.current_satellite_index
-        
-        # Cluster configurations
-        self.clusters = []
-        self.cluster_configurations = []
-        
-        # Communication tracking
-        self.communication_windows = {}
-        self.message_history = []
-        
-        # FIXED: Proper orbit configurations per requirements
+
+        # Cluster & orbit state
+        self.clusters = []                # list of dicts: {name, leader, children, satellites, formation, ...}
+        self.cluster_configurations = []  # reserved (compat)
         self.orbit_configurations = [
             {
-                "name": "Primary Orbit",
-                "altitude": 600,  # km above Earth
+                "name": "LEO 600km",
+                "altitude": 600,
                 "inclination": 55.0,
-                "raan": 0.0,  # Right Ascension of Ascending Node
+                "raan": 0.0,
                 "satellites": [],
-                "description": "Primary orbit for sat1 and sat2"
+                "description": "Low Earth Orbit for cluster deployment",
             },
             {
-                "name": "Opposite Orbit", 
-                "altitude": 600,  # Same altitude
-                "inclination": 55.0,  # Same inclination  
-                "raan": 180.0,  # Opposite RAAN for opposite orbit
+                "name": "LEO 700km",
+                "altitude": 700,
+                "inclination": 56.0,
+                "raan": 0.0,
                 "satellites": [],
-                "description": "Opposite orbit for sat3 and sat4"
+                "description": "Standard LEO for constellations",
             },
-            {
-                "name": "Orbit 3",
-                "altitude": 700,  # Different altitude
-                "inclination": 60.0,
-                "raan": 90.0,
-                "satellites": [],
-                "description": "Alternative orbit for additional satellites"
-            },
-            {
-                "name": "Orbit 4",
-                "altitude": 800,  # Higher altitude
-                "inclination": 65.0,
-                "raan": 270.0,
-                "satellites": [],
-                "description": "High altitude orbit"
-            }
         ]
-        
-        # Communication settings
+
+        # Communication defaults
         self.comm_range = tk.DoubleVar(value=2000.0)  # km
-        self.comm_fov = tk.DoubleVar(value=30.0)  # degrees
-        
-        # Formation settings
+        self.comm_fov = tk.DoubleVar(value=30.0)      # deg
+
+        # Formation defaults
         self.formation_separation = tk.DoubleVar(value=10.0)  # km
-        
-        # Create the tab UI
+
+        # Build UI
         self.create_tab_ui()
-        
+
+    # --------------------------------------------------------------------- UI
     def create_tab_ui(self):
-        """Create the Constellation Management tab UI"""
-        # Main container
         main_container = ttk.Frame(self.parent_frame)
         main_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Create notebook for sub-tabs
+
         self.constellation_notebook = ttk.Notebook(main_container)
         self.constellation_notebook.pack(fill=tk.BOTH, expand=True)
-        
-        # Create frames for sub-tabs
+
         cluster_frame = ttk.Frame(self.constellation_notebook)
         orbit_frame = ttk.Frame(self.constellation_notebook)
         individual_frame = ttk.Frame(self.constellation_notebook)
         comm_frame = ttk.Frame(self.constellation_notebook)
-        
-        # Add sub-tabs
+
         self.constellation_notebook.add(cluster_frame, text="Cluster Management")
         self.constellation_notebook.add(orbit_frame, text="Orbit Management")
         self.constellation_notebook.add(individual_frame, text="Individual Satellites")
         self.constellation_notebook.add(comm_frame, text="Communication")
-        
-        # Create sub-tab content
+
         self._create_cluster_tab(cluster_frame)
         self._create_orbit_management_tab(orbit_frame)
         self._create_individual_tab(individual_frame)
         self._create_comm_tab(comm_frame)
-            
+
+    # ------------------------------------------------------------ Cluster Tab
     def _create_cluster_tab(self, parent):
-        """Create the cluster management sub-tab with proper formations"""
-        # Cluster creation section
+        # Create
         create_frame = ttk.LabelFrame(parent, text="Create New Cluster", padding=10)
         create_frame.pack(fill=tk.X, padx=10, pady=10)
-        
-        # Basic cluster parameters
-        basic_frame = ttk.Frame(create_frame)
-        basic_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Label(basic_frame, text="Cluster Name:").grid(row=0, column=0, sticky=tk.W, padx=5)
+
+        basic = ttk.Frame(create_frame)
+        basic.pack(fill=tk.X, pady=5)
+
+        ttk.Label(basic, text="Cluster Name:").grid(row=0, column=0, sticky=tk.W, padx=5)
         self.cluster_name_var = tk.StringVar(value="")
-        name_entry = ttk.Entry(basic_frame, textvariable=self.cluster_name_var, width=20)
-        name_entry.grid(row=0, column=1, padx=5)
-        
-        ttk.Label(basic_frame, text="Number of Satellites:").grid(row=0, column=2, sticky=tk.W, padx=5)
+        ttk.Entry(basic, textvariable=self.cluster_name_var, width=20).grid(row=0, column=1, padx=5)
+
+        ttk.Label(basic, text="Number of Satellites:").grid(row=0, column=2, sticky=tk.W, padx=5)
         self.sats_per_cluster_var = tk.IntVar(value=4)
-        sats_combo = ttk.Combobox(basic_frame, textvariable=self.sats_per_cluster_var, 
-                                values=[2, 3, 4, 5, 6], width=10, state="readonly")
+        sats_combo = ttk.Combobox(
+            basic, textvariable=self.sats_per_cluster_var,
+            values=[2, 3, 4, 5, 6], width=10, state="readonly"
+        )
         sats_combo.grid(row=0, column=3, padx=5)
-        sats_combo.current(2)  # Default to 4 satellites
-        
-        # Formation parameters - Updated formations based on your image
-        formation_frame = ttk.Frame(create_frame)
-        formation_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Label(formation_frame, text="Formation Type:").grid(row=0, column=0, sticky=tk.W, padx=5)
-        self.formation_var = tk.StringVar(value="Circle")
-        formation_combo = ttk.Combobox(formation_frame, textvariable=self.formation_var,
-                                    values=["Circle", "Line", "Leader-Follower", "Ellipse"], 
-                                    width=15, state="readonly")
+        sats_combo.current(2)  # default 4
+
+        formation_row = ttk.Frame(create_frame)
+        formation_row.pack(fill=tk.X, pady=5)
+
+        ttk.Label(formation_row, text="Formation Type:").grid(row=0, column=0, sticky=tk.W, padx=5)
+        self.formation_var = tk.StringVar(value=self.ALLOWED_FORMATIONS[0])
+        formation_combo = ttk.Combobox(
+            formation_row, textvariable=self.formation_var,
+            values=self.ALLOWED_FORMATIONS, width=18, state="readonly"
+        )
         formation_combo.grid(row=0, column=1, padx=5)
-        
-        ttk.Label(formation_frame, text="Separation (km):").grid(row=0, column=2, sticky=tk.W, padx=5)
-        ttk.Entry(formation_frame, textvariable=self.formation_separation, width=10).grid(row=0, column=3, padx=5)
-        
-        # Orbit assignment 
-        orbit_frame = ttk.LabelFrame(create_frame, text="Orbit Assignment", padding=5)
+
+        ttk.Label(formation_row, text="Separation (km):").grid(row=0, column=2, sticky=tk.W, padx=5)
+        ttk.Entry(formation_row, textvariable=self.formation_separation, width=10).grid(row=0, column=3, padx=5)
+
+        self.cartesian_mode = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            formation_row, text="Cartesian (no-orbit) mode", variable=self.cartesian_mode
+        ).grid(row=0, column=4, padx=10)
+
+        # Orbit selection (single orbit per cluster)
+        orbit_frame = ttk.LabelFrame(create_frame, text="Cluster Orbit", padding=5)
         orbit_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Label(orbit_frame, text="Primary Orbit:").grid(row=0, column=0, sticky=tk.W, padx=5)
-        self.primary_orbit_var = tk.StringVar(value="Primary Orbit")
-        primary_combo = ttk.Combobox(orbit_frame, textvariable=self.primary_orbit_var,
-                                    values=["Primary Orbit", "Opposite Orbit"], 
-                                    width=15, state="readonly")
-        primary_combo.grid(row=0, column=1, padx=5)
-        
-        self.orbit_assignment_frame = ttk.Frame(orbit_frame)
-        self.orbit_assignment_frame.grid(row=1, column=0, columnspan=4, sticky="we", pady=(6, 0))
 
-        # When '# of sats' changes, rebuild the rows
-        sats_combo.bind('<<ComboboxSelected>>', self._update_orbit_assignments)
+        ttk.Label(orbit_frame, text="Select Orbit:").grid(row=0, column=0, sticky=tk.W, padx=5)
+        self.primary_orbit_var = tk.StringVar()
+        orbit_combo = ttk.Combobox(
+            orbit_frame, textvariable=self.primary_orbit_var,
+            values=[o["name"] for o in self.orbit_configurations],
+            width=20, state="readonly",
+        )
+        orbit_combo.grid(row=0, column=1, padx=5)
+        if self.orbit_configurations:
+            self.primary_orbit_var.set(self.orbit_configurations[0]["name"])
+            orbit_combo.current(0)
 
-        # first build
-        self._update_orbit_assignments()
-        # Create cluster button - REMOVED Sprint 2 button
-        button_frame = ttk.Frame(create_frame)
-        button_frame.pack(fill=tk.X, pady=10)
-        
-        ttk.Button(button_frame, text="Create Cluster", 
-                command=self.create_cluster, style="Run.TButton").pack(side=tk.LEFT, padx=5)
-        
-        ttk.Button(button_frame, text="Clear Form", 
-                command=self.clear_cluster_form).pack(side=tk.LEFT, padx=5)
-        
-        
-        
-        # Cluster list section
+        ttk.Label(
+            orbit_frame,
+            text="All satellites share this orbit; small offsets create the formation.",
+            foreground="gray",
+        ).grid(row=1, column=0, columnspan=2, pady=3, sticky=tk.W)
+
+        # Buttons
+        btns = ttk.Frame(create_frame)
+        btns.pack(fill=tk.X, pady=10)
+        ttk.Button(btns, text="Create Cluster", command=self.create_cluster, style="Run.TButton").pack(side=tk.LEFT, padx=5)
+        ttk.Button(btns, text="Clear Form", command=self.clear_cluster_form).pack(side=tk.LEFT, padx=5)
+
+        # List
         list_frame = ttk.LabelFrame(parent, text="Existing Clusters", padding=10)
         list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        # Create treeview for clusters
-        columns = ('Cluster', 'Leader', 'Children', 'Formation', 'Status')
-        self.cluster_tree = ttk.Treeview(list_frame, columns=columns, show='tree headings', height=10)
-        
-        # Define column headings
-        self.cluster_tree.heading('#0', text='')
-        self.cluster_tree.heading('Cluster', text='Cluster')
-        self.cluster_tree.heading('Leader', text='Leader')
-        self.cluster_tree.heading('Children', text='Children')
-        self.cluster_tree.heading('Formation', text='Formation')
-        self.cluster_tree.heading('Status', text='Status')
-        
-        # Set column widths
-        self.cluster_tree.column('#0', width=30)
-        self.cluster_tree.column('Cluster', width=120)
-        self.cluster_tree.column('Leader', width=120)
-        self.cluster_tree.column('Children', width=80)
-        self.cluster_tree.column('Formation', width=100)
-        self.cluster_tree.column('Status', width=100)
-        
-        # Add scrollbar
-        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.cluster_tree.yview)
-        self.cluster_tree.configure(yscrollcommand=scrollbar.set)
-        
+
+        columns = ("Cluster", "Leader", "Children", "Formation", "Status")
+        self.cluster_tree = ttk.Treeview(list_frame, columns=columns, show="tree headings", height=10)
+        self.cluster_tree.heading("#0", text="")
+        for col in columns:
+            self.cluster_tree.heading(col, text=col)
+        self.cluster_tree.column("#0", width=30)
+        self.cluster_tree.column("Cluster", width=130)
+        self.cluster_tree.column("Leader", width=150)
+        self.cluster_tree.column("Children", width=90)
+        self.cluster_tree.column("Formation", width=120)
+        self.cluster_tree.column("Status", width=100)
         self.cluster_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Cluster actions - ALL BUTTONS IMPLEMENTED
-        action_frame = ttk.Frame(list_frame)
-        action_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Button(action_frame, text="View Details", 
-                  command=self.view_cluster_details).pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Modify Cluster", 
-                  command=self.modify_cluster).pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Delete Cluster", 
-                  command=self.delete_cluster).pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Test Communication", 
-                  command=self.test_cluster_communication).pack(side=tk.LEFT, padx=5)
-        
-        # Update tree
+
+        sb = ttk.Scrollbar(list_frame, orient="vertical", command=self.cluster_tree.yview)
+        self.cluster_tree.configure(yscrollcommand=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Actions
+        actions = ttk.Frame(list_frame)
+        actions.pack(fill=tk.X, pady=5)
+        ttk.Button(actions, text="View Details", command=self.view_cluster_details).pack(side=tk.LEFT, padx=5)
+        ttk.Button(actions, text="Modify Cluster", command=self.modify_cluster).pack(side=tk.LEFT, padx=5)
+        ttk.Button(actions, text="Delete Cluster", command=self.delete_cluster).pack(side=tk.LEFT, padx=5)
+        ttk.Button(actions, text="Test Communication", command=self.test_cluster_communication).pack(side=tk.LEFT, padx=5)
+        ttk.Button(actions, text="View Formation", command=self.view_formation).pack(side=tk.LEFT, padx=5)
+        ttk.Button(actions, text="Export Config", command=self.export_config).pack(side=tk.LEFT, padx=5)
+
         self.update_cluster_tree()
-        
-    def _update_orbit_assignments(self, event=None):
-        """Update orbit assignment rows to match the number of satellites."""
-        # Clear existing
-        for w in self.orbit_assignment_frame.winfo_children():
-            w.destroy()
-        self.orbit_assignments = {}
 
-        try:
-            num_sats = int(self.sats_per_cluster_var.get())
-        except Exception:
-            num_sats = 0
+    def _update_orbit_assignments(self, *_args):
+        """No-op (compat) — clusters use a single selected orbit."""
+        return
 
-        if num_sats <= 0:
-            return
-
-
-        orbit_names = [o['name'] for o in self.orbit_configurations]
-
-        # ensure stale assignment vars don’t leak from a previous create
-        if not hasattr(self, "orbit_assignments"):
-            self.orbit_assignments = {}
-
-        for i in range(num_sats):
-            role = "Leader" if i == 0 else f"Child {i}"
-            ttk.Label(self.orbit_assignment_frame, text=f"{role}:").grid(
-                row=i // 2, column=(i % 2) * 2, sticky=tk.W, padx=5, pady=2
-            )
-
-            var = tk.StringVar()
-            combo = ttk.Combobox(self.orbit_assignment_frame, textvariable=var,
-                                values=orbit_names, width=15, state="readonly")
-            combo.grid(row=i // 2, column=(i % 2) * 2 + 1, padx=5, pady=2)
-
-            # defaults that match your requirement/image:
-            if i in (0, 1):
-                var.set("Primary Orbit")
-            else:
-                # round‑robin to make sure >2 sats still have reasonable defaults
-                var.set("Opposite Orbit" if "Opposite Orbit" in orbit_names else orbit_names[i % len(orbit_names)])
-
-            self.orbit_assignments[i] = var
-
-
+    # ------------------------------------------------------------ Create/Modify
     def create_cluster(self):
-        """
-        Create a new satellite cluster with proper leader/child roles,
-        each satellite optionally on different orbits, and role-based
-        communication pointing. Safe for FaultTab (includes periodic).
-        """
-        # --- Read form values ---
-        cluster_name = self.cluster_name_var.get().strip()
-        try:
-            num_sats = int(self.sats_per_cluster_var.get())
-        except Exception:
-            num_sats = 0
+        # Cap at 4 clusters (Claude requirement)
+        if len(self.clusters) >= self.MAX_CLUSTERS:
+            messagebox.showwarning("Cluster Limit", f"Only {self.MAX_CLUSTERS} clusters are allowed.")
+            return
+
+        name = self.cluster_name_var.get().strip()
+        if not name:
+            messagebox.showerror("Input Error", "Please enter a cluster name")
+            return
+        if any(c["name"] == name for c in self.clusters):
+            messagebox.showerror("Duplicate Name", f"Cluster '{name}' already exists")
+            return
+
+        n = int(self.sats_per_cluster_var.get())
         formation = self.formation_var.get()
-        separation = float(self.formation_separation.get()) if hasattr(self, "formation_separation") else 0.0
+        separation = float(self.formation_separation.get())
 
-        # --- Validation ---
-        if not cluster_name:
-            messagebox.showwarning("Missing Information", "Please provide a cluster name")
-            return
-        if num_sats <= 0:
-            messagebox.showwarning("Invalid Value", "Number of satellites must be greater than zero")
-            return
-        if hasattr(self, "clusters") and cluster_name in [c['name'] for c in self.clusters]:
-            messagebox.showwarning("Duplicate Name", f"Cluster '{cluster_name}' already exists")
-            return
-        if not getattr(self, "orbit_configurations", None):
-            messagebox.showwarning("No Orbits", "No orbit configurations found. Create or import orbits first.")
+        if not self.orbit_configurations:
+            messagebox.showwarning("No Orbits", "Create or import at least one orbit first.")
             return
 
-        # --- Build cluster record ---
+        # Base orbit for the entire cluster
+        primary_orbit = next((o for o in self.orbit_configurations if o["name"] == self.primary_orbit_var.get()),
+                             self.orbit_configurations[0])
+
+        cluster_base_angle = (len(self.clusters) * 90.0) % 360.0  # spread clusters around the Earth
+
+        base_orbit = {
+            "a": primary_orbit["altitude"] + 6371,
+            "e": 0.001,
+            "i": primary_orbit["inclination"],
+            "Omega": primary_orbit.get("raan", 0.0),
+            "omega": 0.0,
+            "f": cluster_base_angle,
+        }
+
+        # Small orbital offsets to shape formation
+        offsets = self._get_formation_offsets(n, formation, separation)
+
+        # Optional cartesian offsets (visual spacing used by plots/Vizard)
+        cart = None
+        try:
+            # Map formation to helper shapes
+            f = formation.lower()
+            if "leader-follower" in f:
+                cart = CartesianFormations.train(n, separation)
+            elif "line" in f:
+                cart = CartesianFormations.column(n, separation)
+            elif "triangle" in f or "diamond" in f:
+                cart = CartesianFormations.box(n, separation)
+            else:
+                cart = CartesianFormations.box(n, separation)
+        except Exception:
+            cart = None  # fall back to storing just numeric offsets we compute below
+
+        # Build cluster record
         cluster = {
-            "name": cluster_name,
+            "name": name,
             "type": "cluster",
             "formation": formation,
             "leader": None,
             "children": [],
             "satellites": [],
             "separation": separation,
+            "cartesian_mode": bool(self.cartesian_mode.get()),
+            "color_idx": len(self.clusters) % len(self.PALETTE),
+            "color_hex": self.PALETTE[len(self.clusters) % len(self.PALETTE)],
         }
 
-        # --- Formation geometry (keeps your existing helper) ---
-        # positions[i] should include keys like 'anomaly' and optional 'offset'
-        positions = self._calculate_cluster_positions(num_sats, formation, 0, 0, separation)
-
-        # --- Create satellites ---
-        for i in range(num_sats):
+        for i in range(n):
             is_leader = (i == 0)
-            sat_name = f"{cluster_name}_{'Leader' if is_leader else f'Sat{i+1}'}"
+            sat_name = f"{name}_{'Leader' if is_leader else f'Sat{i+1}'}"
 
-            # Choose an orbit for this satellite:
-            # 1) honor explicit assignment if provided in self.orbit_assignments[i]
-            # 2) otherwise round-robin through self.orbit_configurations
-            orbit_name = None
-            if hasattr(self, "orbit_assignments"):
-                var = self.orbit_assignments.get(i)
-                if hasattr(var, "get"):
-                    orbit_name = var.get().strip() or None
-            if orbit_name is None:
-                orbit_name = self.orbit_configurations[i % len(self.orbit_configurations)]['name']
+            sat_orbit = {
+                "a": base_orbit["a"],
+                "e": base_orbit["e"],
+                "i": base_orbit["i"] + offsets[i]["di"],
+                "Omega": base_orbit["Omega"] + offsets[i]["dOmega"],
+                "omega": base_orbit["omega"],
+                "f": base_orbit["f"] + offsets[i]["df"],
+            }
 
-            orbit_cfg = next((o for o in self.orbit_configurations if o['name'] == orbit_name), self.orbit_configurations[0])
+            # Communication pointing defaults
+            aHat = [0.2, -0.4, 0.2] if is_leader else [0.0, 0.0, -1.0]
 
-            # Role-based comm pointing (kept from your new snippet)
-            leader_aHat = [0.2, -0.4, 0.2]
-            child_aHat  = [0.0, 0.0, -1.0]
+            pos_off = [0.0, 0.0, 0.0]
+            if cart is not None:
+                try:
+                    pos_off = cart[i].offset_km  # provided by helper
+                except Exception:
+                    pos_off = [0.0, 0.0, 0.0]
 
             sat = {
                 "name": sat_name,
                 "type": "cluster_member",
-                "cluster": cluster_name,
+                "cluster": name,
                 "role": "leader" if is_leader else "child",
-
-                # Orbit state (ECI classical elements → Basilisk-friendly if you convert downstream)
-                "orbit": {
-                    "a": orbit_cfg['altitude'] + 6371.0,   # km, Earth radius added
-                    "e": 0.01,
-                    "i": orbit_cfg['inclination'],
-                    "Omega": orbit_cfg['raan'],
-                    "omega": 0.0,
-                    "f": positions[i].get('anomaly', 0.0),
-                },
-                "orbit_name": orbit_name,
-                "position_offset": positions[i].get('offset', [0.0, 0.0, 0.0]),
-
-                # Fault block compatible with FaultTab (includes periodic)
+                "cartesian_mode": bool(self.cartesian_mode.get()),
+                "position_offset_km": pos_off,
+                "formation": formation,
+                "orbit": sat_orbit,
                 "fault": {
                     "type": "friction",
                     "magnitude": 0.0005,
-                    "wheel": 3,               # 0-based (RW4 shown as 4 in GUI)
-                    "time": 15.0,             # minutes
+                    "wheel": 3,
+                    "time": 15.0,
                     "enabled": False,
-                    "periodic": {              # <<< important for FaultTab safety
-                        "enabled": False,
-                        "interval": 360.0,
-                        "magnitude": 0.1,
-                        "wheel": 3
-                    }
                 },
-
-                # Camera defaults: leader camera on by default
                 "camera": {
-                    "position": [0.0, 0.0, 15.0],
-                    "fov": 80.0,
-                    "enabled": is_leader
+                    "position": [10.0, 10.0, 10.0],
+                    "fov": 90.0,
+                    "enabled": is_leader,
                 },
-
-                # Communications (range/fov from GUI; pointing depends on role)
                 "communication": {
-                    "range": float(self.comm_range.get()) if hasattr(self, "comm_range") else 1000.0,
-                    "fov": float(self.comm_fov.get()) if hasattr(self, "comm_fov") else 45.0,
-                    "aHat_B": leader_aHat if is_leader else child_aHat,
-
-                    # Optional scaffolding you may use elsewhere
-                    "links": {
-                        "intra_cluster": [],
-                        "inter_cluster": []
-                    }
+                    "range": float(self.comm_range.get()),
+                    "fov": float(self.comm_fov.get()),
+                    "aHat_B": aHat,
                 },
-
-                # Placeholder for imaging targets or tasks
-                "targets": []
+                "targets": [],
+                "orbit_name": primary_orbit["name"],
             }
 
-            # Register satellite in app structures
             self.satellites.append(sat)
             cluster["satellites"].append(sat_name)
-            if "satellites" in orbit_cfg:
-                orbit_cfg["satellites"].append(sat_name)
-            else:
-                orbit_cfg["satellites"] = [sat_name]
-
             if is_leader:
                 cluster["leader"] = sat_name
             else:
                 cluster["children"].append(sat_name)
 
-        # --- Save cluster and refresh UI ---
-        if not hasattr(self, "clusters"):
-            self.clusters = []
+            primary_orbit["satellites"].append(sat_name)
+
+        # Book-keeping
         self.clusters.append(cluster)
+        cluster["_members"] = [next(s for s in self.satellites if s["name"] == nm) for nm in cluster["satellites"]]
 
-        # UI refresh hooks (exist in your codebase)
-        try:
-            self.update_cluster_tree()
-        except Exception:
-            pass
-        try:
-            self.update_satellite_listbox()
-        except Exception:
-            pass
-        try:
-            self.update_orbit_tree()
-        except Exception:
-            pass
-        try:
-            # Let other tabs (e.g., FaultTab) refresh their dropdowns
+        # UI updates
+        self.update_cluster_tree()
+        self.update_satellite_listbox()
+        self.update_orbit_tree()
+        if hasattr(self.parent_app, "update_satellite_dropdowns"):
             self.parent_app.update_satellite_dropdowns()
-        except Exception:
-            pass
-        try:
+        if hasattr(self.parent_app, "update_status_counts"):
             self.parent_app.update_status_counts()
-        except Exception:
-            pass
-        try:
-            # If you maintain a comm graph elsewhere
-            if hasattr(self, "_rebuild_comm_graph"):
-                self._rebuild_comm_graph()
-        except Exception:
-            pass
 
-        # Log + clean up form
-        self.add_log(f"Created cluster '{cluster_name}' with {num_sats} satellites (formation={formation}, separation={separation})")
-        try:
-            self.clear_cluster_form()
-        except Exception:
-            pass
+        # Log
+        self.add_log(f"Created cluster '{name}' with {n} satellites in {formation} formation")
+        self.add_log(f"  Formation separation: {separation} km")
+        self.add_log(f"  All satellites in orbit: {primary_orbit['name']}")
+        self.add_log(f"  Leader: {cluster['leader']}")
+        self.add_log(f"  Children: {', '.join(cluster['children'])}")
 
-        try:
-            self.update_communication_plot()
-        except Exception as e:
-            print(f"Could not update communication plot: {e}")
-        
-        # Also notify the main communication tab if it exists
-        try:
-            if hasattr(self.parent_app, 'communication_tab'):
-                self.parent_app.communication_tab.update_for_clusters()
-        except Exception:
-            pass
+        # Warn if limit reached
+        if len(self.clusters) >= self.MAX_CLUSTERS:
+            messagebox.showinfo(
+                "Cluster Limit Reached",
+                f"Maximum {self.MAX_CLUSTERS} clusters created (project requirement)."
+            )
 
-        
-    
-    
+    def _get_formation_offsets(self, num_sats, formation, separation_km):
+        """
+        Small orbital deltas producing tight formations.
+        Returns: list of dicts {'df','di','dOmega'} (degrees)
+        """
+        offsets = []
+        deg_per_km = 1.0 / 116.0  # approx along-track conversion
+        sep_deg = separation_km * deg_per_km
+
+        f = (formation or "").lower()
+
+        if "line" in f:
+            for i in range(num_sats):
+                offsets.append({"df": i * sep_deg, "di": 0.0, "dOmega": 0.0})
+
+        elif "triangle" in f:
+            if num_sats >= 1:
+                offsets.append({"df": 0.0, "di": 0.0, "dOmega": 0.0})
+            if num_sats >= 2:
+                offsets.append({"df": -sep_deg, "di": +sep_deg * 0.005, "dOmega": 0.0})
+            if num_sats >= 3:
+                offsets.append({"df": -sep_deg, "di": -sep_deg * 0.005, "dOmega": 0.0})
+            for i in range(3, num_sats):
+                offsets.append({"df": -sep_deg * 0.5, "di": 0.0, "dOmega": 0.0})
+
+        elif "diamond" in f:
+            if num_sats >= 1:
+                offsets.append({"df": 0.0, "di": 0.0, "dOmega": 0.0})
+            if num_sats >= 2:
+                offsets.append({"df": +sep_deg, "di": 0.0, "dOmega": 0.0})
+            if num_sats >= 3:
+                offsets.append({"df": -sep_deg, "di": 0.0, "dOmega": 0.0})
+            if num_sats >= 4:
+                offsets.append({"df": 0.0, "di": +sep_deg * 0.01, "dOmega": 0.0})
+            for i in range(4, num_sats):
+                offsets.append({"df": (i - 3) * sep_deg * 0.5, "di": 0.0, "dOmega": 0.0})
+
+        else:  # Leader-Follower (train)
+            for i in range(num_sats):
+                offsets.append({"df": -i * sep_deg, "di": 0.0, "dOmega": 0.0})
+
+        return offsets
+
+    # ------------------------------------------------------------ Cluster ops
     def view_cluster_details(self):
-        """View details of selected cluster - IMPLEMENTED"""
-        selection = self.cluster_tree.selection()
-        if not selection:
+        sel = self.cluster_tree.selection()
+        if not sel:
             messagebox.showinfo("No Selection", "Please select a cluster to view")
             return
-        
-        # Get cluster name from selection
-        item = self.cluster_tree.item(selection[0])
-        cluster_name = item['values'][0]
-        
-        # Find cluster
-        cluster = next((c for c in self.clusters if c['name'] == cluster_name), None)
+        cluster_name = self.cluster_tree.item(sel[0])["values"][0]
+        cluster = next((c for c in self.clusters if c["name"] == cluster_name), None)
         if not cluster:
             return
-        
-        # Create details window
-        details_window = tk.Toplevel(self.parent_app.root)
-        details_window.title(f"Cluster Details: {cluster_name}")
-        details_window.geometry("600x500")
-        
-        # Details text
-        text_frame = ttk.Frame(details_window, padding=10)
-        text_frame.pack(fill=tk.BOTH, expand=True)
-        
-        text = tk.Text(text_frame, wrap=tk.WORD, font=('Consolas', 10))
-        scrollbar = ttk.Scrollbar(text_frame, command=text.yview)
-        text.config(yscrollcommand=scrollbar.set)
-        
-        # Build details
-        details = f"CLUSTER: {cluster['name']}\n"
-        details += "="*50 + "\n\n"
-        details += f"Formation: {cluster['formation']}\n"
-        details += f"Leader: {cluster['leader']}\n"
-        details += f"Children: {', '.join(cluster['children'])}\n"
-        details += f"Total Satellites: {len(cluster['satellites'])}\n\n"
-        
-        # Satellite details
-        details += "SATELLITE DETAILS:\n"
-        details += "-"*50 + "\n"
-        for sat_name in cluster['satellites']:
-            sat = next((s for s in self.satellites if s['name'] == sat_name), None)
-            if sat:
-                details += f"\n{sat['name']}:\n"
-                details += f"  Role: {sat['role']}\n"
-                details += f"  Orbit: {sat['orbit_name']}\n"
-                details += f"  Altitude: {sat['orbit']['a'] - 6371:.0f} km\n"
-                details += f"  Inclination: {sat['orbit']['i']:.1f}°\n"
-                details += f"  RAAN: {sat['orbit']['Omega']:.1f}°\n"
-                details += f"  True Anomaly: {sat['orbit']['f']:.1f}°\n"
-                details += f"  Camera: {'Enabled' if sat['camera']['enabled'] else 'Disabled'}\n"
-                details += f"  Fault: {'Enabled' if sat['fault']['enabled'] else 'Disabled'}\n"
-                if sat['targets']:
-                    details += f"  Targets: {', '.join(sat['targets'])}\n"
-        
-        # Communication info
-        details += "\n" + "="*50 + "\n"
-        details += "COMMUNICATION CONFIGURATION:\n"
-        details += f"Range: {self.comm_range.get():.0f} km\n"
-        details += f"FOV: {self.comm_fov.get():.1f}°\n"
-        
-        text.insert(tk.END, details)
-        text.config(state="disabled")
-        
-        text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Close button
-        ttk.Button(details_window, text="Close", 
-                  command=details_window.destroy).pack(pady=10)
-    
+
+        w = tk.Toplevel(self.parent_app.root)
+        w.title(f"Cluster Details: {cluster_name}")
+        w.geometry("600x520")
+        frame = ttk.Frame(w, padding=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        txt = tk.Text(frame, wrap=tk.WORD, font=("Consolas", 10))
+        sb = ttk.Scrollbar(frame, command=txt.yview)
+        txt.configure(yscrollcommand=sb.set)
+        txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        details = [
+            f"CLUSTER: {cluster['name']}",
+            "=" * 60,
+            f"Formation: {cluster['formation']}",
+            f"Leader: {cluster['leader']}",
+            f"Children: {', '.join(cluster['children']) or '-'}",
+            f"Total Satellites: {len(cluster['satellites'])}",
+            f"Separation: {cluster.get('separation', 10.0)} km",
+            "",
+            "SATELLITES",
+            "-" * 60,
+        ]
+        for nm in cluster["satellites"]:
+            sat = next((s for s in self.satellites if s["name"] == nm), None)
+            if not sat:
+                continue
+            details += [
+                f"{sat['name']}:",
+                f"  Role: {sat['role']}",
+                f"  Orbit: {sat.get('orbit_name','')}",
+                f"  Altitude: {sat['orbit']['a'] - 6371:.0f} km",
+                f"  Inc: {sat['orbit']['i']:.1f}°, RAAN: {sat['orbit']['Omega']:.1f}°, TA: {sat['orbit']['f']:.1f}°",
+                f"  Camera: {'Enabled' if sat['camera']['enabled'] else 'Disabled'}",
+                f"  Fault: {'Enabled' if sat['fault']['enabled'] else 'Disabled'}",
+                ""
+            ]
+        details += [
+            "=" * 60, "COMMUNICATION",
+            f"Range: {self.comm_range.get():.0f} km | FOV: {self.comm_fov.get():.1f}°",
+        ]
+
+        txt.insert(tk.END, "\n".join(details))
+        txt.configure(state="disabled")
+        ttk.Button(w, text="Close", command=w.destroy).pack(pady=8)
+
     def modify_cluster(self):
-        """Modify selected cluster - IMPLEMENTED"""
-        selection = self.cluster_tree.selection()
-        if not selection:
+        sel = self.cluster_tree.selection()
+        if not sel:
             messagebox.showinfo("No Selection", "Please select a cluster to modify")
             return
-        
-        # Get cluster
-        item = self.cluster_tree.item(selection[0])
-        cluster_name = item['values'][0]
-        cluster = next((c for c in self.clusters if c['name'] == cluster_name), None)
+        name = self.cluster_tree.item(sel[0])["values"][0]
+        cluster = next((c for c in self.clusters if c["name"] == name), None)
         if not cluster:
             return
-        
-        # Create modification window
-        mod_window = tk.Toplevel(self.parent_app.root)
-        mod_window.title(f"Modify Cluster: {cluster_name}")
-        mod_window.geometry("400x300")
-        
-        # Modification options
-        frame = ttk.Frame(mod_window, padding=20)
-        frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Formation type
-        ttk.Label(frame, text="Formation Type:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        formation_var = tk.StringVar(value=cluster['formation'])
-        formation_combo = ttk.Combobox(frame, textvariable=formation_var,
-                                      values=["Leader-Follower", "Diamond", "Line", "Triangle"],
-                                      width=20, state="readonly")
-        formation_combo.grid(row=0, column=1, pady=5)
-        
-        # Separation
-        ttk.Label(frame, text="Separation (km):").grid(row=1, column=0, sticky=tk.W, pady=5)
-        sep_var = tk.DoubleVar(value=cluster.get('separation', 10.0))
-        ttk.Entry(frame, textvariable=sep_var, width=20).grid(row=1, column=1, pady=5)
-        
-        # Add satellite button
-        ttk.Label(frame, text="Add Satellite:").grid(row=2, column=0, sticky=tk.W, pady=5)
-        ttk.Button(frame, text="Add Child Satellite", 
-                  command=lambda: self._add_satellite_to_cluster(cluster_name)).grid(row=2, column=1, pady=5)
-        
-        # Apply changes
-        def apply_changes():
-            cluster['formation'] = formation_var.get()
-            cluster['separation'] = sep_var.get()
-            
-            # Update satellites formation
+
+        w = tk.Toplevel(self.parent_app.root)
+        w.title(f"Modify Cluster: {name}")
+        w.geometry("380x240")
+        f = ttk.Frame(w, padding=20); f.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(f, text="Formation Type:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        form_var = tk.StringVar(value=cluster["formation"])
+        ttk.Combobox(f, textvariable=form_var, values=self.ALLOWED_FORMATIONS, width=20, state="readonly").grid(row=0, column=1, pady=5)
+
+        ttk.Label(f, text="Separation (km):").grid(row=1, column=0, sticky=tk.W, pady=5)
+        sep_var = tk.DoubleVar(value=cluster.get("separation", 10.0))
+        ttk.Entry(f, textvariable=sep_var, width=20).grid(row=1, column=1, pady=5)
+
+        def apply():
+            cluster["formation"] = form_var.get()
+            cluster["separation"] = float(sep_var.get())
             self._update_cluster_formation(cluster)
-            
             self.update_cluster_tree()
-            self.add_log(f"Modified cluster: {cluster_name}")
-            mod_window.destroy()
-        
-        # Buttons
-        button_frame = ttk.Frame(frame)
-        button_frame.grid(row=3, column=0, columnspan=2, pady=20)
-        
-        ttk.Button(button_frame, text="Apply", command=apply_changes).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Cancel", command=mod_window.destroy).pack(side=tk.LEFT, padx=5)
-    
+            self.add_log(f"Modified cluster: {name}")
+            w.destroy()
+
+        row = ttk.Frame(f); row.grid(row=2, column=0, columnspan=2, pady=18)
+        ttk.Button(row, text="Apply", command=apply).pack(side=tk.LEFT, padx=5)
+        ttk.Button(row, text="Cancel", command=w.destroy).pack(side=tk.LEFT, padx=5)
+
     def delete_cluster(self):
-        """Delete selected cluster - IMPLEMENTED"""
-        selection = self.cluster_tree.selection()
-        if not selection:
+        sel = self.cluster_tree.selection()
+        if not sel:
             messagebox.showinfo("No Selection", "Please select a cluster to delete")
             return
-        
-        # Get cluster
-        item = self.cluster_tree.item(selection[0])
-        cluster_name = item['values'][0]
-        
-        if not messagebox.askyesno("Confirm Delete", f"Delete cluster '{cluster_name}' and all its satellites?"):
+        name = self.cluster_tree.item(sel[0])["values"][0]
+        if not messagebox.askyesno("Confirm Delete", f"Delete cluster '{name}' and all its satellites?"):
             return
-        
-        # Find and remove cluster
-        cluster = next((c for c in self.clusters if c['name'] == cluster_name), None)
-        if cluster:
-            # Remove satellites
-            for sat_name in cluster['satellites']:
-                # Remove from main list
-                self.satellites[:] = [s for s in self.satellites if s['name'] != sat_name]
-                
-                # Remove from orbit lists
-                for orbit in self.orbit_configurations:
-                    if sat_name in orbit['satellites']:
-                        orbit['satellites'].remove(sat_name)
-            
-            # Remove cluster
-            self.clusters.remove(cluster)
-            
-            # Update UI
-            self.update_cluster_tree()
-            self.update_satellite_listbox()
-            self.update_orbit_tree()
+
+        cluster = next((c for c in self.clusters if c["name"] == name), None)
+        if not cluster:
+            return
+
+        for sat_name in list(cluster["satellites"]):
+            self.satellites[:] = [s for s in self.satellites if s["name"] != sat_name]
+            for orbit in self.orbit_configurations:
+                if sat_name in orbit["satellites"]:
+                    orbit["satellites"].remove(sat_name)
+
+        self.clusters.remove(cluster)
+
+        self.update_cluster_tree()
+        self.update_satellite_listbox()
+        self.update_orbit_tree()
+        if hasattr(self.parent_app, "update_satellite_dropdowns"):
             self.parent_app.update_satellite_dropdowns()
+        if hasattr(self.parent_app, "update_status_counts"):
             self.parent_app.update_status_counts()
-            
-            self.add_log(f"Deleted cluster: {cluster_name}")
-    
+
+        self.add_log(f"Deleted cluster: {name}")
+
     def test_cluster_communication(self):
-        """Test communication within selected cluster"""
-        selection = self.cluster_tree.selection()
-        if not selection:
+        sel = self.cluster_tree.selection()
+        if not sel:
             messagebox.showinfo("No Selection", "Please select a cluster to test")
             return
-        
-        # Get cluster
-        item = self.cluster_tree.item(selection[0])
-        cluster_name = item['values'][0]
-        cluster = next((c for c in self.clusters if c['name'] == cluster_name), None)
+        name = self.cluster_tree.item(sel[0])["values"][0]
+        cluster = next((c for c in self.clusters if c["name"] == name), None)
         if not cluster:
             return
-        
-        # Simulate communication
-        messages = []
-        messages.append(f"Testing communication in cluster: {cluster_name}")
-        messages.append(f"Leader: {cluster['leader']} broadcasting to children...")
-        
-        for child in cluster['children']:
-            messages.append(f"  → {child}: Message received")
-        
-        messages.append(f"\nChildren reporting to leader:")
-        for child in cluster['children']:
-            messages.append(f"  ← {child}: Status OK")
-        
-        # Show results
-        messagebox.showinfo("Communication Test", "\n".join(messages))
-        self.add_log(f"Communication test completed for cluster: {cluster_name}")
-    
+
+        msgs = [f"Testing communication in cluster: {name}",
+                f"Leader: {cluster['leader']} broadcasting to children..."]
+        for child in cluster["children"]:
+            msgs.append(f"  → {child}: Message received")
+        msgs.append("\nChildren reporting to leader:")
+        for child in cluster["children"]:
+            msgs.append(f"  ← {child}: Status OK")
+
+        messagebox.showinfo("Communication Test", "\n".join(msgs))
+        self.add_log(f"Communication test completed for cluster: {name}")
+
     def _add_satellite_to_cluster(self, cluster_name):
-        """Add a new satellite to existing cluster"""
-        cluster = next((c for c in self.clusters if c['name'] == cluster_name), None)
+        cluster = next((c for c in self.clusters if c["name"] == cluster_name), None)
         if not cluster:
             return
-        
-        # Get orbit selection
-        orbit_names = [o['name'] for o in self.orbit_configurations]
-        orbit_name = simpledialog.askstring("Select Orbit", 
-                                           f"Enter orbit name for new satellite\nAvailable: {', '.join(orbit_names)}")
-        if not orbit_name or orbit_name not in orbit_names:
+
+        choices = [o["name"] for o in self.orbit_configurations]
+        orbit_name = simpledialog.askstring("Select Orbit", f"Enter orbit name for new satellite\nAvailable: {', '.join(choices)}")
+        if not orbit_name or orbit_name not in choices:
             return
-        
-        orbit_config = next(o for o in self.orbit_configurations if o['name'] == orbit_name)
-        
-        # Create new child satellite
-        child_num = len(cluster['children']) + 1
+        orbit = next(o for o in self.orbit_configurations if o["name"] == orbit_name)
+
+        child_num = len(cluster["children"]) + 1
         sat_name = f"{cluster_name}_Child{child_num}"
-        
+
         satellite = {
             "name": sat_name,
             "type": "cluster_member",
             "cluster": cluster_name,
             "role": "child",
+            "formation": cluster["formation"],
             "orbit": {
-                "a": orbit_config['altitude'] + 6371,
+                "a": orbit["altitude"] + 6371,
                 "e": 0.01,
-                "i": orbit_config['inclination'],
-                "Omega": orbit_config['raan'],
+                "i": orbit["inclination"],
+                "Omega": orbit["raan"],
                 "omega": 0.0,
-                "f": child_num * 10.0  # Spread out
+                "f": child_num * 10.0,
             },
-            "fault": {
-                "type": "friction",
-                "magnitude": 0.0005,
-                "wheel": 3,
-                "time": 15.0,
-                "enabled": False,
-            },
-            "camera": {
-                "position": [0.0, 0.0, 15.0],
-                "fov": 80.0,
-                "enabled": False
-            },
-            "communication": {
-                "range": self.comm_range.get(),
-                "fov": self.comm_fov.get(),
-                "aHat_B": [0.0, 0.0, -1.0]
-            },
+            "fault": {"type": "friction", "magnitude": 0.0005, "wheel": 3, "time": 15.0, "enabled": False},
+            "camera": {"position": [0.0, 0.0, 15.0], "fov": 80.0, "enabled": False},
+            "communication": {"range": float(self.comm_range.get()), "fov": float(self.comm_fov.get()), "aHat_B": [0.0, 0.0, -1.0]},
             "targets": [],
-            "orbit_name": orbit_name
+            "orbit_name": orbit_name,
+            "position_offset_km": [0.0, 0.0, 0.0],
         }
-        
+
         self.satellites.append(satellite)
-        cluster['satellites'].append(sat_name)
-        cluster['children'].append(sat_name)
-        orbit_config['satellites'].append(sat_name)
-        
-        # Update UI
+        cluster["satellites"].append(sat_name)
+        cluster["children"].append(sat_name)
+        orbit["satellites"].append(sat_name)
+
         self.update_cluster_tree()
         self.update_satellite_listbox()
         self.update_orbit_tree()
-        
         self.add_log(f"Added {sat_name} to cluster {cluster_name}")
-    
+
     def _update_cluster_formation(self, cluster):
-        """Update satellite positions based on formation type"""
-        num_sats = len(cluster['satellites'])
-        formation = cluster['formation']
-        separation = cluster.get('separation', 10.0)
-        
-        positions = self._calculate_cluster_positions(num_sats, formation, 0, 0, separation)
-        
-        # Update satellite positions
-        for i, sat_name in enumerate(cluster['satellites']):
-            sat = next((s for s in self.satellites if s['name'] == sat_name), None)
-            if sat and i < len(positions):
-                sat['orbit']['f'] = positions[i]['anomaly']
-                sat['position_offset'] = positions[i].get('offset', [0, 0, 0])
-    
+        n = len(cluster["satellites"])
+        formation = cluster["formation"]
+        separation = cluster.get("separation", 10.0)
+
+        # compute new leader-relative offsets (visual) and TA adjustments (kept minimal)
+        positions = self._calculate_cluster_positions(n, formation, leader_anomaly=0.0, phase_offset=0.0, separation=separation)
+
+        for idx, sat_name in enumerate(cluster["satellites"]):
+            sat = next((s for s in self.satellites if s["name"] == sat_name), None)
+            if not sat:
+                continue
+            sat["orbit"]["f"] += positions[idx]["anomaly"]  # small tweak
+            sat["position_offset_km"] = positions[idx].get("offset", [0.0, 0.0, 0.0])
+
     def _calculate_cluster_positions(self, num_sats, formation, leader_anomaly, phase_offset, separation):
-        """
-        Return a list of dicts, each like:
-        {'anomaly': <deg>, 'offset': [dx_km, dy_km, dz_km]}
-        - leader at index 0
-        - 'separation' is in km and acts as a nominal scale knob
-        """
-        # Normalize formation name + allow synonyms
+        # Normalize to 4 formations
         f = (formation or "").strip().lower()
-        if f in ("circle", "ring"):
-            f = "ring"
-        elif f in ("line", "column", "stack"):
-            f = "column"
-        elif f in ("diamond", "box", "square"):
-            f = "box"
-        elif f in ("leader-follower", "train"):
-            f = "train"
+        if f == "line":
+            key = "column"
+        elif f == "triangle":
+            key = "box"  # close visual
+        elif f == "diamond":
+            key = "box"
         else:
-            f = "ring"  # sensible default
+            key = "train"  # Leader-Follower
 
         positions = []
 
-        # Helper: leader at index 0 (no offset, base anomaly)
         def leader_entry():
-            return {'anomaly': leader_anomaly, 'offset': [0.0, 0.0, 0.0]}
+            return {"anomaly": leader_anomaly, "offset": [0.0, 0.0, 0.0]}
 
-        if f == "ring":
-            # Satellites evenly spaced on a circle around the leader.
-            # Leader at "top" (0 offset), followers on ring of radius R.
-            R = max(2.0, separation)  # km
-            positions.append(leader_entry())
-            if num_sats > 1:
-                for k in range(1, num_sats):
-                    theta = 2.0 * np.pi * (k - 1) / max(1, (num_sats - 1))
-                    dx = R * np.cos(theta)
-                    dy = R * np.sin(theta)
-                    positions.append({
-                        'anomaly': leader_anomaly,   # keep anomaly same; only in-plane offset
-                        'offset': [dx, dy, 0.0]
-                    })
-
-        elif f == "column":
-            # Vertical stack: small along-track spacing (anomaly) and tiny cross-track spread.
-            dA = max(2.0, separation * 0.5)  # deg between neighbors
+        if key == "column":  # line
+            dA = max(2.0, separation * 0.5)
             positions.append(leader_entry())
             for k in range(1, num_sats):
-                positions.append({
-                    'anomaly': leader_anomaly + k * dA,
-                    'offset': [0.0, k * 0.2, 0.0]  # tiny lateral so links don't overlap in plots
-                })
+                positions.append({"anomaly": leader_anomaly + k * dA, "offset": [0.0, k * 0.2, 0.0]})
 
-        elif f == "box":
-            # 2x2 diamond/box around leader (like bubble 3).
-            # For >4 sats, we wrap additional ones around in a second, larger box.
-            side = max(3.0, separation)  # km
+        elif key == "box":  # diamond/triangle
+            side = max(3.0, separation)
             positions.append(leader_entry())
-            # First ring (up to 4 children)
-            ring1 = [
-                ( side,   0.0),
-                ( 0.0,    side),
-                (-side,   0.0),
-                ( 0.0,   -side),
-            ]
-            # Second ring (optional) for >5
-            ring2 = [
-                ( 2*side,  2*side),
-                (-2*side,  2*side),
-                (-2*side, -2*side),
-                ( 2*side, -2*side),
-            ]
+            ring1 = [( side,  0.0), (0.0,  side), (-side, 0.0), (0.0, -side)]
+            ring2 = [( 2*side,  2*side), (-2*side,  2*side), (-2*side, -2*side), ( 2*side, -2*side)]
             coords = ring1 + ring2
-            k = 1
-            for (dx, dy) in coords[:max(0, num_sats-1)]:
-                positions.append({'anomaly': leader_anomaly, 'offset': [dx, dy, 0.0]})
-                k += 1
-            # If still more, fall back to ring fill
+            for (dx, dy) in coords[:max(0, num_sats - 1)]:
+                positions.append({"anomaly": leader_anomaly, "offset": [dx, dy, 0.0]})
             while len(positions) < num_sats:
-                angle = 2*np.pi*(len(positions)-1)/max(1, num_sats-1)
-                positions.append({'anomaly': leader_anomaly, 'offset': [1.5*side*np.cos(angle), 1.5*side*np.sin(angle), 0.0]})
+                angle = 2 * np.pi * (len(positions) - 1) / max(1, num_sats - 1)
+                positions.append({"anomaly": leader_anomaly, "offset": [1.5 * side * np.cos(angle), 1.5 * side * np.sin(angle), 0.0]})
 
-        elif f == "train":
-            # Long along-track line (wide spacing) like bubble 4.
-            dA = max(8.0, separation)  # deg between neighbors (wider than column)
+        else:  # train (Leader-Follower)
+            dA = max(8.0, separation)
             positions.append(leader_entry())
             for k in range(1, num_sats):
-                positions.append({
-                    'anomaly': leader_anomaly + k * dA,
-                    'offset': [0.0, 0.0, 0.0]
-                })
+                positions.append({"anomaly": leader_anomaly + k * dA, "offset": [0.0, 0.0, 0.0]})
 
         return positions
 
-    
+    # ------------------------------------------------------------ Formation view
+    def view_formation(self):
+        sel = self.cluster_tree.selection()
+        if not sel:
+            messagebox.showwarning("No Selection", "Please select a cluster to view")
+            return
+        name = self.cluster_tree.item(sel[0])["values"][0]
+        self.show_formation_check_plot(name)
+
+    def show_formation_check_plot(self, cluster_name):
+        cluster = next((c for c in self.clusters if c["name"] == cluster_name), None)
+        if not cluster:
+            return
+
+        # Gather positions: use saved 'position_offset_km' (leader-relative)
+        positions = []
+        for nm in cluster["satellites"]:
+            sat = next((s for s in self.satellites if s["name"] == nm), None)
+            pos = sat.get("position_offset_km", [0.0, 0.0, 0.0]) if sat else [0.0, 0.0, 0.0]
+            positions.append(pos)
+
+        # Compute simple RMS from ideal (0 for leader; others target at separation distance)
+        rms_error = self.calculate_formation_error(cluster, positions)
+
+        w = tk.Toplevel(self.parent_app.root)
+        w.title(f"Formation Check: {cluster_name}")
+        w.geometry("900x700")
+
+        fig = Figure(figsize=(10, 8), facecolor="white")
+
+        # 3D leader-relative scatter
+        ax1 = fig.add_subplot(221, projection="3d")
+        ax1.set_title(f"{cluster_name} — {cluster['formation']} (Leader-Relative)")
+        # Ideal template lines (thin)
+        self.plot_ideal_formation(ax1, cluster["formation"], len(cluster["satellites"]), cluster.get("separation", 10.0))
+
+        for i, nm in enumerate(cluster["satellites"]):
+            x, y, z = positions[i]
+            if nm == cluster["leader"]:
+                ax1.scatter(x, y, z, c="red", s=100, marker="s", label="Leader")
+            else:
+                ax1.scatter(x, y, z, c=cluster["color_hex"], s=50, marker="o")
+        ax1.set_xlabel("Along-track (km)")
+        ax1.set_ylabel("Cross-track (km)")
+        ax1.set_zlabel("Radial (km)")
+        ax1.legend()
+
+        # Status panel
+        ax2 = fig.add_subplot(222); ax2.axis("off")
+        if rms_error < 0.5:
+            status_color, status_text = "green", "EXCELLENT"
+        elif rms_error < 2.0:
+            status_color, status_text = "yellow", "GOOD"
+        else:
+            status_color, status_text = "red", "NEEDS CORRECTION"
+        metrics = f"""Formation Quality
+Formation: {cluster['formation']}
+Satellites: {len(cluster['satellites'])}
+Leader: {cluster['leader']}
+Separation: {cluster.get('separation', 10.0)} km
+
+RMS Error: {rms_error:.3f} km
+Status: {status_text}"""
+        ax2.text(0.1, 0.5, metrics, fontsize=11, family="monospace",
+                 bbox=dict(boxstyle="round,pad=0.6", facecolor=status_color, alpha=0.25))
+
+        # Error vs time (synthetic)
+        ax3 = fig.add_subplot(223)
+        t = np.linspace(0, 24, 100)
+        e = rms_error + 0.2 * np.sin(2 * np.pi * t / 12)
+        ax3.plot(t, e, linewidth=2)
+        ax3.axhline(0.5, color="g", linestyle="--", label="Excellent")
+        ax3.axhline(2.0, color="y", linestyle="--", label="Good")
+        ax3.set_xlabel("Time (hours)")
+        ax3.set_ylabel("RMS Error (km)")
+        ax3.set_title("Formation Error Over Time")
+        ax3.grid(True, alpha=0.3); ax3.legend()
+
+        # 2D intra-cluster comm sketch
+        ax4 = fig.add_subplot(224)
+        ax4.set_title("Intra-Cluster Communication (schematic)")
+        leader_pos = positions[0] if positions else [0, 0, 0]
+        for i, nm in enumerate(cluster["children"]):
+            idx = cluster["satellites"].index(nm)
+            child_pos = positions[idx]
+            ax4.plot([leader_pos[0], child_pos[0]], [leader_pos[1], child_pos[1]], color=cluster["color_hex"], alpha=0.6)
+        ax4.scatter(leader_pos[0], leader_pos[1], c="red", s=120, marker="s", label="Leader")
+        for i, nm in enumerate(cluster["children"]):
+            idx = cluster["satellites"].index(nm)
+            x, y, _ = positions[idx]
+            ax4.scatter(x, y, c=cluster["color_hex"], s=70)
+        ax4.set_xlabel("Along-track (km)"); ax4.set_ylabel("Cross-track (km)")
+        ax4.grid(True, alpha=0.3); ax4.legend()
+
+        fig.tight_layout()
+
+        canvas = FigureCanvasTkAgg(fig, master=w)
+        canvas.draw(); canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+        # Save
+        bar = ttk.Frame(w); bar.pack(fill=tk.X, pady=6)
+        def save_plot():
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            fname = f"plots/{ts}_FormationCheck_{cluster_name}.png"
+            fig.savefig(fname, dpi=150, bbox_inches="tight")
+            messagebox.showinfo("Saved", f"Plot saved to {fname}")
+        ttk.Button(bar, text="Save Plot", command=save_plot).pack()
+
+    def plot_ideal_formation(self, ax, formation_type, num_sats, separation):
+        f = (formation_type or "").lower()
+        if "line" in f:
+            for i in range(num_sats):
+                ax.plot([i * separation, i * separation], [0, 0], [-0.1, 0.1], "g--", alpha=0.3, linewidth=1)
+        elif "triangle" in f:
+            ang = np.linspace(0, 2*np.pi, 3, endpoint=False)
+            x = separation * np.cos(ang); y = separation * np.sin(ang)
+            for i in range(3):
+                j = (i + 1) % 3
+                ax.plot([x[i], x[j]], [y[i], y[j]], [0, 0], "g--", alpha=0.3)
+        elif "diamond" in f:
+            pts = [[ separation, 0, 0],[0, separation, 0],[-separation, 0, 0],[0,-separation, 0]]
+            for i in range(4):
+                j = (i + 1) % 4
+                ax.plot([pts[i][0], pts[j][0]],[pts[i][1], pts[j][1]],[0,0],"g--", alpha=0.3)
+        else:  # Leader-Follower
+            for i in range(num_sats):
+                ax.plot([-i * separation, -i * separation], [0, 0], [-0.1, 0.1], "g--", alpha=0.3, linewidth=1)
+
+    def calculate_formation_error(self, cluster, positions):
+        # Simple RMS distance from ideal ring/line center (leader at origin)
+        if not positions:
+            return 0.0
+        sep = float(cluster.get("separation", 10.0))
+        f = (cluster.get("formation","") or "").lower()
+        errs = []
+        for i, p in enumerate(positions):
+            x, y, z = p
+            if i == 0:
+                errs.append(np.linalg.norm([x, y, z]))  # leader ~ 0
+                continue
+            if "line" in f or "leader-follower" in f:
+                target = np.array([i*sep, 0.0, 0.0])
+            elif "diamond" in f:
+                targets = [np.array([ sep,0,0]), np.array([0, sep,0]), np.array([-sep,0,0]), np.array([0,-sep,0])]
+                target = targets[(i-1) % len(targets)]
+            elif "triangle" in f:
+                ang = 2*np.pi*((i-1) % 3)/3
+                target = np.array([sep*np.cos(ang), sep*np.sin(ang), 0.0])
+            else:
+                target = np.array([0.0, 0.0, 0.0])
+            errs.append(np.linalg.norm(np.array([x,y,z]) - target))
+        return float(np.sqrt(np.mean(np.square(errs))))
+
+    def export_config(self):
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        fname = f"cluster_config_{ts}.txt"
+        with open(fname, "w", encoding="utf-8") as f:
+            f.write("Cluster Configuration Export\n")
+            f.write(f"Generated: {datetime.now()}\n")
+            f.write(f"Total Clusters: {len(self.clusters)}/{self.MAX_CLUSTERS}\n\n")
+            for c in self.clusters:
+                f.write(f"Cluster: {c['name']}\n")
+                f.write(f"  Formation: {c['formation']}\n")
+                f.write(f"  Satellites: {len(c['satellites'])}\n")
+                f.write(f"  Leader: {c['leader']}\n")
+                f.write(f"  Children: {len(c['children'])}\n")
+                f.write(f"  Separation: {c.get('separation', 10.0)} km\n")
+                f.write(f"  Color: {c.get('color_hex','')}\n\n")
+        messagebox.showinfo("Export Complete", f"Configuration exported to {fname}")
+
+    # ------------------------------------------------------------ Orbit Tab
     def _create_orbit_management_tab(self, parent):
-        """Create orbit management tab with all working buttons"""
-        # Create orbit section
         create_frame = ttk.LabelFrame(parent, text="Create New Orbit", padding=10)
         create_frame.pack(fill=tk.X, padx=10, pady=10)
-        
-        # Orbit parameters
-        params_grid = ttk.Frame(create_frame)
-        params_grid.pack(fill=tk.X, pady=5)
-        
-        ttk.Label(params_grid, text="Orbit Name:").grid(row=0, column=0, sticky=tk.W, padx=5)
+
+        grid = ttk.Frame(create_frame); grid.pack(fill=tk.X, pady=5)
+        ttk.Label(grid, text="Orbit Name:").grid(row=0, column=0, sticky=tk.W, padx=5)
         self.new_orbit_name_var = tk.StringVar()
-        ttk.Entry(params_grid, textvariable=self.new_orbit_name_var, width=20).grid(row=0, column=1, padx=5)
-        
-        ttk.Label(params_grid, text="Altitude (km):").grid(row=0, column=2, sticky=tk.W, padx=5)
+        ttk.Entry(grid, textvariable=self.new_orbit_name_var, width=20).grid(row=0, column=1, padx=5)
+
+        ttk.Label(grid, text="Altitude (km):").grid(row=0, column=2, sticky=tk.W, padx=5)
         self.new_orbit_alt_var = tk.DoubleVar(value=600.0)
-        ttk.Entry(params_grid, textvariable=self.new_orbit_alt_var, width=15).grid(row=0, column=3, padx=5)
-        
-        ttk.Label(params_grid, text="Inclination (deg):").grid(row=1, column=0, sticky=tk.W, padx=5)
+        ttk.Entry(grid, textvariable=self.new_orbit_alt_var, width=15).grid(row=0, column=3, padx=5)
+
+        ttk.Label(grid, text="Inclination (deg):").grid(row=1, column=0, sticky=tk.W, padx=5)
         self.new_orbit_inc_var = tk.DoubleVar(value=55.0)
-        ttk.Entry(params_grid, textvariable=self.new_orbit_inc_var, width=15).grid(row=1, column=1, padx=5)
-        
-        ttk.Label(params_grid, text="RAAN (deg):").grid(row=1, column=2, sticky=tk.W, padx=5)
+        ttk.Entry(grid, textvariable=self.new_orbit_inc_var, width=15).grid(row=1, column=1, padx=5)
+
+        ttk.Label(grid, text="RAAN (deg):").grid(row=1, column=2, sticky=tk.W, padx=5)
         self.new_orbit_raan_var = tk.DoubleVar(value=0.0)
-        ttk.Entry(params_grid, textvariable=self.new_orbit_raan_var, width=15).grid(row=1, column=3, padx=5)
-        
-        ttk.Button(create_frame, text="Create Orbit", 
-                  command=self.create_new_orbit).pack(pady=10)
-        
-        # Existing orbits
+        ttk.Entry(grid, textvariable=self.new_orbit_raan_var, width=15).grid(row=1, column=3, padx=5)
+
+        ttk.Button(create_frame, text="Create Orbit", command=self.create_new_orbit).pack(pady=10)
+
         orbits_frame = ttk.LabelFrame(parent, text="Orbit Library", padding=10)
         orbits_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        # Orbit tree
-        columns = ('Name', 'Altitude', 'Inclination', 'RAAN', 'Satellites')
-        self.orbit_tree = ttk.Treeview(orbits_frame, columns=columns, show='headings', height=8)
-        
+
+        columns = ("Name", "Altitude", "Inclination", "RAAN", "Satellites")
+        self.orbit_tree = ttk.Treeview(orbits_frame, columns=columns, show="headings", height=8)
         for col in columns:
             self.orbit_tree.heading(col, text=col)
-            
-        self.orbit_tree.column('Name', width=120)
-        self.orbit_tree.column('Altitude', width=100)
-        self.orbit_tree.column('Inclination', width=100)
-        self.orbit_tree.column('RAAN', width=100)
-        self.orbit_tree.column('Satellites', width=100)
-        
-        scrollbar = ttk.Scrollbar(orbits_frame, orient="vertical", command=self.orbit_tree.yview)
-        self.orbit_tree.configure(yscrollcommand=scrollbar.set)
-        
+        self.orbit_tree.column("Name", width=140)
+        self.orbit_tree.column("Altitude", width=100)
+        self.orbit_tree.column("Inclination", width=100)
+        self.orbit_tree.column("RAAN", width=100)
+        self.orbit_tree.column("Satellites", width=100)
         self.orbit_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Orbit actions - ALL IMPLEMENTED
-        action_frame = ttk.Frame(orbits_frame)
-        action_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Button(action_frame, text="Modify Orbit", 
-                  command=self.modify_orbit).pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Delete Orbit", 
-                  command=self.delete_orbit).pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="View Satellites", 
-                  command=self.view_orbit_satellites).pack(side=tk.LEFT, padx=5)
-        
+
+        sb = ttk.Scrollbar(orbits_frame, orient="vertical", command=self.orbit_tree.yview)
+        self.orbit_tree.configure(yscrollcommand=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        row = ttk.Frame(orbits_frame); row.pack(fill=tk.X, pady=5)
+        ttk.Button(row, text="Modify Orbit", command=self.modify_orbit).pack(side=tk.LEFT, padx=5)
+        ttk.Button(row, text="Delete Orbit", command=self.delete_orbit).pack(side=tk.LEFT, padx=5)
+        ttk.Button(row, text="View Satellites", command=self.view_orbit_satellites).pack(side=tk.LEFT, padx=5)
+
         self.update_orbit_tree()
-    
+
     def create_new_orbit(self):
-        """Create a new orbit"""
         name = self.new_orbit_name_var.get().strip()
         if not name:
             messagebox.showwarning("Missing Name", "Please provide an orbit name")
             return
-            
-        if name in [o['name'] for o in self.orbit_configurations]:
+        if name in [o["name"] for o in self.orbit_configurations]:
             messagebox.showwarning("Duplicate Name", f"Orbit '{name}' already exists")
             return
-        
+
         new_orbit = {
             "name": name,
-            "altitude": self.new_orbit_alt_var.get(),
-            "inclination": self.new_orbit_inc_var.get(),
-            "raan": self.new_orbit_raan_var.get(),
+            "altitude": float(self.new_orbit_alt_var.get()),
+            "inclination": float(self.new_orbit_inc_var.get()),
+            "raan": float(self.new_orbit_raan_var.get()),
             "satellites": [],
-            "description": f"Custom orbit at {self.new_orbit_alt_var.get()}km"
+            "description": f"Custom orbit at {self.new_orbit_alt_var.get()} km",
         }
-        
         self.orbit_configurations.append(new_orbit)
         self.update_orbit_tree()
-        self._update_orbit_assignments()  # Update dropdowns
-        
         self.add_log(f"Created new orbit: {name}")
-        
-        # Clear form
+
+        # Reset form
         self.new_orbit_name_var.set("")
         self.new_orbit_alt_var.set(600.0)
         self.new_orbit_inc_var.set(55.0)
         self.new_orbit_raan_var.set(0.0)
-    
+
     def modify_orbit(self):
-        """Modify selected orbit - IMPLEMENTED"""
-        selection = self.orbit_tree.selection()
-        if not selection:
+        sel = self.orbit_tree.selection()
+        if not sel:
             messagebox.showinfo("No Selection", "Please select an orbit to modify")
             return
-        
-        item = self.orbit_tree.item(selection[0])
-        orbit_name = item['values'][0]
-        orbit = next((o for o in self.orbit_configurations if o['name'] == orbit_name), None)
+        name = self.orbit_tree.item(sel[0])["values"][0]
+        orbit = next((o for o in self.orbit_configurations if o["name"] == name), None)
         if not orbit:
             return
-        
-        # Modification window
-        mod_window = tk.Toplevel(self.parent_app.root)
-        mod_window.title(f"Modify Orbit: {orbit_name}")
-        mod_window.geometry("350x250")
-        
-        frame = ttk.Frame(mod_window, padding=20)
-        frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Parameters
-        ttk.Label(frame, text="Altitude (km):").grid(row=0, column=0, sticky=tk.W, pady=5)
-        alt_var = tk.DoubleVar(value=orbit['altitude'])
-        ttk.Entry(frame, textvariable=alt_var, width=20).grid(row=0, column=1, pady=5)
-        
-        ttk.Label(frame, text="Inclination (deg):").grid(row=1, column=0, sticky=tk.W, pady=5)
-        inc_var = tk.DoubleVar(value=orbit['inclination'])
-        ttk.Entry(frame, textvariable=inc_var, width=20).grid(row=1, column=1, pady=5)
-        
-        ttk.Label(frame, text="RAAN (deg):").grid(row=2, column=0, sticky=tk.W, pady=5)
-        raan_var = tk.DoubleVar(value=orbit['raan'])
-        ttk.Entry(frame, textvariable=raan_var, width=20).grid(row=2, column=1, pady=5)
-        
-        def apply_changes():
-            orbit['altitude'] = alt_var.get()
-            orbit['inclination'] = inc_var.get()
-            orbit['raan'] = raan_var.get()
-            
-            # Update satellites using this orbit
-            for sat_name in orbit['satellites']:
-                sat = next((s for s in self.satellites if s['name'] == sat_name), None)
+
+        w = tk.Toplevel(self.parent_app.root)
+        w.title(f"Modify Orbit: {name}")
+        w.geometry("360x260")
+        f = ttk.Frame(w, padding=20); f.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(f, text="Altitude (km):").grid(row=0, column=0, sticky=tk.W, pady=5)
+        alt = tk.DoubleVar(value=orbit["altitude"]); ttk.Entry(f, textvariable=alt, width=20).grid(row=0, column=1, pady=5)
+        ttk.Label(f, text="Inclination (deg):").grid(row=1, column=0, sticky=tk.W, pady=5)
+        inc = tk.DoubleVar(value=orbit["inclination"]); ttk.Entry(f, textvariable=inc, width=20).grid(row=1, column=1, pady=5)
+        ttk.Label(f, text="RAAN (deg):").grid(row=2, column=0, sticky=tk.W, pady=5)
+        raan = tk.DoubleVar(value=orbit["raan"]); ttk.Entry(f, textvariable=raan, width=20).grid(row=2, column=1, pady=5)
+
+        def apply():
+            orbit["altitude"] = float(alt.get())
+            orbit["inclination"] = float(inc.get())
+            orbit["raan"] = float(raan.get())
+            # push changes to satellites on this orbit
+            for nm in orbit["satellites"]:
+                sat = next((s for s in self.satellites if s["name"] == nm), None)
                 if sat:
-                    sat['orbit']['a'] = orbit['altitude'] + 6371
-                    sat['orbit']['i'] = orbit['inclination']
-                    sat['orbit']['Omega'] = orbit['raan']
-            
+                    sat["orbit"]["a"] = orbit["altitude"] + 6371
+                    sat["orbit"]["i"] = orbit["inclination"]
+                    sat["orbit"]["Omega"] = orbit["raan"]
             self.update_orbit_tree()
-            self.add_log(f"Modified orbit: {orbit_name}")
-            mod_window.destroy()
-        
-        # Buttons
-        button_frame = ttk.Frame(frame)
-        button_frame.grid(row=3, column=0, columnspan=2, pady=20)
-        
-        ttk.Button(button_frame, text="Apply", command=apply_changes).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Cancel", command=mod_window.destroy).pack(side=tk.LEFT, padx=5)
-    
+            self.add_log(f"Modified orbit: {name}")
+            w.destroy()
+
+        row = ttk.Frame(f); row.grid(row=3, column=0, columnspan=2, pady=18)
+        ttk.Button(row, text="Apply", command=apply).pack(side=tk.LEFT, padx=5)
+        ttk.Button(row, text="Cancel", command=w.destroy).pack(side=tk.LEFT, padx=5)
+
     def delete_orbit(self):
-        """Delete selected orbit - IMPLEMENTED"""
-        selection = self.orbit_tree.selection()
-        if not selection:
+        sel = self.orbit_tree.selection()
+        if not sel:
             messagebox.showinfo("No Selection", "Please select an orbit to delete")
             return
-        
-        item = self.orbit_tree.item(selection[0])
-        orbit_name = item['values'][0]
-        orbit = next((o for o in self.orbit_configurations if o['name'] == orbit_name), None)
-        
+        name = self.orbit_tree.item(sel[0])["values"][0]
+        orbit = next((o for o in self.orbit_configurations if o["name"] == name), None)
         if not orbit:
             return
-        
-        if orbit['satellites']:
-            messagebox.showwarning("Cannot Delete", 
-                                 f"Cannot delete orbit with {len(orbit['satellites'])} satellites")
+        if orbit["satellites"]:
+            messagebox.showwarning("Cannot Delete", f"Cannot delete orbit with {len(orbit['satellites'])} satellites")
             return
-        
-        if not messagebox.askyesno("Confirm Delete", f"Delete orbit '{orbit_name}'?"):
+        if not messagebox.askyesno("Confirm Delete", f"Delete orbit '{name}'?"):
             return
-        
         self.orbit_configurations.remove(orbit)
         self.update_orbit_tree()
-        self._update_orbit_assignments()
-        
-        self.add_log(f"Deleted orbit: {orbit_name}")
-    
+        self.add_log(f"Deleted orbit: {name}")
+
     def view_orbit_satellites(self):
-        """View satellites in selected orbit - IMPLEMENTED"""
-        selection = self.orbit_tree.selection()
-        if not selection:
+        sel = self.orbit_tree.selection()
+        if not sel:
             messagebox.showinfo("No Selection", "Please select an orbit")
             return
-        
-        item = self.orbit_tree.item(selection[0])
-        orbit_name = item['values'][0]
-        orbit = next((o for o in self.orbit_configurations if o['name'] == orbit_name), None)
-        
+        name = self.orbit_tree.item(sel[0])["values"][0]
+        orbit = next((o for o in self.orbit_configurations if o["name"] == name), None)
         if not orbit:
             return
-        
-        # Show satellites
-        if orbit['satellites']:
-            sat_list = "\n".join([f"• {s}" for s in orbit['satellites']])
-            messagebox.showinfo(f"Satellites in {orbit_name}", 
-                              f"Satellites ({len(orbit['satellites'])}):\n\n{sat_list}")
+        if orbit["satellites"]:
+            txt = "\n".join([f"• {s}" for s in orbit["satellites"]])
+            messagebox.showinfo(f"Satellites in {name}", f"Satellites ({len(orbit['satellites'])}):\n\n{txt}")
         else:
-            messagebox.showinfo(f"Satellites in {orbit_name}", "No satellites in this orbit")
-    
+            messagebox.showinfo(f"Satellites in {name}", "No satellites in this orbit")
+
+    # ------------------------------------------------------------ Individuals
     def _create_individual_tab(self, parent):
-        """Create individual satellites tab"""
-        # Add satellite section
-        add_frame = ttk.LabelFrame(parent, text="Add Individual Satellite", padding=10)
-        add_frame.pack(fill=tk.X, padx=10, pady=10)
-        
-        # Satellite name and orbit
-        params = ttk.Frame(add_frame)
-        params.pack(fill=tk.X, pady=5)
-        
-        ttk.Label(params, text="Satellite Name:").grid(row=0, column=0, sticky=tk.W, padx=5)
+        add = ttk.LabelFrame(parent, text="Add Individual Satellite", padding=10)
+        add.pack(fill=tk.X, padx=10, pady=10)
+
+        row = ttk.Frame(add); row.pack(fill=tk.X, pady=5)
+        ttk.Label(row, text="Satellite Name:").grid(row=0, column=0, sticky=tk.W, padx=5)
         self.individual_sat_name_var = tk.StringVar()
-        ttk.Entry(params, textvariable=self.individual_sat_name_var, width=20).grid(row=0, column=1, padx=5)
-        
-        ttk.Label(params, text="Orbit:").grid(row=0, column=2, sticky=tk.W, padx=5)
+        ttk.Entry(row, textvariable=self.individual_sat_name_var, width=20).grid(row=0, column=1, padx=5)
+
+        ttk.Label(row, text="Orbit:").grid(row=0, column=2, sticky=tk.W, padx=5)
         self.individual_orbit_var = tk.StringVar()
-        orbit_combo = ttk.Combobox(params, textvariable=self.individual_orbit_var, width=20, state="readonly")
+        orbit_combo = ttk.Combobox(row, textvariable=self.individual_orbit_var, width=20, state="readonly")
         orbit_combo.grid(row=0, column=3, padx=5)
-        orbit_combo['values'] = [o['name'] for o in self.orbit_configurations]
-        if orbit_combo['values']:
+        orbit_combo["values"] = [o["name"] for o in self.orbit_configurations]
+        if orbit_combo["values"]:
             orbit_combo.current(0)
-        
-        ttk.Label(params, text="True Anomaly (deg):").grid(row=1, column=0, sticky=tk.W, padx=5)
+
+        ttk.Label(row, text="True Anomaly (deg):").grid(row=1, column=0, sticky=tk.W, padx=5)
         self.individual_anomaly_var = tk.DoubleVar(value=0.0)
-        ttk.Entry(params, textvariable=self.individual_anomaly_var, width=20).grid(row=1, column=1, padx=5)
-        
-        ttk.Button(add_frame, text="Add Satellite", 
-                  command=self.add_individual_satellite).pack(pady=10)
-        
-        # Satellite list
+        ttk.Entry(row, textvariable=self.individual_anomaly_var, width=20).grid(row=1, column=1, padx=5)
+
+        ttk.Button(add, text="Add Satellite", command=self.add_individual_satellite).pack(pady=10)
+
         list_frame = ttk.LabelFrame(parent, text="All Satellites", padding=10)
         list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        # Listbox with scrollbar
-        list_container = ttk.Frame(list_frame)
-        list_container.pack(fill=tk.BOTH, expand=True)
-        
-        scrollbar = ttk.Scrollbar(list_container)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        self.satellite_listbox = tk.Listbox(list_container, 
-                                           selectmode=tk.SINGLE,
-                                           yscrollcommand=scrollbar.set,
-                                           font=('Segoe UI', 10))
+
+        container = ttk.Frame(list_frame); container.pack(fill=tk.BOTH, expand=True)
+        sb = ttk.Scrollbar(container); sb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.satellite_listbox = tk.Listbox(
+            container, selectmode=tk.SINGLE, yscrollcommand=sb.set, font=("Segoe UI", 10)
+        )
         self.satellite_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.config(command=self.satellite_listbox.yview)
-        
-        # Satellite actions
-        action_frame = ttk.Frame(list_frame)
-        action_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Button(action_frame, text="Remove Satellite", 
-                  command=self.remove_satellite).pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Assign to Orbit", 
-                  command=self.assign_satellite_to_orbit).pack(side=tk.LEFT, padx=5)
-        
+        sb.config(command=self.satellite_listbox.yview)
+
+        actions = ttk.Frame(list_frame); actions.pack(fill=tk.X, pady=5)
+        ttk.Button(actions, text="Remove Satellite", command=self.remove_satellite).pack(side=tk.LEFT, padx=5)
+        ttk.Button(actions, text="Assign to Orbit", command=self.assign_satellite_to_orbit).pack(side=tk.LEFT, padx=5)
+
         self.update_satellite_listbox()
-    
+
     def add_individual_satellite(self):
-        """Add an individual satellite"""
         name = self.individual_sat_name_var.get().strip()
-        orbit_name = self.individual_orbit_var.get()
-        anomaly = self.individual_anomaly_var.get()
-        
+        orb_name = self.individual_orbit_var.get()
+        anomaly = float(self.individual_anomaly_var.get())
+
         if not name:
             messagebox.showwarning("Missing Name", "Please provide a satellite name")
             return
-        
-        if name in [s['name'] for s in self.satellites]:
+        if name in [s["name"] for s in self.satellites]:
             messagebox.showwarning("Duplicate Name", f"Satellite '{name}' already exists")
             return
-        
-        orbit = next((o for o in self.orbit_configurations if o['name'] == orbit_name), None)
+
+        orbit = next((o for o in self.orbit_configurations if o["name"] == orb_name), None)
         if not orbit:
             messagebox.showerror("Invalid Orbit", "Selected orbit not found")
             return
-        
-        satellite = {
+
+        sat = {
             "name": name,
             "type": "individual",
             "cluster": None,
             "role": "independent",
             "orbit": {
-                "a": orbit['altitude'] + 6371,
-                "e": 0.01,
-                "i": orbit['inclination'],
-                "Omega": orbit['raan'],
-                "omega": 0.0,
-                "f": anomaly
+                "a": orbit["altitude"] + 6371, "e": 0.01, "i": orbit["inclination"],
+                "Omega": orbit["raan"], "omega": 0.0, "f": anomaly
             },
-            "fault": {
-                "type": "friction",
-                "magnitude": 0.0005,
-                "wheel": 3,
-                "time": 15.0,
-                "enabled": False,
-            },
-            "camera": {
-                "position": [0.0, 0.0, 15.0],
-                "fov": 80.0,
-                "enabled": True
-            },
-            "communication": {
-                "range": self.comm_range.get(),
-                "fov": self.comm_fov.get(),
-                "aHat_B": [0.0, 0.0, -1.0]
-            },
+            "fault": {"type": "friction", "magnitude": 0.0005, "wheel": 3, "time": 15.0, "enabled": False},
+            "camera": {"position": [0.0, 0.0, 15.0], "fov": 80.0, "enabled": True},
+            "communication": {"range": float(self.comm_range.get()), "fov": float(self.comm_fov.get()), "aHat_B": [0.0, 0.0, -1.0]},
             "targets": [],
-            "orbit_name": orbit_name
+            "orbit_name": orb_name,
         }
-        
-        self.satellites.append(satellite)
-        orbit['satellites'].append(name)
-        
-        # Update UI
+        self.satellites.append(sat)
+        orbit["satellites"].append(name)
+
         self.update_satellite_listbox()
         self.update_orbit_tree()
-        self.parent_app.update_satellite_dropdowns()
-        self.parent_app.update_status_counts()
-        
-        # Clear form
+        if hasattr(self.parent_app, "update_satellite_dropdowns"):
+            self.parent_app.update_satellite_dropdowns()
+        if hasattr(self.parent_app, "update_status_counts"):
+            self.parent_app.update_status_counts()
+
         self.individual_sat_name_var.set("")
         self.individual_anomaly_var.set(0.0)
-        
         self.add_log(f"Added individual satellite: {name}")
-    
+
     def remove_satellite(self):
-        """Remove selected satellite - IMPLEMENTED"""
-        selection = self.satellite_listbox.curselection()
-        if not selection:
+        sel = self.satellite_listbox.curselection()
+        if not sel:
             messagebox.showinfo("No Selection", "Please select a satellite to remove")
             return
-        
-        # Get satellite name
-        item_text = self.satellite_listbox.get(selection[0])
-        
-        # Parse satellite name from display text
-        sat_name = None
-        if "[INDIVIDUAL]" in item_text:
-            sat_name = item_text.split("]")[1].strip().split("(")[0].strip()
-        elif "[L]" in item_text or "[C]" in item_text:
-            messagebox.showwarning("Cannot Remove", "Cannot remove cluster satellites here. Use cluster management.")
+        item_text = self.satellite_listbox.get(sel[0])
+
+        if "[INDIVIDUAL]" not in item_text:
+            messagebox.showwarning("Cannot Remove", "Cluster satellites must be removed via Cluster Management")
             return
-        
-        if not sat_name:
-            return
-        
+
+        sat_name = item_text.split("]")[1].strip().split("(")[0].strip()
         if not messagebox.askyesno("Confirm Remove", f"Remove satellite '{sat_name}'?"):
             return
-        
-        # Remove satellite
-        sat = next((s for s in self.satellites if s['name'] == sat_name), None)
+
+        sat = next((s for s in self.satellites if s["name"] == sat_name), None)
         if sat:
-            # Remove from satellites list
             self.satellites.remove(sat)
-            
-            # Remove from orbit
-            orbit_name = sat.get('orbit_name')
+            orbit_name = sat.get("orbit_name")
             if orbit_name:
-                orbit = next((o for o in self.orbit_configurations if o['name'] == orbit_name), None)
-                if orbit and sat_name in orbit['satellites']:
-                    orbit['satellites'].remove(sat_name)
-            
-            # Update UI
+                orbit = next((o for o in self.orbit_configurations if o["name"] == orbit_name), None)
+                if orbit and sat_name in orbit["satellites"]:
+                    orbit["satellites"].remove(sat_name)
+
             self.update_satellite_listbox()
             self.update_orbit_tree()
-            self.parent_app.update_satellite_dropdowns()
-            self.parent_app.update_status_counts()
-            
+            if hasattr(self.parent_app, "update_satellite_dropdowns"):
+                self.parent_app.update_satellite_dropdowns()
+            if hasattr(self.parent_app, "update_status_counts"):
+                self.parent_app.update_status_counts()
+
             self.add_log(f"Removed satellite: {sat_name}")
-    
+
     def assign_satellite_to_orbit(self):
-        """Assign satellite to different orbit - IMPLEMENTED"""
-        selection = self.satellite_listbox.curselection()
-        if not selection:
+        sel = self.satellite_listbox.curselection()
+        if not sel:
             messagebox.showinfo("No Selection", "Please select a satellite")
             return
-        
-        # Get satellite
-        item_text = self.satellite_listbox.get(selection[0])
-        sat_name = None
-        
-        if "[INDIVIDUAL]" in item_text:
-            sat_name = item_text.split("]")[1].strip().split("(")[0].strip()
-        else:
+        item_text = self.satellite_listbox.get(sel[0])
+        if "[INDIVIDUAL]" not in item_text:
             messagebox.showinfo("Cannot Reassign", "Only individual satellites can be reassigned")
             return
-        
-        sat = next((s for s in self.satellites if s['name'] == sat_name), None)
+
+        sat_name = item_text.split("]")[1].strip().split("(")[0].strip()
+        sat = next((s for s in self.satellites if s["name"] == sat_name), None)
         if not sat:
             return
-        
-        # Get new orbit
-        orbit_names = [o['name'] for o in self.orbit_configurations]
-        new_orbit_name = simpledialog.askstring("Select Orbit", 
-                                               f"Enter new orbit for {sat_name}\nAvailable: {', '.join(orbit_names)}")
-        
-        if not new_orbit_name or new_orbit_name not in orbit_names:
+
+        choices = [o["name"] for o in self.orbit_configurations]
+        new_name = simpledialog.askstring("Select Orbit", f"Enter new orbit for {sat_name}\nAvailable: {', '.join(choices)}")
+        if not new_name or new_name not in choices:
             return
-        
-        # Update orbit assignment
-        old_orbit_name = sat.get('orbit_name')
-        new_orbit = next(o for o in self.orbit_configurations if o['name'] == new_orbit_name)
-        
-        # Remove from old orbit
-        if old_orbit_name:
-            old_orbit = next((o for o in self.orbit_configurations if o['name'] == old_orbit_name), None)
-            if old_orbit and sat_name in old_orbit['satellites']:
-                old_orbit['satellites'].remove(sat_name)
-        
-        # Add to new orbit
-        sat['orbit_name'] = new_orbit_name
-        sat['orbit']['a'] = new_orbit['altitude'] + 6371
-        sat['orbit']['i'] = new_orbit['inclination']
-        sat['orbit']['Omega'] = new_orbit['raan']
-        new_orbit['satellites'].append(sat_name)
-        
-        # Update UI
+
+        old = sat.get("orbit_name")
+        new_orbit = next(o for o in self.orbit_configurations if o["name"] == new_name)
+        if old:
+            old_orbit = next((o for o in self.orbit_configurations if o["name"] == old), None)
+            if old_orbit and sat_name in old_orbit["satellites"]:
+                old_orbit["satellites"].remove(sat_name)
+
+        sat["orbit_name"] = new_name
+        sat["orbit"]["a"] = new_orbit["altitude"] + 6371
+        sat["orbit"]["i"] = new_orbit["inclination"]
+        sat["orbit"]["Omega"] = new_orbit["raan"]
+        new_orbit["satellites"].append(sat_name)
+
         self.update_satellite_listbox()
         self.update_orbit_tree()
-        
-        self.add_log(f"Reassigned {sat_name} to orbit: {new_orbit_name}")
-    
+        self.add_log(f"Reassigned {sat_name} to orbit: {new_name}")
+
+    # ------------------------------------------------------------ Comm Tab
     def _create_comm_tab(self, parent):
-        """Create communication tab with visualization"""
-        # Global settings
-        settings_frame = ttk.LabelFrame(parent, text="Communication Settings", padding=10)
-        settings_frame.pack(fill=tk.X, padx=10, pady=10)
+        settings = ttk.LabelFrame(parent, text="Communication Settings", padding=10)
+        settings.pack(fill=tk.X, padx=10, pady=10)
 
-        params = ttk.Frame(settings_frame)
-        params.pack(fill=tk.X, pady=5)
+        row = ttk.Frame(settings); row.pack(fill=tk.X, pady=5)
+        ttk.Label(row, text="Range (km):").grid(row=0, column=0, sticky=tk.W, padx=5)
+        ttk.Entry(row, textvariable=self.comm_range, width=15).grid(row=0, column=1, padx=5)
+        ttk.Label(row, text="FOV (deg):").grid(row=0, column=2, sticky=tk.W, padx=5)
+        ttk.Entry(row, textvariable=self.comm_fov, width=15).grid(row=0, column=3, padx=5)
+        ttk.Button(row, text="Refresh", command=lambda: [self.update_communication_plot(), self.comm_canvas.draw()]).grid(row=0, column=4, padx=5)
+        ttk.Button(row, text="Help", command=self.show_communication_help).grid(row=0, column=5, padx=5)
+        ttk.Label(row, text="(Bars = comm possible, Dots = messages)", font=("Arial", 8), foreground="gray").grid(row=1, column=0, columnspan=6, sticky=tk.W)
 
-        ttk.Label(params, text="Range (km):").grid(row=0, column=0, sticky=tk.W, padx=5)
-        ttk.Entry(params, textvariable=self.comm_range, width=15).grid(row=0, column=1, padx=5)
-
-        ttk.Label(params, text="FOV (deg):").grid(row=0, column=2, sticky=tk.W, padx=5)
-        ttk.Entry(params, textvariable=self.comm_fov, width=15).grid(row=0, column=3, padx=5)
-
-        ttk.Button(
-            params, text="Refresh",
-            command=lambda: [self.update_communication_plot(), self.comm_canvas.draw()]
-        ).grid(row=0, column=4, padx=5)
-
-      
-        ttk.Button(
-            params, text="Help",
-            command=self.show_communication_help
-        ).grid(row=0, column=5, padx=5)
-
-        ttk.Label(
-            params, text="(Bars = comm possible, Dots = messages)",
-            font=('Arial', 8), foreground='gray'
-        ).grid(row=1, column=0, columnspan=6, pady=2, sticky=tk.W)
-
-        # Communication plot
         plot_frame = ttk.LabelFrame(parent, text="Communication Windows", padding=10)
         plot_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Create matplotlib figure
         self.comm_figure = Figure(figsize=(10, 6), dpi=80)
         self.comm_ax = self.comm_figure.add_subplot(111)
-
         self.comm_canvas = FigureCanvasTkAgg(self.comm_figure, plot_frame)
         self.comm_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        # Update button
-        ttk.Button(
-            plot_frame, text="Update Communication Plot",
-            command=lambda: [self.update_communication_plot(),
-                            print(f"Clusters available: {len(self.clusters)}")]
-        ).pack(pady=10)
+        ttk.Button(plot_frame, text="Update Communication Plot", command=self.update_communication_plot).pack(pady=8)
 
-        # Initialize plot
         self.update_communication_plot()
 
-
     def update_communication_plot(self):
-        """Update communication windows plot - IMPROVED VERSION"""
         self.comm_ax.clear()
-        
-        print(f"Updating communication plot. Clusters: {len(self.clusters)}")
-        
-        if not self.clusters or len(self.clusters) == 0:
-            self.comm_ax.text(0.5, 0.5, 'No clusters configured\n\nCreate clusters in the Cluster Management tab', 
-                            ha='center', va='center', fontsize=12)
-            self.comm_ax.set_xlim(0, 1)
-            self.comm_ax.set_ylim(0, 1)
-        else:
-            # Simulate communication windows
-            time = np.linspace(0, 30, 100)  # 30 minutes
-            
-            y_pos = 0
-            colors = ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336']  # Better colors
-            cluster_colors = {}
-            
-            # First, add title and explanation
-            title_text = f"Communication Windows for {len(self.clusters)} Clusters"
-            self.comm_ax.text(15, -1.5, "Green/Blue/Orange bars = Communication possible | Dots = Messages sent", 
-                            ha='center', fontsize=9, style='italic', color='gray')
-            
-            # Plot each cluster with clear separation
-            for cluster_idx, cluster in enumerate(self.clusters):
-                color = colors[cluster_idx % len(colors)]
-                cluster_colors[cluster['name']] = color
-                cluster_name = cluster['name']
-                leader = cluster.get('leader', 'Unknown')
-                children = cluster.get('children', [])
-                
-                # Add cluster header with background
-                cluster_y_start = y_pos
-                self.comm_ax.axhspan(y_pos - 0.5, y_pos + len(children) + 0.5, 
-                                    alpha=0.05, color=color, zorder=0)
-                
-                # Cluster name label
-                self.comm_ax.text(-3, y_pos + len(children)/2, f"[{cluster_name.upper()}]", 
-                                fontsize=11, fontweight='bold', color=color, 
-                                va='center', ha='right',
-                                bbox=dict(boxstyle="round,pad=0.3", facecolor='white', 
-                                        edgecolor=color, linewidth=2))
-                
-                # Plot each communication link
-                for child_idx, child in enumerate(children):
-                    # Create communication windows with better visibility
-                    phase = child_idx * np.pi/4
-                    comm_window = np.sin(2 * np.pi * time / 10 + phase) > 0.3
-                    
-                    # Draw communication availability as continuous bars
-                    in_window = False
-                    window_start = 0
-                    
-                    for k in range(len(time)):
-                        if comm_window[k] and not in_window:
-                            window_start = time[k]
-                            in_window = True
-                        elif not comm_window[k] and in_window:
-                            # Draw the window
-                            self.comm_ax.barh(y_pos, time[k] - window_start, 
-                                            left=window_start, height=0.6,
-                                            color=color, alpha=0.3, edgecolor=color, 
-                                            linewidth=1)
-                            in_window = False
-                    
-                    # Handle case where window extends to end
-                    if in_window:
-                        self.comm_ax.barh(y_pos, time[-1] - window_start, 
-                                        left=window_start, height=0.6,
-                                        color=color, alpha=0.3, edgecolor=color, 
-                                        linewidth=1)
-                    
-                    # Add message indicators
-                    message_times = time[::12]  # Messages every 12 time steps
-                    for msg_time in message_times:
-                        idx = np.argmin(np.abs(time - msg_time))
-                        if comm_window[idx]:
-                            # Message dot with annotation
-                            self.comm_ax.scatter(msg_time, y_pos, color=color, 
-                                            s=80, marker='o', zorder=5,
-                                            edgecolors='white', linewidths=1)
-                    
-                    # Communication link label with arrow
-                    link_label = f"{leader[:12]} → {child[:12]}"
-                    self.comm_ax.text(-2, y_pos, link_label, fontsize=9, va='center',
-                                    color='black', fontweight='normal')
-                    
-                    # Add link status indicator
-                    if np.any(comm_window):
-                        status = "●"  # Active
-                        status_color = 'green'
-                    else:
-                        status = "○"  # Inactive
-                        status_color = 'red'
-                    self.comm_ax.text(30.5, y_pos, status, fontsize=12, va='center',
-                                    color=status_color)
-                    
-                    y_pos += 1
-                
-                # Add spacing between clusters
-                y_pos += 0.8
-            
-            # Configure plot with better formatting
-            self.comm_ax.set_xlabel('Time (minutes)', fontsize=11, fontweight='bold')
-            self.comm_ax.set_ylabel('Communication Links', fontsize=11, fontweight='bold')
-            self.comm_ax.set_title(title_text, fontsize=13, fontweight='bold', pad=15)
-            
-            # Set limits with padding
-            self.comm_ax.set_xlim(-3.5, 31)
-            self.comm_ax.set_ylim(-2, max(1, y_pos))
-            
-            # Add grid for better readability
-            self.comm_ax.grid(True, alpha=0.2, axis='x', linestyle='--')
-            self.comm_ax.axvline(x=0, color='black', linewidth=1, alpha=0.5)
-            self.comm_ax.axvline(x=30, color='black', linewidth=1, alpha=0.5)
-            
-            # Add time markers
-            for t in [0, 5, 10, 15, 20, 25, 30]:
-                self.comm_ax.axvline(x=t, color='gray', linewidth=0.5, alpha=0.3, linestyle=':')
-            
-            # Create legend
-            legend_elements = []
-            for cluster_name, color in cluster_colors.items():
-                from matplotlib.patches import Patch
-                from matplotlib.lines import Line2D
-                # Combined legend entry
-                legend_elements.append(Patch(facecolor=color, alpha=0.3, 
-                                            edgecolor=color, label=f'{cluster_name} cluster'))
-            
-            # Add legend items for symbols
-            from matplotlib.lines import Line2D
-            legend_elements.append(Line2D([0], [0], marker='o', color='w', 
-                                        markerfacecolor='gray', markersize=8, 
-                                        label='Message sent'))
-            legend_elements.append(Patch(facecolor='gray', alpha=0.3, 
-                                        label='Comm window'))
-            
-            self.comm_ax.legend(handles=legend_elements, loc='upper left', 
-                            fontsize=9, framealpha=0.9, ncol=2)
-        
-        self.comm_canvas.draw()
-        print(f"Communication plot updated")
-    # ============================================
-    # Also add this helper to check cluster status:
-    # ============================================
 
-    def debug_cluster_status(self):
-        """Debug helper to check cluster configuration"""
-        print("\n=== CLUSTER DEBUG INFO ===")
-        print(f"Number of clusters: {len(self.clusters)}")
-        for cluster in self.clusters:
-            print(f"  Cluster '{cluster['name']}':")
-            print(f"    - Leader: {cluster.get('leader', 'None')}")
-            print(f"    - Children: {cluster.get('children', [])}")
-            print(f"    - Formation: {cluster.get('formation', 'Unknown')}")
-        print(f"Total satellites: {len(self.satellites)}")
-        print("=========================\n")
-    
+        if not self.clusters:
+            self.comm_ax.text(0.5, 0.5, "No clusters configured\nCreate clusters in the Cluster Management tab",
+                              ha="center", va="center", fontsize=12)
+            self.comm_ax.set_xlim(0, 1); self.comm_ax.set_ylim(0, 1)
+            self.comm_canvas.draw(); return
+
+        t = np.linspace(0, 30, 100)
+        y = 0
+        title_text = f"Communication Windows for {len(self.clusters)} Clusters"
+        self.comm_ax.text(15, -1.5, "Colored bars = communication windows | Dots = messages",
+                          ha="center", fontsize=9, style="italic", color="gray")
+
+        legend_elems = [Line2D([0], [0], marker="o", color="w", markerfacecolor="gray", markersize=8, label="Message sent"),
+                        Patch(facecolor="gray", alpha=0.3, label="Comm window")]
+
+        for idx, c in enumerate(self.clusters):
+            color = self.PALETTE[c.get("color_idx", idx % len(self.PALETTE))]
+            leader = c.get("leader", "Leader")
+            children = c.get("children", [])
+
+            # cluster band
+            self.comm_ax.axhspan(y - 0.5, y + len(children) + 0.5, color=color, alpha=0.06, zorder=0)
+            self.comm_ax.text(-3, y + len(children) / 2, f"[{c['name'].upper()}]",
+                              fontsize=11, fontweight="bold", color=color, va="center", ha="right",
+                              bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=color, linewidth=2))
+
+            # legend entry per cluster
+            legend_elems.append(Patch(facecolor=color, edgecolor=color, alpha=0.3, label=f"{c['name']} cluster"))
+
+            for j, child in enumerate(children):
+                phase = j * np.pi / 4
+                comm_window = np.sin(2 * np.pi * t / 10 + phase) > 0.3
+
+                in_window = False; start = 0.0
+                for k in range(len(t)):
+                    if comm_window[k] and not in_window:
+                        start = t[k]; in_window = True
+                    elif not comm_window[k] and in_window:
+                        self.comm_ax.barh(y, t[k] - start, left=start, height=0.6,
+                                          color=color, alpha=0.3, edgecolor=color, linewidth=1)
+                        in_window = False
+                if in_window:
+                    self.comm_ax.barh(y, t[-1] - start, left=start, height=0.6,
+                                      color=color, alpha=0.3, edgecolor=color, linewidth=1)
+
+                # message dots
+                for mt in t[::12]:
+                    k = np.argmin(np.abs(t - mt))
+                    if comm_window[k]:
+                        self.comm_ax.scatter(mt, y, color=color, s=80, marker="o", zorder=5, edgecolors="white", linewidths=1)
+
+                self.comm_ax.text(-2, y, f"{leader[:12]} → {child[:12]}", fontsize=9, va="center", color="black")
+                y += 1
+
+            y += 0.8  # gap between clusters
+
+        self.comm_ax.set_xlabel("Time (minutes)", fontsize=11, fontweight="bold")
+        self.comm_ax.set_ylabel("Communication Links", fontsize=11, fontweight="bold")
+        self.comm_ax.set_title(title_text, fontsize=13, fontweight="bold", pad=12)
+        self.comm_ax.set_xlim(-3.5, 31); self.comm_ax.set_ylim(-2, max(1, y))
+        self.comm_ax.grid(True, alpha=0.2, axis="x", linestyle="--")
+        for tmark in [0, 5, 10, 15, 20, 25, 30]:
+            self.comm_ax.axvline(x=tmark, color="gray", linewidth=0.5, alpha=0.3, linestyle=":")
+
+        # dedupe legend labels
+        seen = set(); final = []
+        for h in legend_elems:
+            lbl = h.get_label()
+            if lbl not in seen:
+                final.append(h); seen.add(lbl)
+
+        self.comm_ax.legend(handles=final, loc="upper left", fontsize=9, framealpha=0.9, ncol=2)
+        self.comm_canvas.draw()
 
     def show_communication_help(self):
-        """Show help dialog explaining the communication plot"""
-        help_text = """UNDERSTANDING THE COMMUNICATION PLOT
+        messagebox.showinfo(
+            "Communication Plot Help",
+            """WHAT YOU SEE
+• Each row is a leader→child link
+• Links are grouped by cluster color
+• Bars = time windows when link is available
+• Dots = actual messages (only inside windows)
 
-    WHAT IT SHOWS:
-    • Each horizontal line represents a communication link between two satellites
-    • Links are grouped by cluster (different colors for each cluster)
+WHY WINDOWS COME/GO
+• Relative motion causes satellites to move in/out of range
+• FOV and Earth occlusion also gate communication""",
+        )
 
-    VISUAL ELEMENTS:
-    • Colored Bars = Time windows when satellites can communicate
-    - Bars appear when satellites are in range and have line-of-sight
-    - No bar = satellites cannot communicate (out of range/blocked by Earth)
-
-    • Dots = Messages being sent
-    - Only appear during communication windows
-    - Represent actual data transmission events
-
-    • Y-Axis Labels = Communication links
-    - Format: "Leader_name → Child_name"
-    - Shows who is talking to whom
-
-    • X-Axis = Time in minutes
-    - Shows the full simulation duration (typically 30 minutes)
-
-    HOW SATELLITES COMMUNICATE:
-    1. Leader satellites coordinate their cluster
-    2. Children report back to their leader
-    3. Communication only possible when:
-    - Satellites are within range (2000 km default)
-    - Have line-of-sight (not blocked by Earth)
-    - Within field-of-view angle (30° default)
-
-    PATTERN EXPLANATION:
-    The sinusoidal (wave-like) pattern occurs because:
-    • Satellites orbit Earth at different speeds/positions
-    • They move in and out of communication range
-    • This creates periodic communication opportunities
-
-    USE THIS FOR:
-    • Planning when to send commands
-    • Understanding data relay delays
-    • Identifying communication blackout periods
-    • Optimizing constellation design"""
-        
-        messagebox.showinfo("Communication Plot Help", help_text)
-
-    
-    # Update methods
+    # ------------------------------------------------------------ Update lists
     def update_cluster_tree(self):
-        """Update cluster tree view"""
         for item in self.cluster_tree.get_children():
             self.cluster_tree.delete(item)
-        
-        for cluster in self.clusters:
-            status = "Active" if cluster.get('leader') else "Inactive"
-            
-            cluster_item = self.cluster_tree.insert('', 'end', values=(
-                cluster['name'],
-                cluster.get('leader', 'None'),
-                len(cluster.get('children', [])),
-                cluster.get('formation', 'Unknown'),
-                status
-            ))
-            
-            # Add satellite details as children
-            for sat_name in cluster.get('satellites', []):
-                sat = next((s for s in self.satellites if s['name'] == sat_name), None)
+        for c in self.clusters:
+            status = "Active" if c.get("leader") else "Inactive"
+            node = self.cluster_tree.insert("", "end", values=(c["name"], c.get("leader","None"),
+                                                               len(c.get("children", [])), c.get("formation",""), status))
+            # children rows with satellite details
+            for nm in c.get("satellites", []):
+                sat = next((s for s in self.satellites if s["name"] == nm), None)
                 if sat:
-                    self.cluster_tree.insert(cluster_item, 'end', values=(
-                        f"  {sat['name']}",
-                        sat.get('role', ''),
-                        sat.get('orbit_name', ''),
-                        f"{sat['orbit']['a']-6371:.0f}km",
-                        "Fault" if sat['fault']['enabled'] else "OK"
-                    ))
-    
+                    self.cluster_tree.insert(node, "end", values=(f"  {sat['name']}",
+                                                                  sat.get("role", ""), sat.get("orbit_name", ""),
+                                                                  f"{sat['orbit']['a']-6371:.0f}km",
+                                                                  "Fault" if sat["fault"]["enabled"] else "OK"))
+
     def update_orbit_tree(self):
-        """Update orbit tree view"""
         for item in self.orbit_tree.get_children():
             self.orbit_tree.delete(item)
-        
-        for orbit in self.orbit_configurations:
-            self.orbit_tree.insert('', 'end', values=(
-                orbit['name'],
-                f"{orbit['altitude']:.0f} km",
-                f"{orbit['inclination']:.1f}°",
-                f"{orbit['raan']:.1f}°",
-                len(orbit['satellites'])
-            ))
-    
+        for o in self.orbit_configurations:
+            self.orbit_tree.insert("", "end", values=(o["name"], f"{o['altitude']:.0f} km",
+                                                      f"{o['inclination']:.1f}°", f"{o['raan']:.1f}°",
+                                                      len(o["satellites"])))
+
     def update_satellite_listbox(self):
-        """Update satellite listbox"""
         self.satellite_listbox.delete(0, tk.END)
-        
-        # Add clusters
-        for cluster in self.clusters:
-            self.satellite_listbox.insert(tk.END, f"[CLUSTER] {cluster['name']}")
-            
-            for sat_name in cluster['satellites']:
-                sat = next((s for s in self.satellites if s['name'] == sat_name), None)
+        # clusters
+        for c in self.clusters:
+            self.satellite_listbox.insert(tk.END, f"[CLUSTER] {c['name']}")
+            for nm in c["satellites"]:
+                sat = next((s for s in self.satellites if s["name"] == nm), None)
                 if sat:
-                    role = "L" if sat['role'] == 'leader' else "C"
-                    orbit = sat.get('orbit_name', 'Unknown')
-                    alt = sat['orbit']['a'] - 6371
-                    fault = "F" if sat['fault']['enabled'] else ""
-                    self.satellite_listbox.insert(tk.END, 
-                                                 f"  [{role}] {sat['name']} ({orbit}, {alt:.0f}km) {fault}")
-        
-        # Add individual satellites
+                    role = "L" if sat["role"] == "leader" else "C"
+                    orbit = sat.get("orbit_name", "Unknown")
+                    alt = sat["orbit"]["a"] - 6371
+                    fault = "F" if sat["fault"]["enabled"] else ""
+                    self.satellite_listbox.insert(tk.END, f"  [{role}] {sat['name']} ({orbit}, {alt:.0f}km) {fault}")
+        # individuals
         for sat in self.satellites:
-            if sat['type'] == 'individual':
-                orbit = sat.get('orbit_name', 'Unknown')
-                alt = sat['orbit']['a'] - 6371
-                fault = "F" if sat['fault']['enabled'] else ""
-                self.satellite_listbox.insert(tk.END, 
-                                             f"[INDIVIDUAL] {sat['name']} ({orbit}, {alt:.0f}km) {fault}")
-    
+            if sat["type"] == "individual":
+                orbit = sat.get("orbit_name", "Unknown")
+                alt = sat["orbit"]["a"] - 6371
+                fault = "F" if sat["fault"]["enabled"] else ""
+                self.satellite_listbox.insert(tk.END, f"[INDIVIDUAL] {sat['name']} ({orbit}, {alt:.0f}km) {fault}")
+
     def clear_cluster_form(self):
-        """Clear cluster creation form"""
         self.cluster_name_var.set("")
         self.sats_per_cluster_var.set(4)
-        self.formation_var.set("Leader-Follower")
+        self.formation_var.set(self.ALLOWED_FORMATIONS[0])
         self.formation_separation.set(10.0)
-        self._update_orbit_assignments()
+
+    # ------------------------------------------------------------ Debug helper
+    def debug_cluster_status(self):
+        print("\n=== CLUSTER DEBUG INFO ===")
+        print(f"Number of clusters: {len(self.clusters)}")
+        for c in self.clusters:
+            print(f"  Cluster '{c['name']}':")
+            print(f"    - Leader: {c.get('leader', 'None')}")
+            print(f"    - Children: {c.get('children', [])}")
+            print(f"    - Formation: {c.get('formation', 'Unknown')}")
+        print(f"Total satellites: {len(self.satellites)}")
+        print("=========================\n")

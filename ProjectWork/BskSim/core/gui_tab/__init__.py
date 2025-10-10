@@ -51,6 +51,13 @@ except ImportError as e:
     FaultDetectionTab = None
 
 try:
+    from .task_reassignment_tab import TaskReassignmentTab
+except ImportError as e:
+    print(f"Warning: Could not import TaskReassignmentTab: {e}")
+    TaskReassignmentTab = None
+
+
+try:
     from .target_tab import TargetTab
 except ImportError as e:
     print(f"Warning: Could not import TargetTab: {e}")

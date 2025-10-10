@@ -61,7 +61,7 @@ def PD_test():
     dataRwPower = []
 
     # Run the simulation loop
-    for i in range(400):
+    for i in range(200):
         torque = PDControllor(b_model.cur_error_MRP, b_model.cur_omega)
         if b_model.faulty and b_model.step_count > b_model.fault_time and b_model.wheel_num != -1:
             torque[b_model.wheel_num] = 0
