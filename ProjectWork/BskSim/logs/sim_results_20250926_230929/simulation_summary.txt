@@ -1,0 +1,52 @@
+SPACECRAFT CONSTELLATION SIMULATION SUMMARY
+==================================================
+
+Date: 2025-09-26 23:10:08
+
+MODULE STATUS:
+  Basilisk: Available
+  Cluster Integration: Available
+  Plotting: Available (APIs: new, old)
+  Fault Loader: Available
+  Available Faults: ['friction', 'power_limit', 'encoder', 'battery']
+
+SIMULATION CONFIGURATION:
+  Duration: 5.0 minutes
+  Time Step: 1 second
+  Spacecraft: 2
+  Clusters: 1
+
+SPACECRAFT DETAILS:
+
+Spacecraft 1: TestSat1
+  Type: cluster_member
+  Cluster: ALPHA
+  Role: leader
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: ENABLED
+    - Type: friction
+    - Magnitude: 0.0005
+    - Wheel: 3
+    - Injection time: 2.0 minutes
+
+Spacecraft 2: TestSat2
+  Type: cluster_member
+  Cluster: ALPHA
+  Role: child
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+OUTPUT:
+  Results Directory: D:\Swinburne University\Sem01 2025\Computing Technology Project A\Github\satelliteConstellation-basilisk\ProjectWork\BskSim\logs\sim_results_20250926_230929
+  Plots Generated: 0
+  Binary File: D:\Swinburne University\Sem01 2025\Computing Technology Project A\Github\satelliteConstellation-basilisk\ProjectWork\BskSim\Vizfile\_VizFiles\spacecraft_viz_UnityViz.bin (0.10 MB)

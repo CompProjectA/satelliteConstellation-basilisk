@@ -56,7 +56,6 @@ except ImportError as e:
     print(f"Warning: Could not import TaskReassignmentTab: {e}")
     TaskReassignmentTab = None
 
-
 try:
     from .target_tab import TargetTab
 except ImportError as e:
@@ -81,12 +80,19 @@ except ImportError as e:
     print(f"Warning: Could not import ResultsTab: {e}")
     ResultsTab = None
 
-# NEW: Import CommunicationTab
+# Import CommunicationTab
 try:
     from .communication_tab import CommunicationTab
 except ImportError as e:
     print(f"Warning: Could not import CommunicationTab: {e}")
     CommunicationTab = None
+
+# NEW: Import DRLTab
+try:
+    from .drl_tab import DRLTab
+except ImportError as e:
+    print(f"Warning: Could not import DRLTab: {e}")
+    DRLTab = None
 
 # Export all available classes
 __all__ = []
@@ -99,6 +105,8 @@ if FaultTab:
     __all__.append('FaultTab')
 if FaultDetectionTab:
     __all__.append('FaultDetectionTab')
+if TaskReassignmentTab:
+    __all__.append('TaskReassignmentTab')
 if TargetTab:
     __all__.append('TargetTab')
 if VisualizationTab:
@@ -109,3 +117,5 @@ if ResultsTab:
     __all__.append('ResultsTab')
 if CommunicationTab:
     __all__.append('CommunicationTab')
+if DRLTab:
+    __all__.append('DRLTab')

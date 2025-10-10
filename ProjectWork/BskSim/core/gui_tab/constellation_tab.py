@@ -382,48 +382,121 @@ class ConstellationTab(BaseTab):
                 f"Maximum {self.MAX_CLUSTERS} clusters created (project requirement)."
             )
 
+
+
     def _get_formation_offsets(self, num_sats, formation, separation_km):
         """
-        Small orbital deltas producing tight formations.
-        Returns: list of dicts {'df','di','dOmega'} (degrees)
+        Calculate proper orbital offsets for visible formations.
+        Returns: list of dicts {'df','di','dOmega','offset'} (degrees + km)
+        
+        Key principle: separation_km is the target spacing between satellites
         """
         offsets = []
-        deg_per_km = 1.0 / 116.0  # approx along-track conversion
-        sep_deg = separation_km * deg_per_km
-
+        
+        # CRITICAL: Use much larger separations for clear Vizard visibility
+        # Minimum 15km for any formation to be clearly visible in Vizard
+        effective_sep = max(separation_km, 15.0)
+        
+        # Convert km separation to degrees 
+        # For LEO ~7000km orbit, 1 degree ≈ 122 km along track
+        deg_per_km = 1.0 / 122.0
+        sep_deg = effective_sep * deg_per_km
+        
+        # Ensure minimum angular separation for visibility
+        min_sep_deg = 1.2  # At least 1.2 degrees for clear visibility
+        sep_deg = max(sep_deg, min_sep_deg)
+        
         f = (formation or "").lower()
-
+        
         if "line" in f:
+            # Satellites in a line along the orbital path
             for i in range(num_sats):
-                offsets.append({"df": i * sep_deg, "di": 0.0, "dOmega": 0.0})
-
+                offsets.append({
+                    "df": i * sep_deg,           # Along-track spacing
+                    "di": 0.0,                   # Same inclination plane
+                    "dOmega": 0.0                # Same RAAN
+                })
+        
         elif "triangle" in f:
+            # Equilateral triangle formation
             if num_sats >= 1:
+                # Leader at front
                 offsets.append({"df": 0.0, "di": 0.0, "dOmega": 0.0})
             if num_sats >= 2:
-                offsets.append({"df": -sep_deg, "di": +sep_deg * 0.005, "dOmega": 0.0})
+                # Left vertex - behind and to the side
+                offsets.append({
+                    "df": -sep_deg * 0.866,      # Behind by cos(30°) * separation
+                    "di": sep_deg * 0.05,        # Cross-track left
+                    "dOmega": 0.0
+                })
             if num_sats >= 3:
-                offsets.append({"df": -sep_deg, "di": -sep_deg * 0.005, "dOmega": 0.0})
+                # Right vertex - behind and to the other side
+                offsets.append({
+                    "df": -sep_deg * 0.866,      # Behind by cos(30°) * separation
+                    "di": -sep_deg * 0.05,       # Cross-track right
+                    "dOmega": 0.0
+                })
+            # Additional satellites fill the center
             for i in range(3, num_sats):
-                offsets.append({"df": -sep_deg * 0.5, "di": 0.0, "dOmega": 0.0})
-
+                offsets.append({
+                    "df": -sep_deg * 0.5,
+                    "di": 0.0,
+                    "dOmega": 0.0
+                })
+        
         elif "diamond" in f:
+            # Diamond/box formation
             if num_sats >= 1:
+                # Leader at center/front
                 offsets.append({"df": 0.0, "di": 0.0, "dOmega": 0.0})
             if num_sats >= 2:
-                offsets.append({"df": +sep_deg, "di": 0.0, "dOmega": 0.0})
+                # Front vertex
+                offsets.append({
+                    "df": sep_deg,               # Ahead
+                    "di": 0.0,
+                    "dOmega": 0.0
+                })
             if num_sats >= 3:
-                offsets.append({"df": -sep_deg, "di": 0.0, "dOmega": 0.0})
+                # Right vertex
+                offsets.append({
+                    "df": 0.0,
+                    "di": -sep_deg * 0.05,       # Cross-track right
+                    "dOmega": 0.0
+                })
             if num_sats >= 4:
-                offsets.append({"df": 0.0, "di": +sep_deg * 0.01, "dOmega": 0.0})
-            for i in range(4, num_sats):
-                offsets.append({"df": (i - 3) * sep_deg * 0.5, "di": 0.0, "dOmega": 0.0})
-
+                # Back vertex
+                offsets.append({
+                    "df": -sep_deg,              # Behind
+                    "di": 0.0,
+                    "dOmega": 0.0
+                })
+            if num_sats >= 5:
+                # Left vertex
+                offsets.append({
+                    "df": 0.0,
+                    "di": sep_deg * 0.05,        # Cross-track left
+                    "dOmega": 0.0
+                })
+            # Additional satellites form outer ring
+            for i in range(5, num_sats):
+                angle = 2 * np.pi * (i - 5) / max(1, num_sats - 5)
+                offsets.append({
+                    "df": sep_deg * 1.5 * np.cos(angle),
+                    "di": sep_deg * 0.05 * np.sin(angle),
+                    "dOmega": 0.0
+                })
+        
         else:  # Leader-Follower (train)
+            # Satellites follow in a line behind the leader
             for i in range(num_sats):
-                offsets.append({"df": -i * sep_deg, "di": 0.0, "dOmega": 0.0})
-
+                offsets.append({
+                    "df": -i * sep_deg,          # Each sat behind the previous
+                    "di": 0.0,                   # Same plane
+                    "dOmega": 0.0                # Same RAAN
+                })
+        
         return offsets
+
 
     # ------------------------------------------------------------ Cluster ops
     def view_cluster_details(self):
@@ -632,47 +705,93 @@ class ConstellationTab(BaseTab):
             sat["position_offset_km"] = positions[idx].get("offset", [0.0, 0.0, 0.0])
 
     def _calculate_cluster_positions(self, num_sats, formation, leader_anomaly, phase_offset, separation):
-        # Normalize to 4 formations
-        f = (formation or "").strip().lower()
-        if f == "line":
-            key = "column"
-        elif f == "triangle":
-            key = "box"  # close visual
-        elif f == "diamond":
-            key = "box"
-        else:
-            key = "train"  # Leader-Follower
-
+        """
+        Calculate both cartesian offsets (for Vizard) and orbital anomaly adjustments.
+        This provides visual spacing in addition to orbital differences.
+        
+        Returns: list of dicts with 'anomaly' (degrees) and 'offset' ([x, y, z] km)
+        """
         positions = []
-
-        def leader_entry():
-            return {"anomaly": leader_anomaly, "offset": [0.0, 0.0, 0.0]}
-
-        if key == "column":  # line
-            dA = max(2.0, separation * 0.5)
-            positions.append(leader_entry())
-            for k in range(1, num_sats):
-                positions.append({"anomaly": leader_anomaly + k * dA, "offset": [0.0, k * 0.2, 0.0]})
-
-        elif key == "box":  # diamond/triangle
-            side = max(3.0, separation)
-            positions.append(leader_entry())
-            ring1 = [( side,  0.0), (0.0,  side), (-side, 0.0), (0.0, -side)]
-            ring2 = [( 2*side,  2*side), (-2*side,  2*side), (-2*side, -2*side), ( 2*side, -2*side)]
-            coords = ring1 + ring2
-            for (dx, dy) in coords[:max(0, num_sats - 1)]:
-                positions.append({"anomaly": leader_anomaly, "offset": [dx, dy, 0.0]})
-            while len(positions) < num_sats:
-                angle = 2 * np.pi * (len(positions) - 1) / max(1, num_sats - 1)
-                positions.append({"anomaly": leader_anomaly, "offset": [1.5 * side * np.cos(angle), 1.5 * side * np.sin(angle), 0.0]})
-
-        else:  # train (Leader-Follower)
-            dA = max(8.0, separation)
-            positions.append(leader_entry())
-            for k in range(1, num_sats):
-                positions.append({"anomaly": leader_anomaly + k * dA, "offset": [0.0, 0.0, 0.0]})
-
+        
+        f = (formation or "").strip().lower()
+        
+        # Base separation for cartesian offsets (visual spacing)
+        base_sep = max(5.0, separation)  # At least 5km for visibility
+        
+        if f == "line":
+            # Line formation: satellites in a row
+            for i in range(num_sats):
+                positions.append({
+                    "anomaly": leader_anomaly + i * 0.5,  # Small angle spacing
+                    "offset": [i * base_sep, 0.0, 0.0]    # Visual spacing along X
+                })
+        
+        elif f == "triangle":
+            # Triangle formation
+            if num_sats >= 1:
+                # Leader at front apex
+                positions.append({
+                    "anomaly": leader_anomaly,
+                    "offset": [0.0, 0.0, 0.0]
+                })
+            if num_sats >= 2:
+                # Left rear vertex
+                positions.append({
+                    "anomaly": leader_anomaly - 0.3,
+                    "offset": [-base_sep * 0.866, -base_sep * 0.5, 0.0]
+                })
+            if num_sats >= 3:
+                # Right rear vertex
+                positions.append({
+                    "anomaly": leader_anomaly - 0.3,
+                    "offset": [-base_sep * 0.866, base_sep * 0.5, 0.0]
+                })
+            # Additional satellites in center
+            for i in range(3, num_sats):
+                positions.append({
+                    "anomaly": leader_anomaly - 0.15,
+                    "offset": [-base_sep * 0.5, 0.0, 0.0]
+                })
+        
+        elif f == "diamond":
+            # Diamond/box formation - 5 positions (center + 4 cardinal points)
+            diamond_offsets = [
+                [0.0, 0.0, 0.0],              # Center (leader)
+                [base_sep, 0.0, 0.0],         # Front
+                [0.0, base_sep, 0.0],         # Right
+                [-base_sep, 0.0, 0.0],        # Back
+                [0.0, -base_sep, 0.0]         # Left
+            ]
+            
+            for i in range(num_sats):
+                if i < len(diamond_offsets):
+                    positions.append({
+                        "anomaly": leader_anomaly,
+                        "offset": diamond_offsets[i]
+                    })
+                else:
+                    # Outer ring for extra satellites
+                    angle = 2 * np.pi * (i - 5) / max(1, num_sats - 5)
+                    positions.append({
+                        "anomaly": leader_anomaly,
+                        "offset": [
+                            base_sep * 1.5 * np.cos(angle),
+                            base_sep * 1.5 * np.sin(angle),
+                            0.0
+                        ]
+                    })
+        
+        else:  # Leader-Follower (train)
+            # Satellites follow in a line behind leader
+            for i in range(num_sats):
+                positions.append({
+                    "anomaly": leader_anomaly - i * 0.5,
+                    "offset": [-i * base_sep, 0.0, 0.0]
+                })
+        
         return positions
+
+
 
     # ------------------------------------------------------------ Formation view
     def view_formation(self):

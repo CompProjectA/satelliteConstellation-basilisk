@@ -1,13 +1,27 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 target_tab.py
 
 Implements the Target Management tab with improved target-satellite connections.
+
+Notes:
+- This file now also exposes helpers to export targets into the exact
+  structures expected by `spacecraft_simulation.py` without requiring a separate
+  targets.py module. No existing code here has been removed; only safe additions.
 """
 import tkinter as tk
 from tkinter import ttk, messagebox, colorchooser
 from .base_tab import BaseTab
 import numpy as np
+
+# ---- Optional Basilisk bits (only used for math constants if present) ----
+try:
+    from Basilisk.utilities import macros
+    _D2R = macros.D2R
+except Exception:
+    _D2R = np.pi / 180.0
+
 
 class TargetTab(BaseTab):
     """Target Management tab with improved target visibility"""
@@ -31,7 +45,99 @@ class TargetTab(BaseTab):
         
         # Auto-assign targets to satellites for better Vizard visibility
         self.auto_assign_targets_on_startup()
-        
+
+    # ---------------------------------------------------------------------
+    # NEW: helpers for other modules (no removals of your code)
+    # ---------------------------------------------------------------------
+    def build_sim_targets(self):
+        """
+        Convert the UI target dicts into TargetDefinition objects that
+        `spacecraft_simulation.py` expects (no circular import at import-time).
+
+        Returns
+        -------
+        list[TargetDefinition]
+        """
+        try:
+            # Lazy import to avoid circulars during app startup
+            from spacecraft_simulation import TargetDefinition
+        except Exception:
+            # If import fails, provide a clear error early
+            raise ImportError(
+                "Could not import TargetDefinition from spacecraft_simulation. "
+                "Ensure spacecraft_simulation.py is on PYTHONPATH and importable."
+            )
+        out = []
+        for t in self.targets:
+            td = TargetDefinition(
+                name=t.get("name", "Target"),
+                latitude=float(t.get("lat", 0.0)),
+                longitude=float(t.get("lon", 0.0)),
+                color=t.get("color", "#FF0000"),
+                priority=int(t.get("priority", 1))
+            )
+            # Preserve existing assignments
+            td.assigned_to = list(t.get("assigned_to", []))
+            out.append(td)
+        return out
+
+    def export_targets_for_config(self):
+        """
+        Return targets as a list of plain dicts (useful if another part of your
+        app wants to write config files or skip the class objects).
+
+        Keys: name, lat, lon, color, priority, assigned_to
+        """
+        out = []
+        for t in self.targets:
+            out.append({
+                "name": t.get("name", "Target"),
+                "lat": float(t.get("lat", 0.0)),
+                "lon": float(t.get("lon", 0.0)),
+                "color": t.get("color", "#FF0000"),
+                "priority": int(t.get("priority", 1)),
+                "assigned_to": list(t.get("assigned_to", []))
+            })
+        return out
+
+    def coverage_summary(self):
+        """
+        Summarize coverage status for quick logging/GUI.
+
+        Returns
+        -------
+        dict with total, assigned, visible_estimate, unassigned
+        """
+        total = len(self.targets)
+        assigned = sum(1 for t in self.targets if t.get("assigned_to"))
+        visible = 0
+        for t in self.targets:
+            st = self.calculate_target_coverage_status(t)
+            if st.get("can_be_seen"):
+                visible += 1
+        return {
+            "total_targets": total,
+            "assigned_targets": assigned,
+            "visible_estimate": visible,
+            "unassigned_targets": total - assigned
+        }
+
+    @staticmethod
+    def calculate_ground_target_position(lat_deg, lon_deg, altitude_m=100_000.0):
+        """
+        (Utility) Convert lat/lon to simple ECEF-like position for any later use.
+        Matches what our simulation helpers do (mean radius + altitude).
+        """
+        earth_radius = 6_371_000.0
+        lat = float(lat_deg) * _D2R
+        lon = float(lon_deg) * _D2R
+        r = earth_radius + float(altitude_m)
+        x = r * np.cos(lat) * np.cos(lon)
+        y = r * np.cos(lat) * np.sin(lon)
+        z = r * np.sin(lat)
+        return [float(x), float(y), float(z)]
+    # ---------------------------------------------------------------------
+
     def auto_assign_targets_on_startup(self):
         """Auto-assign targets to satellites on startup for immediate Vizard visibility"""
         try:
@@ -234,7 +340,7 @@ class TargetTab(BaseTab):
         ttk.Label(sat_frame, text="Assign to Satellite:").pack(side=tk.LEFT)
         
         self.assign_satellite_var = tk.StringVar()
-        self.assign_satellite_combo = ttk.Combobox(sat_frame, textvariable=self.assign_satellite_var)
+        self.assign_satellite_combo = ttk.Combobox(sat_frame, textvariable=self.assign_satellite_var, state="readonly")
         self.assign_satellite_combo.pack(side=tk.LEFT, padx=5)
         self.update_satellite_dropdown()
         
@@ -290,9 +396,15 @@ class TargetTab(BaseTab):
             
     def update_satellite_dropdown(self):
         """Update the satellite dropdown with current satellites"""
-        self.assign_satellite_combo['values'] = [sat['name'] for sat in self.satellites]
-        if self.satellites:
-            self.assign_satellite_combo.current(0)
+        values = [sat['name'] for sat in self.satellites]
+        self.assign_satellite_combo['values'] = values
+        if values:
+            # If current selection not valid, reset to first
+            current = self.assign_satellite_var.get()
+            if current not in values:
+                self.assign_satellite_combo.current(0)
+        else:
+            self.assign_satellite_var.set("")
             
     def update_target_listbox(self):
         """Update the target listbox with current targets and coverage info"""
@@ -768,15 +880,18 @@ class TargetTab(BaseTab):
         
         for target in sorted_targets:
             # Find satellite with fewest assignments
-            min_assignments = min(assignments_per_sat.values())
+            min_assignments = min(assignments_per_sat.values()) if assignments_per_sat else 0
             candidates = [name for name, count in assignments_per_sat.items() 
-                        if count == min_assignments]
+                        if count == min_assignments] if assignments_per_sat else []
             
             # Assign to first candidate
             if candidates:
                 assigned_sat = candidates[0]
                 target["assigned_to"] = [assigned_sat]  # Replace existing assignments
                 assignments_per_sat[assigned_sat] += 1
+            else:
+                # Fallback (no satellites?): keep existing assignment or none
+                target.setdefault("assigned_to", [])
         
         # Update UI
         self.update_target_assignments()
@@ -853,7 +968,7 @@ class TargetTab(BaseTab):
                 xs, ys = zip(*continent)
                 self.map_ax.plot(xs, ys, 'k-', linewidth=1.0, alpha=0.7)
                 
-        except Exception as e:
+        except Exception:
             # If we can't draw continents, just note it
             pass
         
@@ -936,6 +1051,6 @@ class TargetTab(BaseTab):
         # Update canvas
         try:
             self.map_figure.tight_layout()
-        except:
+        except Exception:
             pass
         self.map_canvas.draw()

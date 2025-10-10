@@ -44,19 +44,14 @@ try:
         TargetTab,
         VisualizationTab,
         OutputTab,
-        ResultsTab
+        ResultsTab,
+        DRLTab  # ✅ ADDED - DRL tab
     )
     GUI_TABS_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: GUI tab modules not fully available: {e}")
     GUI_TABS_AVAILABLE = False
 
-<<<<<<< HEAD
-from drl_tab import DRLTab
-
-# Import help content
-from rw_fault_help import get_general_help
-=======
 # Import help content - with fallback
 try:
     from rw_fault_help import get_general_help
@@ -66,7 +61,6 @@ except ImportError:
     HELP_AVAILABLE = False
     def get_general_help(topic):
         return f"Help content for {topic} is not available. Please check the documentation."
->>>>>>> 38cf37330d7f6f66c8309297e9090f62521af567
 
 # Import style - with fallback
 try:
@@ -638,42 +632,6 @@ class SatelliteSimulatorApp:
         self.notebook = ttk.Notebook(parent)
         self.notebook.pack(fill=tk.BOTH, expand=True)
         
-        # Create tab frames
-        self.constellation_frame = ttk.Frame(self.notebook)
-        self.fault_frame = ttk.Frame(self.notebook)
-        self.fault_detection_frame = ttk.Frame(self.notebook)
-        self.target_frame = ttk.Frame(self.notebook)
-        self.visualization_frame = ttk.Frame(self.notebook)
-        self.output_frame = ttk.Frame(self.notebook)
-        self.results_frame = ttk.Frame(self.notebook)
-        
-        # Add tabs
-        self.notebook.add(self.constellation_frame, text="Constellation")
-        self.notebook.add(self.fault_frame, text="Fault Configuration")
-        self.notebook.add(self.fault_detection_frame, text="Fault Detection")
-        self.notebook.add(self.target_frame, text="Targets")
-        self.notebook.add(self.visualization_frame, text="Visualization")
-        self.notebook.add(self.output_frame, text="Output Settings")
-        self.notebook.add(self.results_frame, text="Results")
-        # --- DRL tab (nested Overview/Results) ---
-# Optionally pre-fill defaults:
-#   - default_script: path to your PPO script (you can leave empty and browse at runtime)
-#   - default_results_dir: wherever you want artifacts to land/list from
-        drl_defaults = {
-            "default_script": "",            # e.g. r"/Users/you/.../PPO2 3.py"
-            "default_results_dir": ""        # e.g. r"/Users/you/DRL-outputs"
-        }
-        self.drl_tab = DRLTab(self.notebook, parent_app=self, **drl_defaults)
-        self.notebook.add(self.drl_tab, text="DRL")
-
-        # Create tab objects
-        self.constellation_tab = ConstellationTab(self, self.constellation_frame)
-        self.fault_tab = FaultTab(self, self.fault_frame)
-        self.fault_detection_tab = FaultDetectionTab(self, self.fault_detection_frame)
-        self.target_tab = TargetTab(self, self.target_frame)
-        self.visualization_tab = VisualizationTab(self, self.visualization_frame)
-        self.output_tab = OutputTab(self, self.output_frame)
-        self.results_tab = ResultsTab(self, self.results_frame)
         if GUI_TABS_AVAILABLE:
             # Create tab frames
             self.constellation_frame = ttk.Frame(self.notebook)
@@ -684,6 +642,7 @@ class SatelliteSimulatorApp:
             self.visualization_frame = ttk.Frame(self.notebook)
             self.output_frame = ttk.Frame(self.notebook)
             self.results_frame = ttk.Frame(self.notebook)
+            self.drl_frame = ttk.Frame(self.notebook)  # ✅ ADDED - DRL frame
             
             # Add tabs
             self.notebook.add(self.constellation_frame, text="Constellation")
@@ -694,6 +653,7 @@ class SatelliteSimulatorApp:
             self.notebook.add(self.visualization_frame, text="Visualization")
             self.notebook.add(self.output_frame, text="Output Settings")
             self.notebook.add(self.results_frame, text="Results")
+            self.notebook.add(self.drl_frame, text="DRL")  # ✅ ADDED - DRL tab
             
             # Create tab objects
             try:
@@ -706,8 +666,18 @@ class SatelliteSimulatorApp:
                 self.output_tab = OutputTab(self, self.output_frame)
                 self.results_tab = ResultsTab(self, self.results_frame)
                 
-                # Optional: embed comm visualization panel in Constellation tab (if available)
-                self.setup_communication_visualization()
+                # ✅ ADDED - Create DRL tab with default paths
+                default_drl_script = os.path.join(ROOT_DIR, "DRL", "PPO_Year2.py")
+                default_drl_results = os.path.join(ROOT_DIR, "DRL")
+                self.drl_tab = DRLTab(
+                    self.drl_frame,
+                    parent_app=self,
+                    default_script=default_drl_script if os.path.exists(default_drl_script) else None,
+                    default_results_dir=default_drl_results if os.path.isdir(default_drl_results) else None
+                )
+                self.drl_tab.pack(fill=tk.BOTH, expand=True)  # ✅ CRITICAL - Pack the tab!
+                
+                self.drl_tab.pack(fill=tk.BOTH, expand=True)
                 
             except Exception as e:
                 messagebox.showerror("Tab Creation Error", f"Error creating tabs: {e}")
@@ -2117,12 +2087,6 @@ Built with Python, Tkinter, Matplotlib, TensorFlow, and Basilisk
 
 # Main entry point
 if __name__ == "__main__":
-<<<<<<< HEAD
-    
-    root = tk.Tk()
-    app = SatelliteSimulatorApp(root)
-    root.mainloop()
-=======
     try:
         root = tk.Tk()
         app = SatelliteSimulatorApp(root)
@@ -2132,4 +2096,3 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc()
         input("Press Enter to exit...")
->>>>>>> 38cf37330d7f6f66c8309297e9090f62521af567
