@@ -15,9 +15,10 @@ import threading
 import time
 import subprocess
 import json
-from datetime import datetime
+import datetime
 import logging
 import matplotlib
+
 matplotlib.use('Agg')  # Use non-interactive backend
 
 # Set up paths
@@ -456,7 +457,7 @@ class SatelliteSimulatorApp:
         """Append new plot rows to the results tab if it exposes a tree widget."""
         try:
             if hasattr(self, 'results_tab') and hasattr(self.results_tab, 'results_tree'):
-                ts = datetime.now().strftime("%H:%M:%S")
+                ts = datetime.datetime.now().strftime("%H:%M:%S")
                 for name, path in plots_list:
                     try:
                         self.results_tab.results_tree.insert("", "end", values=(ts, name, path))
@@ -758,7 +759,7 @@ class SatelliteSimulatorApp:
         # Current time
         self.time_label = ttk.Label(
             status_frame,
-            text=datetime.now().strftime("%Y-%m-%d %H:%M"),
+            text=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
             style='Status.TLabel' if STYLE_AVAILABLE else ""
         )
         self.time_label.pack(side=tk.RIGHT, padx=10)
@@ -940,7 +941,7 @@ class SatelliteSimulatorApp:
             
     def update_time(self):
         """Update the time display"""
-        self.time_label.config(text=datetime.now().strftime("%Y-%m-%d %H:%M"))
+        self.time_label.config(text=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
         self.root.after(60000, self.update_time)  # Update every minute
 
     def _thread_safe(self, fn, *a, **kw):
@@ -1355,7 +1356,7 @@ class SatelliteSimulatorApp:
         self.latest_plots = []
         
         if self.save_plots.get() and figureList:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             self.add_log(f"Saving {len(figureList)} plots...")
             
             # Import matplotlib here to ensure correct backend
