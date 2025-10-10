@@ -3,6 +3,14 @@ import os
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 from Basilisk.utilities import macros, unitTestSupport
 import numpy as np
+# OLD (causes circular + side effects)
+# from Envs import BasiliskEnv
+
+# NEW: avoid importing Envs at import time
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from Envs import BasiliskEnv  # type: ignore
+
 import matplotlib.pyplot as plt
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, SubprocVecEnv
@@ -70,7 +78,7 @@ def random_euler():
 
 import pandas as pd
 
-def plot_history(dynamic_model, ref_MRP, torque_history, env):
+def plot_history(dynamic_model, ref_MRP, torque_history, env: "BasiliskEnv"):
     fig, axes = plt.subplots(2, 2, figsize=(10, 6))
     
     # Attitude Data (MRP)

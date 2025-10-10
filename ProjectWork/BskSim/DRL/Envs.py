@@ -10,10 +10,11 @@ import pandas as pd  # Import pandas to handle the data logging
 
 bskPath = __path__[0]
 fileName = os.path.basename(os.path.splitext(__file__)[0])
-
+import uuid
 
 class BasiliskModel:
     def __init__(self, I: list, ref_MRP: np.ndarray, torque_mode: str = "wheel", timestep: int = macros.sec2nano(0.01)) -> None:
+        _VIZ_INITIALIZED = False
         self.ref_MRP = ref_MRP
         self.torque_mode = torque_mode
         simulationTime = macros.sec2nano(8000)
@@ -32,6 +33,7 @@ class BasiliskModel:
         # Initialize the spacecraft object
         self.scObject = spacecraft.Spacecraft()
         self.scObject.hub.r_BcB_B = [[0.0], [0.0], [0.0]]
+        self.scObject.ModelTag = os.environ.get("BASILISK_SC_TAG", f"hub_{uuid.uuid4().hex[:6]}")
         self.scObject.hub.IHubPntBc_B = unitTestSupport.np2EigenMatrix3d(I)
         self.scObject.hub.sigma_BNInit = np.zeros(3, dtype=np.float32)
         self.scObject.hub.omega_BN_BInit = np.zeros(3, dtype=np.float32)
@@ -102,7 +104,13 @@ class BasiliskModel:
         # Initialize the spacecraft state
         self.scObject.SelfInit()
         self.scObject.initializeDynamics()
-        vizSupport.enableUnityVisualization(self.scSim, task_name, self.scObject,  saveFile=fileName, rwEffectorList=self.rwStateEffector)
+        enable_viz = os.environ.get("ENABLE_VIZ", "0") == "1"
+        if enable_viz and not _VIZ_INITIALIZED:
+            vizSupport.enableUnityVisualization(
+                self.scSim, task_name, self.scObject,
+                saveFile=fileName, rwEffectorList=self.rwStateEffector
+            )
+            _VIZ_INITIALIZED = True
         self.scSim.InitializeSimulation()
 
         # Initialize state variables
@@ -190,7 +198,10 @@ class BasiliskModel:
         return self.cur_MRP, self.cur_error_MRP, self.cur_error_angle, self.cur_omega, self.cur_omega_dot
 
     
-import Tools
+try:
+    import Tools  # only utilities; should have no import-time side effects now
+except Exception:
+    Tools = None
 
 
 class BasiliskEnv(gym.Env):
@@ -228,7 +239,9 @@ class BasiliskEnv(gym.Env):
         self.reset()
 
     def reset(self, seed=None, options=None):
+        import Tools
         super().reset(seed=seed, options=options)
+
         self.ref_MRP = RigidBodyKinematics.euler1232MRP(Tools.random_euler())
         self.model = BasiliskModel(I=[0.025, 0, 0, 0, 0.05, 0, 0, 0, 0.065], ref_MRP=self.ref_MRP, torque_mode=self.torque_mode)
         self.reward = 0

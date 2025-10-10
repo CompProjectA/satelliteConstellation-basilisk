@@ -46,6 +46,8 @@ from gui_tab import (
     ResultsTab
 )
 
+from drl_tab import DRLTab
+
 # Import help content
 from rw_fault_help import get_general_help
 
@@ -370,7 +372,17 @@ class SatelliteSimulatorApp:
         self.notebook.add(self.visualization_frame, text="Visualization")
         self.notebook.add(self.output_frame, text="Output Settings")
         self.notebook.add(self.results_frame, text="Results")
-        
+        # --- DRL tab (nested Overview/Results) ---
+# Optionally pre-fill defaults:
+#   - default_script: path to your PPO script (you can leave empty and browse at runtime)
+#   - default_results_dir: wherever you want artifacts to land/list from
+        drl_defaults = {
+            "default_script": "",            # e.g. r"/Users/you/.../PPO2 3.py"
+            "default_results_dir": ""        # e.g. r"/Users/you/DRL-outputs"
+        }
+        self.drl_tab = DRLTab(self.notebook, parent_app=self, **drl_defaults)
+        self.notebook.add(self.drl_tab, text="DRL")
+
         # Create tab objects
         self.constellation_tab = ConstellationTab(self, self.constellation_frame)
         self.fault_tab = FaultTab(self, self.fault_frame)
@@ -430,8 +442,8 @@ class SatelliteSimulatorApp:
         self.sim_time_status.pack(side=tk.LEFT, padx=5)
         
         # Bind simulation time change
-        self.simulation_time.trace('w', self._update_sim_time_status)
-        
+        self.simulation_time.trace_add('write', lambda *args: self._update_sim_time_status())
+
         # Current time
         self.time_label = ttk.Label(
             status_frame,
@@ -1145,6 +1157,7 @@ Built with Python, Tkinter, Matplotlib, TensorFlow, and Basilisk
 
 # Main entry point
 if __name__ == "__main__":
+    
     root = tk.Tk()
     app = SatelliteSimulatorApp(root)
     root.mainloop()

@@ -69,13 +69,13 @@ WINDOW = int(os.environ.get("WINDOW", 10))
 THRESHOLD = float(os.environ.get("THRESHOLD", 0.185))
 
 DT_SEC = float(os.environ.get("DT_SEC", 0.08))
-STEPS = int(os.environ.get("STEPS", 5000))
+STEPS = int(os.environ.get("STEPS", 1000))
 
 SAFE_TORQUE_LIMIT = float(os.environ.get("SAFE_TORQUE_LIMIT", 0.02))
 RECOVERY_STEPS = int(os.environ.get("RECOVERY_STEPS", 200))
 
 # Battery thresholds
-BATTERY_MIN_LEVEL = float(os.environ.get("BATTERY_MIN_LEVEL", "30000"))         # W·s
+BATTERY_MIN_LEVEL = float(os.environ.get("BATTERY_MIN_LEVEL", "300000"))         # W·s
 BATTERY_NET_NEG_THRESH = float(os.environ.get("BATTERY_NET_NEG_THRESH", "-40")) # W
 BATTERY_NEG_PERSIST_STEPS = int(os.environ.get("BATTERY_NEG_PERSIST_STEPS", "40"))
 

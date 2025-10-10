@@ -40,8 +40,8 @@ from bsk_rl.utils.orbital import walker_delta_args
 class TargetAreas(UniformTargets):
     def __init__(self, n_targets: int = 40, priority_distribution=None, radius=6378136.6):
         super().__init__(n_targets, priority_distribution, radius)
-        self.lat_min, self.lat_max = -38.0, -25.0
-        self.lon_min, self.lon_max = 129.0, 141.0
+        self.lat_min, self.lat_max = -60.0, 60.0
+        self.lon_min, self.lon_max = 0.0, 360.0
 
     def regenerate_targets(self) -> None:
         n_targets = self.n_targets if isinstance(self.n_targets, int) else np.random.randint(
@@ -60,6 +60,20 @@ class TargetAreas(UniformTargets):
             priority = self.priority_distribution() if self.priority_distribution else np.random.uniform(0, 1)
             targets.append(Target(f"SA_Target_{i}", [x, y, z], priority))
         self.targets = targets
+
+
+# --- add near your other Action classes ---
+class GuardedImage(Image):
+    """No imaging if the satellite is 'dead' during a fault window."""
+    def action(self, satellite, state):
+        try:
+            alive = satellite.is_alive(log_failure=False)
+        except TypeError:
+            alive = satellite.is_alive()
+        if not alive:
+            return 0.0
+        return super().action(satellite, state)
+
 
 
 # =========================================================
@@ -93,15 +107,15 @@ class AdvancedImagingSatellite(ImagingSatellite):
             n_ahead_observe=5,
         )
     ]
-    action_spec = [Image(n_ahead_image=5), Reallocate()]
+    action_spec = [GuardedImage(n_ahead_image=5), Reallocate()]
     dyn_type = dyn.FullFeaturedDynModel
     fsw_type = fsw.SteeringImagerFSWModel
 
 
 def _tune_access_generation(sat,
-                            initial=1800.0,   # ~30 min initial generation
-                            step=120.0,       # 2-min stride
-                            max_dur=3600.0):  # clamp lookahead to 1 hour
+                            initial=600.0,   # ~30 min initial generation
+                            step=60.0,       # 2-min stride
+                            max_dur=900.0):  # clamp lookahead to 1 hour
     """
     Tries common locations/attributes for the opportunity/access generator.
     Silently no-ops if attributes don't exist in your build.
@@ -230,11 +244,12 @@ class CustomUniqueImageReward(UniqueImageReward):
         return rewards
 
 class CustomConstellationTasking(ConstellationTasking, MultiAgentEnv):
-    def __init__(self, *args, max_episode_steps=64, **kwargs):
+    def __init__(self, *args, max_episode_steps=4, **kwargs):
         super().__init__(*args, **kwargs)
         self.max_episode_steps = int(max_episode_steps)
         self._step_count = 0
         self.remaining_tasks = {"Sat-0": 3, "Sat-1": 3, "Sat-2": 6, "Sat-3": 3}
+        self._sat_by_name = {s.name: s for s in getattr(self, "satellites", [])}
 
     def reset(self, *, seed=None, options=None):
         self._step_count = 0
@@ -244,11 +259,71 @@ class CustomConstellationTasking(ConstellationTasking, MultiAgentEnv):
         else:
             obs, info = out, {}
         self.remaining_tasks = {"Sat-0": 3, "Sat-1": 3, "Sat-2": 6, "Sat-3": 3}
+        self._sat_by_name = {s.name: s for s in getattr(self, "satellites", [])}
         return obs, info
 
     def step(self, action_dict: Dict[str, Any]):
         self._step_count += 1
-        obs, rews, terms, truncs, infos = super().step(action_dict)
+
+        gated_actions = {}
+        for agent, a in action_dict.items():
+            sat = self._sat_by_name.get(agent)
+            alive = True
+            if sat is not None:
+                try:
+                    alive = sat.is_alive(log_failure=False)
+                except TypeError:
+                    alive = sat.is_alive()
+            # action index 0 = Image, 1 = Reallocate (no-op)
+            # if not alive, force no-op so no imaging task is taken
+            gated_actions[agent] = (1 if not alive else a)   # 1 == Reallocate (no imaging)
+
+            if sat is not None and not alive:
+                # (A) Starve the imager this tick (works across builds)
+                dyn = getattr(sat, "dynamics", None)
+                pm  = getattr(dyn, "powerMonitor", None)
+                if pm is not None and hasattr(pm, "batPowerOutMsg"):
+                    try:
+                        msg = messaging.PowerStorageStatusMsgPayload()
+                        msg.storageLevel = 0.0
+                        pm.batPowerOutMsg.write(msg)
+                    except Exception:
+                        pass
+
+                # (B) Flip common FSW imaging switches & call cancel if present
+                fsw = getattr(sat, "fsw", None)
+                if fsw is not None:
+                    for flag in ("is_imaging","isImaging","imaging_enabled","imagingEnabled",
+                                 "enabled","imager_on"):
+                        if hasattr(fsw, flag):
+                            try: setattr(fsw, flag, False)
+                            except Exception: pass
+                    for meth in ("cancel_current_task","abort_imaging","stop_imaging","cancel"):
+                        fn = getattr(fsw, meth, None)
+                        if callable(fn):
+                            try: fn()
+                            except Exception: pass
+
+            if sat is not None and not alive:
+                fsw = getattr(sat, "fsw", None)
+                if fsw is not None:
+                    # clear single "current" style holders
+                    for attr in ("current_task", "active_task", "task", "imaging_task", "current_target"):
+                        if hasattr(fsw, attr):
+                            try: setattr(fsw, attr, None)
+                            except Exception: pass
+                    # clear queues if they exist
+                    for attr in ("task_queue", "queued_tasks", "queue", "tasks", "pending"):
+                        q = getattr(fsw, attr, None)
+                        if isinstance(q, list):
+                            q.clear()
+                    # common enable flags
+                    for attr in ("is_imaging", "imaging_enabled", "enabled"):
+                        if hasattr(fsw, attr):
+                            try: setattr(fsw, attr, False)
+                            except Exception: pass
+
+        obs, rews, terms, truncs, infos = super().step(gated_actions)
 
         # Simple proxy: any positive reward => one task done
         for agent, r in rews.items():
@@ -290,12 +365,15 @@ sat_arg_randomizer = walker_delta_args(altitude=800.0, inc=60.0, n_planes=1)
 # Env factory + registration (includes speed tuning)
 # =========================================================
 def env_creator(env_config):
-    max_episode_steps = env_config.get("max_episode_steps", 64)
+    max_episode_steps = env_config.get("max_episode_steps", 4)
     satellites = [AdvancedImagingSatellite(f"Sat-{i}", sat_args) for i in range(4)]
 
     # SPEED FIX: bound access lookahead and stride
     for sat in satellites:
-        _tune_access_generation(sat, initial=1800.0, step=120.0, max_dur=3600.0)
+        _tune_access_generation(sat, initial=600.0, step=60.0, max_dur=900.0)
+
+    rewarder = CustomUniqueImageReward()
+    rewarder.sat_by_name = {s.name: s for s in satellites}
 
     return CustomConstellationTasking(
         satellites=satellites,
@@ -327,21 +405,21 @@ _sample_env.close()
 config = (
     PPOConfig()
     .api_stack(enable_rl_module_and_learner=False, enable_env_runner_and_connector_v2=False)
-    .environment("custom_constellation", env_config={"max_episode_steps": 64})
+    .environment("custom_constellation", env_config={"max_episode_steps": 4})
     .multi_agent(
         policies={"shared_policy": PolicySpec(None, obs_space, act_space)},
         policy_mapping_fn=lambda agent_id, *args, **kwargs: "shared_policy",
     )
     .framework("torch")
     .resources(num_gpus=0)
-    .env_runners(num_env_runners=1, rollout_fragment_length=16, sample_timeout_s=120.0)
+    .env_runners(num_env_runners=1, rollout_fragment_length=2, sample_timeout_s=30.0)
     .training(
         gamma=0.99,
         lr=5e-4,
-        train_batch_size=2048,
+        train_batch_size=128,
         vf_clip_param=10.0,
         clip_param=0.2,
-        num_sgd_iter=10,
+        num_epochs=1,
         lambda_=0.95,
     )
 )
@@ -350,7 +428,7 @@ algo = PPO(config=config)
 
 
 
-num_iterations = 100
+num_iterations = 1
 for i in range(num_iterations):
     result = algo.train()
     print(f"Iteration {i}: mean reward = {result.get('episode_reward_mean', 'N/A')}")
@@ -364,19 +442,104 @@ print(f"Checkpoint saved at {checkpoint_dir}")
 # =========================================================
 test_env = env_creator({})
 
-def inject_failure(sat_index: int):
-    """Force a satellite 'dead' by zeroing power each step."""
+# --- HARD CLAMP access-generation cost for the test run ---
+for sat in getattr(test_env.unwrapped, "satellites", []):
+    # Reapply tighter bounds (coarser lookahead = less recompute work)
+    _tune_access_generation(sat, initial=300.0, step=120.0, max_dur=600.0)
+
+    # Try to grab the opportunity/access generator object (wherever it lives)
+    og = None
+    for cand in [
+        getattr(getattr(sat, "fsw", None), "opportunity_generator", None),
+        getattr(getattr(sat, "dynamics", None), "accessGenerator", None),
+        getattr(getattr(sat, "dynamics", None), "opportunityGenerator", None),
+    ]:
+        if cand is not None:
+            og = cand
+            break
+
+    if og is None:
+        continue
+
+    # Extra guards to avoid thrashing when is_alive toggles mid-episode
+    if hasattr(og, "retask_on_image_complete"):
+        og.retask_on_image_complete = False  # don't rebuild graph every image
+    if hasattr(og, "max_access_compute_time_s"):
+        og.max_access_compute_time_s = 1.0   # bail early if compute spikes
+    # If available in your build, these further reduce work:
+    for name, val in [
+        ("initial_generation_duration", 300.0),
+        ("generation_step", 120.0),
+        ("max_generation_duration", 600.0),
+        ("max_lookahead", 600.0),
+    ]:
+        if hasattr(og, name):
+            setattr(og, name, float(val))
+
+
+def inject_battery_fault(sat_index: int):
     sat = test_env.unwrapped.satellites[sat_index]
     def isnt_alive(log_failure=False, _sat=sat):
-        death_message = messaging.PowerStorageStatusMsgPayload()
-        death_message.storageLevel = 0.0
-        _sat.dynamics.powerMonitor.batPowerOutMsg.write(death_message)
-        return _sat.dynamics.is_alive(log_failure=log_failure) and _sat.fsw.is_alive(log_failure=log_failure)
+        msg = messaging.PowerStorageStatusMsgPayload()
+        msg.storageLevel = 0.0
+        _sat.dynamics.powerMonitor.batPowerOutMsg.write(msg)
+        return False  # stay dead forever
     sat.is_alive = isnt_alive
 
-max_steps = 40
-max_wallclock_s = 120  # hard cap to ensure we reach plots
-fail_plan = {5: 0, 15: 2, 25: 3}  # step -> satellite index
+
+
+
+def inject_power_limit_fault(sat_index: int, start_step: int, period: int = 6, duty: float = 0.5):
+    sat = test_env.unwrapped.satellites[sat_index]
+    orig_is_alive = sat.is_alive
+
+    def power_limited_is_alive(log_failure=False, _start=start_step):
+        # permanent OFF from first trigger onward
+        if current_step >= _start:
+            return False
+        return orig_is_alive(log_failure=log_failure)
+
+    sat.is_alive = power_limited_is_alive
+
+
+
+def inject_friction_fault(sat_index: int, start_step: int, skip_every: int = 5):
+    """Friction proxy: brief stalls every Nth step after start_step."""
+    sat = test_env.unwrapped.satellites[sat_index]
+    orig_is_alive = sat.is_alive
+
+    def friction_is_alive(log_failure=False, _sat=sat, _start=start_step, _k=skip_every):
+        if current_step >= _start:
+            if (current_step - _start) % _k == 0:
+                return False  # stall step
+        return orig_is_alive(log_failure=log_failure)
+    sat.is_alive = friction_is_alive
+
+
+def inject_encoder_fault(sat_index: int, start_step: int, on_steps: int = 2, off_steps: int = 1):
+    """Encoder proxy: deterministic on/off cadence after start_step."""
+    sat = test_env.unwrapped.satellites[sat_index]
+    orig_is_alive = sat.is_alive
+    period = max(1, on_steps + off_steps)
+
+    def encoder_is_alive(log_failure=False, _sat=sat, _start=start_step, _on=on_steps, _period=period):
+        if current_step >= _start:
+            phase = (current_step - _start) % _period
+            if phase >= _on:   # in the 'off' window
+                return False
+        return orig_is_alive(log_failure=log_failure)
+    sat.is_alive = encoder_is_alive
+
+
+max_steps = 20
+max_wallclock_s = 300
+
+# two windows per fault type (edit start/duration as you like)
+battery_plan     = {7: 0}  # step -> sat index
+power_limit_plan = {10: 1}
+friction_plan    = {9: 3}
+encoder_plan     = {8: 2}
+
 
 # Logs
 step_log = []
@@ -386,6 +549,19 @@ remaining_log = {sat.name: [] for sat in test_env.unwrapped.satellites}
 faulty_steps = {sat.name: [] for sat in test_env.unwrapped.satellites}
 remaining_matrix = np.zeros((4, max_steps))
 
+# Availability masks for plots (1 before first trigger, 0 from first trigger onward)
+bat_mask_log = {sat.name: [] for sat in test_env.unwrapped.satellites}
+pl_mask_log  = {sat.name: [] for sat in test_env.unwrapped.satellites}
+fr_mask_log  = {sat.name: [] for sat in test_env.unwrapped.satellites}
+enc_mask_log = {sat.name: [] for sat in test_env.unwrapped.satellites}
+
+# Record the first trigger step per sat for each fault type
+bat_trigger_at = {sat.name: None for sat in test_env.unwrapped.satellites}
+pl_trigger_at  = {sat.name: None for sat in test_env.unwrapped.satellites}
+fr_trigger_at  = {sat.name: None for sat in test_env.unwrapped.satellites}
+enc_trigger_at = {sat.name: None for sat in test_env.unwrapped.satellites}
+
+
 # Reset
 observations, _ = test_env.reset()
 test_env.remaining_tasks = {"Sat-0": 3, "Sat-1": 3, "Sat-2": 6, "Sat-3": 3}
@@ -394,10 +570,80 @@ current_step = 0
 episode_reward = 0.0
 t0 = time.time()
 
+# --- for masked plotting ---
+raw_seen_imaged = {sat.name: 0 for sat in test_env.unwrapped.satellites}  # last raw total seen
+plot_imaged_cum = {sat.name: 0 for sat in test_env.unwrapped.satellites}  # displayed (masked) cumulative
+plot_remaining  = {sat.name: test_env.remaining_tasks.get(sat.name, 0)
+                   for sat in test_env.unwrapped.satellites}              # displayed remaining (masked)
+
+
 while current_step < max_steps and test_env.agents:
     if time.time() - t0 > max_wallclock_s:
         print(f"[Test] Wallclock timeout ({max_wallclock_s}s). Breaking to plots.")
         break
+
+    # --- inject faults (battery = permanent; others use start_step) ---
+    if current_step in battery_plan:
+        idx = battery_plan[current_step]
+        if 0 <= idx < len(test_env.unwrapped.satellites):
+            sn = test_env.unwrapped.satellites[idx].name
+            if sn in test_env.agents:
+                inject_battery_fault(idx)
+                if bat_trigger_at[sn] is None:
+                    bat_trigger_at[sn] = current_step
+
+    if current_step in power_limit_plan:
+        idx = power_limit_plan[current_step]
+        if 0 <= idx < len(test_env.unwrapped.satellites):
+            sn = test_env.unwrapped.satellites[idx].name
+            if sn in test_env.agents:
+                inject_power_limit_fault(idx, start_step=current_step)   # ← add start_step
+                if pl_trigger_at[sn] is None:
+                    pl_trigger_at[sn] = current_step
+
+    if current_step in friction_plan:
+        idx = friction_plan[current_step]
+        if 0 <= idx < len(test_env.unwrapped.satellites):
+            sn = test_env.unwrapped.satellites[idx].name
+            if sn in test_env.agents:
+                inject_friction_fault(idx, start_step=current_step)      # ← add start_step
+                if fr_trigger_at[sn] is None:
+                    fr_trigger_at[sn] = current_step
+
+    if current_step in encoder_plan:
+        idx = encoder_plan[current_step]
+        if 0 <= idx < len(test_env.unwrapped.satellites):
+            sn = test_env.unwrapped.satellites[idx].name
+            if sn in test_env.agents:
+                inject_encoder_fault(idx, start_step=current_step)       # ← add start_step
+                if enc_trigger_at[sn] is None:
+                    enc_trigger_at[sn] = current_step
+
+
+    for sat in test_env.unwrapped.satellites:
+        sn = sat.name
+        alive = 1 if sat.is_alive(log_failure=False) else 0
+        health_log[sn].append(alive)
+
+        # cumulative images after the step
+        raw_total = getattr(test_env.rewarder, "imaged_by_sat", {}).get(sn, 0)
+        gained = max(0, raw_total - raw_seen_imaged[sn])
+        raw_seen_imaged[sn] = raw_total
+
+        # keep plotted imaged flat when dead; otherwise advance
+        if alive == 1:
+            plot_imaged_cum[sn] += gained
+
+        imaged_log[sn].append(plot_imaged_cum[sn])
+
+        if alive == 0:
+            faulty_steps[sn].append(current_step)
+
+    current_step += 1
+
+
+
+
 
     # Actions from policy (fine despite deprecation warning)
     actions = {}
@@ -411,47 +657,46 @@ while current_step < max_steps and test_env.agents:
 
     step_log.append(current_step)
 
-    # Logging
+    # Logging (masked so lines stay flat during faults)
+    # --- PRE-STEP snapshot (log Remaining before env updates it) ---
     for i, sat in enumerate(test_env.unwrapped.satellites):
-        sat_name = sat.name
-        is_alive = 1 if sat_name in test_env.agents else 0
-        health_log[sat_name].append(is_alive)
+        sn = sat.name
+        # remaining BEFORE the step
+        rem_pre = test_env.remaining_tasks.get(sn, 0)
 
-        imaged_count = getattr(test_env.rewarder, "imaged_by_sat", {}).get(sat_name, 0)
-        imaged_log[sat_name].append(imaged_count)
+        # optional: keep the plot flat if the sat is currently dead
+        alive_now = 1 if sat.is_alive(log_failure=False) else 0
+        if alive_now == 0:
+            rem_pre = plot_remaining.get(sn, rem_pre)
 
-        remaining = test_env.remaining_tasks.get(sat_name, 0)
-        remaining_log[sat_name].append(remaining)
-        remaining_matrix[i, current_step] = remaining
+        plot_remaining[sn] = rem_pre
+        remaining_log[sn].append(rem_pre)
+        remaining_matrix[i, current_step] = rem_pre
 
-        if is_alive == 0:
-            faulty_steps[sat_name].append(current_step)
-
-    # Inject failures
-    if current_step in fail_plan:
-        idx = fail_plan[current_step]
-        if 0 <= idx < len(test_env.unwrapped.satellites):
-            if test_env.unwrapped.satellites[idx].name in test_env.agents:
-                inject_failure(idx)
-
-    current_step += 1
+        current_step += 1
 
 print(f"Test episode reward: {episode_reward}")
 
 # =========================================================
 # Plots
 # =========================================================
-# 1) Health over time
-fig1, ax1 = plt.subplots()
-for sat_name in health_log:
-    ax1.plot(step_log, health_log[sat_name], label=sat_name)
-ax1.set_xlabel('Step')
-ax1.set_ylabel('Health (0=Faulty, 1=Healthy)')
-ax1.set_title('Health Status Over Time')
-ax1.legend()
+
+# BATTERY availability (1 before trigger, 0 after)
+fig_bat, ax_bat = plt.subplots()
+y = np.asarray(bat_mask_log.get(sat.name, []))
+x = np.asarray(step_log)
+for sat_name in bat_mask_log:
+    if y.size:  # only plot if we actually have data
+        n = min(x.size, y.size)
+        ax_bat.step(x[:n], y[:n], where='post', label=sat_name)
+ax_bat.set_ylim(-0.1, 1.1)
+ax_bat.set_xlabel('Step'); ax_bat.set_ylabel('Availability (1=on, 0=off)')
+ax_bat.set_title('Battery Fault Availability')
+ax_bat.legend()
 plt.tight_layout()
-plt.savefig('health_status.png')
-plt.close(fig1)
+plt.savefig('battery.png')
+plt.close(fig_bat)
+
 
 # 2) Per-satellite task progress with shaded faulty steps
 fig2, axs = plt.subplots(4, 1, figsize=(9, 12), sharex=True)
@@ -459,8 +704,9 @@ for i, sat_name in enumerate(remaining_log):
     ax = axs[i]
     ax.plot(step_log, imaged_log[sat_name], label='Imaged')
     ax.plot(step_log, remaining_log[sat_name], label='Remaining')
-    for fs in faulty_steps[sat_name]:
-        ax.axvspan(fs - 0.5, fs + 0.5, alpha=0.3)
+    fs = faulty_steps[sat_name]
+    if fs:
+        ax.axvspan(fs[0] - 0.5, step_log[-1] + 0.5, alpha=0.3)
     ax.set_ylabel(f'{sat_name} (#)')
     ax.legend()
 axs[-1].set_xlabel('Step')
@@ -482,9 +728,54 @@ plt.savefig('remaining_tasks_heatmap.png')
 plt.close(fig3)
 
 print("Testing complete. Plots saved as:")
-print(" - health_status.png")
+print(" - battery.png")
 print(" - task_progress.png")
 print(" - remaining_tasks_heatmap.png")
+
+
+# POWER-LIMIT pattern
+fig_pl, ax_pl = plt.subplots()
+for sat_name in pl_mask_log:
+    ax_pl.step(step_log, pl_mask_log[sat_name], where='post', label=sat_name)
+ax_pl.set_ylim(-0.1, 1.1)
+ax_pl.set_xlabel('Step')
+ax_pl.set_ylabel('Availability (1=on, 0=limited off)')
+ax_pl.set_title('Power-Limit Availability Pattern')
+ax_pl.legend()
+plt.tight_layout()
+plt.savefig('power_limit.png')
+plt.close(fig_pl)
+
+# FRICTION stalls
+fig_fr, ax_fr = plt.subplots()
+for sat_name in fr_mask_log:
+    ax_fr.step(step_log, fr_mask_log[sat_name], where='post', label=sat_name)
+ax_fr.set_ylim(-0.1, 1.1)
+ax_fr.set_xlabel('Step')
+ax_fr.set_ylabel('Availability (1=ok, 0=stall)')
+ax_fr.set_title('Wheel Friction Stall ')
+ax_fr.legend()
+plt.tight_layout()
+plt.savefig('friction.png')
+plt.close(fig_fr)
+
+# ENCODER on/off dropouts
+fig_en, ax_en = plt.subplots()
+for sat_name in enc_mask_log:
+    ax_en.step(step_log, enc_mask_log[sat_name], where='post', label=sat_name)
+ax_en.set_ylim(-0.1, 1.1)
+ax_en.set_xlabel('Step')
+ax_en.set_ylabel('Availability (1=on, 0=dropout)')
+ax_en.set_title('Encoder Signal')
+ax_en.legend()
+plt.tight_layout()
+plt.savefig('encoder.png')
+plt.close(fig_en)
+
+print(" - power_limit.png")
+print(" - friction.png")
+print(" - encoder.png")
+
 
 
 # =========================================================
@@ -553,10 +844,18 @@ def save_results_to_excel(step_log,
             workbook = writer.book
             ws = workbook.add_worksheet("plots")
             y = 2
-            for img in ["health_status.png", "task_progress.png", "remaining_tasks_heatmap.png"]:
+            for img in [
+                "battery.png",
+                "power_limit.png",
+                "friction.png",
+                "encoder.png",
+                "task_progress.png",
+                "remaining_tasks_heatmap.png",
+            ]:
                 if os.path.exists(img):
                     ws.insert_image(y, 2, img)
                     y += 20
+
 
     print(f"Saved Excel: {fname}")
 

@@ -38,7 +38,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 def PD_test():
     # Load the saved LSTM model
-    model = load_model('anomaly_detection_mode.keras')
+    model = load_model('anomaly_detection_model.keras')
     print("Model loaded successfully")
 
     # Load reference data and fit the scaler on it (e.g., training data)
@@ -61,7 +61,7 @@ def PD_test():
     dataRwPower = []
 
     # Run the simulation loop
-    for i in range(5000):
+    for i in range(400):
         torque = PDControllor(b_model.cur_error_MRP, b_model.cur_omega)
         if b_model.faulty and b_model.step_count > b_model.fault_time and b_model.wheel_num != -1:
             torque[b_model.wheel_num] = 0
