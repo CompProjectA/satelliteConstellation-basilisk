@@ -18,6 +18,7 @@ import json
 from datetime import datetime
 import logging
 import matplotlib
+from drl_tab import *
 matplotlib.use('Agg')  # Use non-interactive backend
 
 # Set up paths
@@ -51,12 +52,6 @@ except ImportError as e:
     print(f"Warning: GUI tab modules not fully available: {e}")
     GUI_TABS_AVAILABLE = False
 
-<<<<<<< HEAD
-from drl_tab import DRLTab
-
-# Import help content
-from rw_fault_help import get_general_help
-=======
 # Import help content - with fallback
 try:
     from rw_fault_help import get_general_help
@@ -66,7 +61,6 @@ except ImportError:
     HELP_AVAILABLE = False
     def get_general_help(topic):
         return f"Help content for {topic} is not available. Please check the documentation."
->>>>>>> 38cf37330d7f6f66c8309297e9090f62521af567
 
 # Import style - with fallback
 try:
@@ -462,7 +456,7 @@ class SatelliteSimulatorApp:
         """Append new plot rows to the results tab if it exposes a tree widget."""
         try:
             if hasattr(self, 'results_tab') and hasattr(self.results_tab, 'results_tree'):
-                ts = datetime.now().strftime("%H:%M:%S")
+                ts = datetime.datetime.now().strftime("%H:%M:%S")
                 for name, path in plots_list:
                     try:
                         self.results_tab.results_tree.insert("", "end", values=(ts, name, path))
@@ -674,55 +668,7 @@ class SatelliteSimulatorApp:
         self.visualization_tab = VisualizationTab(self, self.visualization_frame)
         self.output_tab = OutputTab(self, self.output_frame)
         self.results_tab = ResultsTab(self, self.results_frame)
-        if GUI_TABS_AVAILABLE:
-            # Create tab frames
-            self.constellation_frame = ttk.Frame(self.notebook)
-            self.fault_frame = ttk.Frame(self.notebook)
-            self.fault_detection_frame = ttk.Frame(self.notebook)
-            self.task_reassignment_frame = ttk.Frame(self.notebook)
-            self.target_frame = ttk.Frame(self.notebook)
-            self.visualization_frame = ttk.Frame(self.notebook)
-            self.output_frame = ttk.Frame(self.notebook)
-            self.results_frame = ttk.Frame(self.notebook)
-            
-            # Add tabs
-            self.notebook.add(self.constellation_frame, text="Constellation")
-            self.notebook.add(self.fault_frame, text="Fault Configuration")
-            self.notebook.add(self.fault_detection_frame, text="Fault Detection")
-            self.notebook.add(self.task_reassignment_frame, text="Task Reassignment")
-            self.notebook.add(self.target_frame, text="Targets")
-            self.notebook.add(self.visualization_frame, text="Visualization")
-            self.notebook.add(self.output_frame, text="Output Settings")
-            self.notebook.add(self.results_frame, text="Results")
-            
-            # Create tab objects
-            try:
-                self.constellation_tab = ConstellationTab(self, self.constellation_frame)
-                self.fault_tab = FaultTab(self, self.fault_frame)
-                self.fault_detection_tab = FaultDetectionTab(self, self.fault_detection_frame)
-                self.task_reassignment_tab = TaskReassignmentTab(self, self.task_reassignment_frame)
-                self.target_tab = TargetTab(self, self.target_frame)
-                self.visualization_tab = VisualizationTab(self, self.visualization_frame)
-                self.output_tab = OutputTab(self, self.output_frame)
-                self.results_tab = ResultsTab(self, self.results_frame)
-                
-                # Optional: embed comm visualization panel in Constellation tab (if available)
-                self.setup_communication_visualization()
-                
-            except Exception as e:
-                messagebox.showerror("Tab Creation Error", f"Error creating tabs: {e}")
-                self.logger.error(f"Error creating tabs: {e}")
-                
-        else:
-            # Create a simple placeholder tab
-            placeholder_frame = ttk.Frame(self.notebook)
-            self.notebook.add(placeholder_frame, text="Configuration")
-            
-            ttk.Label(
-                placeholder_frame,
-                text="GUI modules not available. Please check imports.",
-                font=('Segoe UI', 12)
-            ).pack(expand=True)
+        
         
     def _create_status_bar(self, parent):
         """Create the status bar"""
@@ -788,7 +734,7 @@ class SatelliteSimulatorApp:
         # Current time
         self.time_label = ttk.Label(
             status_frame,
-            text=datetime.now().strftime("%Y-%m-%d %H:%M"),
+            text=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
             style='Status.TLabel' if STYLE_AVAILABLE else ""
         )
         self.time_label.pack(side=tk.RIGHT, padx=10)
@@ -970,7 +916,7 @@ class SatelliteSimulatorApp:
             
     def update_time(self):
         """Update the time display"""
-        self.time_label.config(text=datetime.now().strftime("%Y-%m-%d %H:%M"))
+        self.time_label.config(text=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
         self.root.after(60000, self.update_time)  # Update every minute
 
     def _thread_safe(self, fn, *a, **kw):
@@ -1385,7 +1331,7 @@ class SatelliteSimulatorApp:
         self.latest_plots = []
         
         if self.save_plots.get() and figureList:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             self.add_log(f"Saving {len(figureList)} plots...")
             
             # Import matplotlib here to ensure correct backend
@@ -2117,12 +2063,6 @@ Built with Python, Tkinter, Matplotlib, TensorFlow, and Basilisk
 
 # Main entry point
 if __name__ == "__main__":
-<<<<<<< HEAD
-    
-    root = tk.Tk()
-    app = SatelliteSimulatorApp(root)
-    root.mainloop()
-=======
     try:
         root = tk.Tk()
         app = SatelliteSimulatorApp(root)
@@ -2132,4 +2072,3 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc()
         input("Press Enter to exit...")
->>>>>>> 38cf37330d7f6f66c8309297e9090f62521af567

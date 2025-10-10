@@ -277,6 +277,16 @@ class CustomConstellationTasking(ConstellationTasking, MultiAgentEnv):
             # action index 0 = Image, 1 = Reallocate (no-op)
             # if not alive, force no-op so no imaging task is taken
             gated_actions[agent] = (1 if not alive else a)   # 1 == Reallocate (no imaging)
+            if not alive:
+                if isinstance(a, np.ndarray):
+                    gated_actions[agent] = np.zeros_like(a)
+                elif isinstance(a, (list, tuple)):
+                    gated_actions[agent] = type(a)(0 for _ in a)
+                else:
+                    gated_actions[agent] = 0
+            else:
+                gated_actions[agent] = a
+
 
             if sat is not None and not alive:
                 # (A) Starve the imager this tick (works across builds)
@@ -535,7 +545,7 @@ max_steps = 20
 max_wallclock_s = 300
 
 # two windows per fault type (edit start/duration as you like)
-battery_plan     = {7: 0}  # step -> sat index
+battery_plan     = {1: 0}  # step -> sat index
 power_limit_plan = {10: 1}
 friction_plan    = {9: 3}
 encoder_plan     = {8: 2}
@@ -619,27 +629,26 @@ while current_step < max_steps and test_env.agents:
                 if enc_trigger_at[sn] is None:
                     enc_trigger_at[sn] = current_step
 
+    step_log.append(current_step)
 
     for sat in test_env.unwrapped.satellites:
         sn = sat.name
-        alive = 1 if sat.is_alive(log_failure=False) else 0
-        health_log[sn].append(alive)
 
-        # cumulative images after the step
-        raw_total = getattr(test_env.rewarder, "imaged_by_sat", {}).get(sn, 0)
-        gained = max(0, raw_total - raw_seen_imaged[sn])
-        raw_seen_imaged[sn] = raw_total
+        # Battery mask: 1 before first trigger, 0 from trigger onward
+        t = bat_trigger_at[sn]
+        bat_mask_log[sn].append(0 if (t is not None and current_step >= t) else 1)
 
-        # keep plotted imaged flat when dead; otherwise advance
-        if alive == 1:
-            plot_imaged_cum[sn] += gained
+        # Power-limit mask (now same permanent logic)
+        t = pl_trigger_at[sn]
+        pl_mask_log[sn].append(0 if (t is not None and current_step >= t) else 1)
 
-        imaged_log[sn].append(plot_imaged_cum[sn])
+        # Friction mask
+        t = fr_trigger_at[sn]
+        fr_mask_log[sn].append(0 if (t is not None and current_step >= t) else 1)
 
-        if alive == 0:
-            faulty_steps[sn].append(current_step)
-
-    current_step += 1
+        # Encoder mask
+        t = enc_trigger_at[sn]
+        enc_mask_log[sn].append(0 if (t is not None and current_step >= t) else 1)
 
 
 
@@ -655,25 +664,33 @@ while current_step < max_steps and test_env.agents:
     observations, rewards, terminations, truncations, infos = test_env.step(actions)
     episode_reward += sum(rewards.values())
 
-    step_log.append(current_step)
+
 
     # Logging (masked so lines stay flat during faults)
-    # --- PRE-STEP snapshot (log Remaining before env updates it) ---
     for i, sat in enumerate(test_env.unwrapped.satellites):
         sn = sat.name
-        # remaining BEFORE the step
-        rem_pre = test_env.remaining_tasks.get(sn, 0)
+        alive = 1 if sat.is_alive(log_failure=False) else 0
+        health_log[sn].append(alive)
 
-        # optional: keep the plot flat if the sat is currently dead
-        alive_now = 1 if sat.is_alive(log_failure=False) else 0
-        if alive_now == 0:
-            rem_pre = plot_remaining.get(sn, rem_pre)
+        # raw cumulative from rewarder
+        raw_total = getattr(test_env.rewarder, "imaged_by_sat", {}).get(sn, 0)
+        gained    = max(0, raw_total - raw_seen_imaged[sn])
+        raw_seen_imaged[sn] = raw_total
 
-        plot_remaining[sn] = rem_pre
-        remaining_log[sn].append(rem_pre)
-        remaining_matrix[i, current_step] = rem_pre
+        # only advance plotted values when alive; otherwise hold last
+        if alive == 1:
+            plot_imaged_cum[sn] += gained
+            plot_remaining[sn]   = test_env.remaining_tasks.get(sn, 0)
 
-        current_step += 1
+        imaged_log[sn].append(plot_imaged_cum[sn])
+        remaining_log[sn].append(plot_remaining[sn])
+        remaining_matrix[i, current_step] = plot_remaining[sn]
+
+        if alive == 0:
+            faulty_steps[sn].append(current_step)
+
+
+    current_step += 1
 
 print(f"Test episode reward: {episode_reward}")
 
@@ -683,12 +700,8 @@ print(f"Test episode reward: {episode_reward}")
 
 # BATTERY availability (1 before trigger, 0 after)
 fig_bat, ax_bat = plt.subplots()
-y = np.asarray(bat_mask_log.get(sat.name, []))
-x = np.asarray(step_log)
 for sat_name in bat_mask_log:
-    if y.size:  # only plot if we actually have data
-        n = min(x.size, y.size)
-        ax_bat.step(x[:n], y[:n], where='post', label=sat_name)
+    ax_bat.step(step_log, bat_mask_log[sat_name], where='post', label=sat_name)
 ax_bat.set_ylim(-0.1, 1.1)
 ax_bat.set_xlabel('Step'); ax_bat.set_ylabel('Availability (1=on, 0=off)')
 ax_bat.set_title('Battery Fault Availability')
