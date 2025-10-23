@@ -20,6 +20,20 @@ Before starting the installation steps shown in the guide video, make sure you h
 
 
 ------------------------------------------------------------
+FOLDER AND FILE ORGANIZATION
+------------------------------------------------------------
+
+All folders and files are named in sequential order for clarity and easy navigation.
+Example:
+   1_CMake install
+   2_Install Python
+   3_Visual studio
+   4_SWIG setup
+
+Follow the folders in this order when watching or following the guide video.
+
+
+------------------------------------------------------------
 VERIFYING BEFORE RUNNING CONAN
 ------------------------------------------------------------
 
