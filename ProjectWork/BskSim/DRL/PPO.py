@@ -1,5 +1,3 @@
-
-
 import time
 import os
 from datetime import datetime
@@ -9,6 +7,8 @@ from bsk_rl.act.actions import ActionBuilder
 import numpy as np
 import matplotlib.pyplot as plt
 import gymnasium as gym
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # ---- Excel export deps (optional but recommended) ----
 try:
@@ -429,7 +429,9 @@ config = (
         train_batch_size=128,
         vf_clip_param=10.0,
         clip_param=0.2,
-        num_epochs=1,
+        # num_epochs removed in Ray RLlib 2.31.0 - now controlled by num_sgd_iter
+        num_sgd_iter=1,  # Equivalent to num_epochs=1
+        sgd_minibatch_size=128,  # Should divide train_batch_size evenly
         lambda_=0.95,
     )
 )
@@ -607,7 +609,7 @@ while current_step < max_steps and test_env.agents:
         if 0 <= idx < len(test_env.unwrapped.satellites):
             sn = test_env.unwrapped.satellites[idx].name
             if sn in test_env.agents:
-                inject_power_limit_fault(idx, start_step=current_step)   # ← add start_step
+                inject_power_limit_fault(idx, start_step=current_step)   # â† add start_step
                 if pl_trigger_at[sn] is None:
                     pl_trigger_at[sn] = current_step
 
@@ -616,7 +618,7 @@ while current_step < max_steps and test_env.agents:
         if 0 <= idx < len(test_env.unwrapped.satellites):
             sn = test_env.unwrapped.satellites[idx].name
             if sn in test_env.agents:
-                inject_friction_fault(idx, start_step=current_step)      # ← add start_step
+                inject_friction_fault(idx, start_step=current_step)      # â† add start_step
                 if fr_trigger_at[sn] is None:
                     fr_trigger_at[sn] = current_step
 
@@ -625,7 +627,7 @@ while current_step < max_steps and test_env.agents:
         if 0 <= idx < len(test_env.unwrapped.satellites):
             sn = test_env.unwrapped.satellites[idx].name
             if sn in test_env.agents:
-                inject_encoder_fault(idx, start_step=current_step)       # ← add start_step
+                inject_encoder_fault(idx, start_step=current_step)       # â† add start_step
                 if enc_trigger_at[sn] is None:
                     enc_trigger_at[sn] = current_step
 
@@ -882,4 +884,3 @@ save_results_to_excel(
     episode_reward=episode_reward,
     algo_name="PPO"
 )
-

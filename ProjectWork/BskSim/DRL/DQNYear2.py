@@ -1,11 +1,32 @@
+#!/usr/bin/env python3
+"""
+DQNYear2.py - DQN with Ray RLlib for bsk_rl multi-agent satellite constellation
+
+Based on working DQN.ipynb code.
+Uses Ray RLlib + bsk_rl for multi-agent constellation tasking.
+Saves checkpoints to DRL/result/ directory.
+"""
 
 import time
 import os
+import sys
 from datetime import datetime
 from typing import Dict, Any
 
-from bsk_rl_develop.act.actions import ActionBuilder
+# Path setup
+DRL_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(DRL_DIR)
+RESULT_DIR = os.path.join(DRL_DIR, "result")
+os.makedirs(RESULT_DIR, exist_ok=True)
+
+for path in [DRL_DIR, ROOT_DIR]:
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+# Third-party imports
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import gymnasium as gym
 
@@ -14,30 +35,37 @@ try:
 except Exception:
     pd = None
 
+from collections import Counter
+
+# Ray RLlib imports
 from ray.tune.registry import register_env
 from ray.rllib.policy.policy import PolicySpec
 from ray.rllib.env.multi_agent_env import MultiAgentEnv
 from ray.rllib.algorithms.dqn import DQNConfig, DQN
 
+# Basilisk imports
 from Basilisk.architecture import messaging
-from collections import Counter
+
+# bsk_rl imports
+from bsk_rl import ConstellationTasking
+from bsk_rl.sats import ImagingSatellite
+from bsk_rl.act import Action, Image
+from bsk_rl.act.actions import ActionBuilder
+from bsk_rl import obs
+from bsk_rl.sim import dyn, fsw
+from bsk_rl.scene.targets import UniformTargets, Target
+from bsk_rl.data import UniqueImageReward
+from bsk_rl.comm import LOSCommunication
+from bsk_rl.utils.orbital import walker_delta_args
 
 
-# ---- bsk_rl_develop imports ----
-from bsk_rl_develop import ConstellationTasking
-from bsk_rl_develop.sats import ImagingSatellite
-from bsk_rl_develop.act import Action, Image
-from bsk_rl_develop import obs
-from bsk_rl_develop.sim import dyn, fsw
-from bsk_rl_develop.scene.targets import UniformTargets, Target
-from bsk_rl_develop.data import UniqueImageReward
-from bsk_rl_develop.comm import LOSCommunication
-from bsk_rl_develop.utils.orbital import walker_delta_args
-
-
+# =========================================================
+# Target Area Definition
+# =========================================================
 
 class TargetAreas(UniformTargets):
-    def __init__(self, n_targets: int = 40, priority_distribution=None, radius=6378136.6):
+    """Custom target area generator for specific geographic region"""
+    def __init__(self, n_targets: int = 20, priority_distribution=None, radius=6378136.6):
         super().__init__(n_targets, priority_distribution, radius)
         self.lat_min, self.lat_max = -38.0, -25.0
         self.lon_min, self.lon_max = 129.0, 141.0
@@ -61,8 +89,12 @@ class TargetAreas(UniformTargets):
         self.targets = targets
 
 
+# =========================================================
+# Custom Action: Reallocate
+# =========================================================
 
 class Reallocate(Action):
+    """Task reallocation action for multi-agent coordination"""
     def __init__(self, n_sats=4):
         self.action_space = gym.spaces.Discrete(n_sats)
         self.n_actions = self.action_space.n
@@ -79,8 +111,12 @@ class Reallocate(Action):
         return 0.0
 
 
+# =========================================================
+# Advanced Imaging Satellite
+# =========================================================
 
 class AdvancedImagingSatellite(ImagingSatellite):
+    """Satellite with imaging and reallocation capabilities"""
     observation_spec = [
         obs.OpportunityProperties(
             dict(prop="priority"),
@@ -93,11 +129,12 @@ class AdvancedImagingSatellite(ImagingSatellite):
     fsw_type = fsw.SteeringImagerFSWModel
 
 
+# =========================================================
+# Opportunity Generator Tuning
+# =========================================================
 
-def _tune_access_generation(sat,
-                            initial=1800.0,
-                            step=120.0,
-                            max_dur=3600.0):
+def _tune_access_generation(sat, initial=600.0, step=300.0, max_dur=1800.0):
+    """Configure opportunity generation parameters for faster training"""
     candidates = [
         getattr(getattr(sat, "fsw", None), "opportunity_generator", None),
         getattr(getattr(sat, "dynamics", None), "accessGenerator", None),
@@ -116,14 +153,23 @@ def _tune_access_generation(sat,
         if hasattr(og, name):
             setattr(og, name, val)
 
-    extras = {"retask_on_image_complete": True, "max_access_compute_time_s": 2.0}
+    # Optimized settings for training speed
+    extras = {
+        "retask_on_image_complete": False,
+        "max_access_compute_time_s": 1.0,
+    }
     for k, v in extras.items():
         if hasattr(og, k):
             setattr(og, k, v)
 
 
+# =========================================================
+# Custom Reward Function
+# =========================================================
 
 class CustomUniqueImageReward(UniqueImageReward):
+    """Enhanced reward function tracking images per satellite"""
+    
     DEBUG_PROBE = False
     DEBUG_PROBE_STEPS = 5
 
@@ -169,6 +215,8 @@ class CustomUniqueImageReward(UniqueImageReward):
         return None
 
     def _target_id_and_priority(self, tgt):
+        if tgt is None:
+            return ("<none>", 0.0)
         tid = getattr(tgt, "name", None) or getattr(tgt, "id", None)
         pr = getattr(tgt, "priority", None)
         if tid is None and isinstance(tgt, dict):
@@ -197,25 +245,29 @@ class CustomUniqueImageReward(UniqueImageReward):
                 if tgt not in self.data.imaged:
                     prio = float(getattr(tgt, "priority", 0.0))
                     denom = occ.get(tgt, 1) or 1
-                    total += self.reward_fn(prio) / denom
+                    total += (1.0 + prio) / denom
                     new_unique_count += 1
-            rewards[sat_id] = total
+                    self.data.imaged.add(tgt)
+                    self.imaged_targets.add(self._target_id_and_priority(tgt)[0])
+
             if new_unique_count > 0:
                 self.imaged_by_sat[sat_id] = self.imaged_by_sat.get(sat_id, 0) + new_unique_count
 
-        for sat_id in getattr(self, "imaged_by_sat", {}).keys():
-            rewards.setdefault(sat_id, 0.0)
-
+            rewards[sat_id] = total
         return rewards
 
 
+# =========================================================
+# Custom Constellation Environment
+# =========================================================
 
-class CustomConstellationTasking(ConstellationTasking, MultiAgentEnv):
-    def __init__(self, *args, max_episode_steps=64, **kwargs):
+class CustomConstellationTasking(ConstellationTasking):
+    """Extended constellation environment with task tracking"""
+    def __init__(self, *args, max_episode_steps=32, **kwargs):
         super().__init__(*args, **kwargs)
         self.max_episode_steps = int(max_episode_steps)
         self._step_count = 0
-        self.remaining_tasks = {"Sat-0": 3, "Sat-1": 3, "Sat-2": 6, "Sat-3": 3}
+        self.remaining_tasks = {"Sat-0": 3, "Sat-1": 3, "Sat-2": 3, "Sat-3": 3}
 
     def reset(self, *, seed=None, options=None):
         self._step_count = 0
@@ -224,7 +276,7 @@ class CustomConstellationTasking(ConstellationTasking, MultiAgentEnv):
             obs, info = out
         else:
             obs, info = out, {}
-        self.remaining_tasks = {"Sat-0": 3, "Sat-1": 3, "Sat-2": 6, "Sat-3": 3}
+        self.remaining_tasks = {"Sat-0": 3, "Sat-1": 3, "Sat-2": 3, "Sat-3": 3}
         return obs, info
 
     def step(self, action_dict: Dict[str, Any]):
@@ -237,6 +289,7 @@ class CustomConstellationTasking(ConstellationTasking, MultiAgentEnv):
 
         horizon_reached = self._step_count >= self.max_episode_steps
         no_agents_left = len(self.agents) == 0
+
         all_keys = set(rews.keys()) | set(terms.keys()) | set(truncs.keys()) | set(self.agents)
         all_done_per_agent = all(terms.get(a, False) or truncs.get(a, False) for a in all_keys) if all_keys else True
 
@@ -247,8 +300,9 @@ class CustomConstellationTasking(ConstellationTasking, MultiAgentEnv):
 
 
 # =========================================================
-# Satellite args + orbit randomizer
+# Environment Creator
 # =========================================================
+
 sat_args = {
     "imageAttErrorRequirement": 0.01,
     "imageRateErrorRequirement": 0.01,
@@ -265,267 +319,157 @@ sat_args = {
 sat_arg_randomizer = walker_delta_args(altitude=800.0, inc=60.0, n_planes=1)
 
 
-
 def env_creator(env_config):
-    max_episode_steps = env_config.get("max_episode_steps", 64)
+    """Create constellation environment"""
+    max_episode_steps = env_config.get("max_episode_steps", 32)
     satellites = [AdvancedImagingSatellite(f"Sat-{i}", sat_args) for i in range(4)]
 
     for sat in satellites:
-        _tune_access_generation(sat, initial=1800.0, step=120.0, max_dur=3600.0)
+        _tune_access_generation(sat, initial=600.0, step=60.0, max_dur=900.0)
 
     return CustomConstellationTasking(
         satellites=satellites,
-        scenario=TargetAreas(n_targets=40),
+        scenario=TargetAreas(n_targets=20),
         rewarder=CustomUniqueImageReward(),
         communicator=LOSCommunication(),
         sat_arg_randomizer=sat_arg_randomizer,
-        log_level="INFO",
+        log_level="WARNING",
         max_episode_steps=max_episode_steps,
     )
 
-register_env("custom_constellation", env_creator)
 
+# =========================================================
+# Training Function
+# =========================================================
 
-
-_sample_env = env_creator({})
-obs0, _ = _sample_env.reset()
-first_agent = _sample_env.agents[0]
-obs_space = _sample_env.observation_space(first_agent)
-act_space = _sample_env.action_space(first_agent)
-_sample_env.close()
-
-
-
-config = (
-    DQNConfig()
-    .api_stack(enable_rl_module_and_learner=False, enable_env_runner_and_connector_v2=False)
-    .environment("custom_constellation", env_config={"max_episode_steps": 64})
-    .multi_agent(
-        policies={"shared_policy": PolicySpec(None, obs_space, act_space)},
-        policy_mapping_fn=lambda agent_id, *args, **kwargs: "shared_policy",
+def train_dqn(num_iterations=50, save_freq=10, verbose=True):
+    """Train DQN agent using Ray RLlib"""
+    
+    print("=" * 60)
+    print("DQN Training for Satellite Constellation")
+    print("=" * 60)
+    
+    # Register environment
+    register_env("constellation", env_creator)
+    
+    # Create sample environment to get specs
+    sample_env = env_creator({"max_episode_steps": 32})
+    obs_space = sample_env.observation_space(sample_env.agents[0])
+    act_space = sample_env.action_space(sample_env.agents[0])
+    sample_env.close()
+    
+    # Configure DQN
+    config = (
+        DQNConfig()
+        .environment("constellation", env_config={"max_episode_steps": 32})
+        .framework("torch")
+        .training(
+            gamma=0.99,
+            lr=5e-4,
+            train_batch_size=64,
+            target_network_update_freq=500,
+            replay_buffer_config={
+                "type": "MultiAgentReplayBuffer",
+                "capacity": 100000,
+            },
+        )
+        .multi_agent(
+            policies={
+                "shared_policy": PolicySpec(
+                    policy_class=None,
+                    observation_space=obs_space,
+                    action_space=act_space,
+                )
+            },
+            policy_mapping_fn=lambda agent_id, *args, **kwargs: "shared_policy",
+        )
+        .resources(num_gpus=0)
+        .rollouts(num_rollout_workers=0)
     )
-    .framework("torch")
-    .resources(num_gpus=0)
-    .env_runners(num_env_runners=1, rollout_fragment_length=2, sample_timeout_s=500.0)
-    .training(
-        gamma=0.99,
-        lr=3e-4,
-        train_batch_size=2048,
-        target_network_update_freq=100,
- 
-    )
-    .training(replay_buffer_config={
-        "type": "MultiAgentReplayBuffer",
-        "capacity": 100000,
-    })
-)
-
-algo = DQN(config=config)
-
-
-
-
-
-num_iterations = 100  
-for i in range(num_iterations):
-    result = algo.train()
-    print(f"Iteration {i}: mean reward = {result.get('episode_reward_mean', 'N/A')}")
-
-checkpoint_dir = algo.save()
-print(f"Checkpoint saved at {checkpoint_dir}")
-
-
-
-test_env = env_creator({})
-
-def inject_failure(sat_index: int):
-    sat = test_env.unwrapped.satellites[sat_index]
-    def isnt_alive(log_failure=False, _sat=sat):
-        death_message = messaging.PowerStorageStatusMsgPayload()
-        death_message.storageLevel = 0.0
-        _sat.dynamics.powerMonitor.batPowerOutMsg.write(death_message)
-        return _sat.dynamics.is_alive(log_failure=log_failure) and _sat.fsw.is_alive(log_failure=log_failure)
-    sat.is_alive = isnt_alive
-
-max_steps = 40
-max_wallclock_s = 120
-fail_plan = {5: 0, 15: 2, 25: 3}
-
-step_log = []
-health_log = {sat.name: [] for sat in test_env.unwrapped.satellites}
-imaged_log = {sat.name: [] for sat in test_env.unwrapped.satellites}
-remaining_log = {sat.name: [] for sat in test_env.unwrapped.satellites}
-faulty_steps = {sat.name: [] for sat in test_env.unwrapped.satellites}
-remaining_matrix = np.zeros((4, max_steps))
-
-observations, _ = test_env.reset()
-test_env.remaining_tasks = {"Sat-0": 3, "Sat-1": 3, "Sat-2": 6, "Sat-3": 3}
-
-current_step = 0
-episode_reward = 0.0
-t0 = time.time()
-
-while current_step < max_steps and test_env.agents:
-    if time.time() - t0 > max_wallclock_s:
-        print(f"[Test] Wallclock timeout ({max_wallclock_s}s). Breaking to plots.")
-        break
-
-    actions = {}
-    for agent in test_env.agents:
-        pid = algo.config.policy_mapping_fn(agent)
-        action = algo.compute_single_action(observations[agent], policy_id=pid)
-        actions[agent] = action
-
-    observations, rewards, terminations, truncations, infos = test_env.step(actions)
-    episode_reward += sum(rewards.values())
-
-    step_log.append(current_step)
-
-    for i, sat in enumerate(test_env.unwrapped.satellites):
-        sat_name = sat.name
-        is_alive = 1 if sat_name in test_env.agents else 0
-        health_log[sat_name].append(is_alive)
-
-        imaged_count = getattr(test_env.rewarder, "imaged_by_sat", {}).get(sat_name, 0)
-        imaged_log[sat_name].append(imaged_count)
-
-        remaining = test_env.remaining_tasks.get(sat_name, 0)
-        remaining_log[sat_name].append(remaining)
-        remaining_matrix[i, current_step] = remaining
-
-        if is_alive == 0:
-            faulty_steps[sat_name].append(current_step)
-
-    if current_step in fail_plan:
-        idx = fail_plan[current_step]
-        if 0 <= idx < len(test_env.unwrapped.satellites):
-            if test_env.unwrapped.satellites[idx].name in test_env.agents:
-                inject_failure(idx)
-
-    current_step += 1
-
-print(f"Test episode reward: {episode_reward}")
-
-
-# =========================================================
-# Plots
-# =========================================================
-fig1, ax1 = plt.subplots()
-for sat_name in health_log:
-    ax1.plot(step_log, health_log[sat_name], label=sat_name)
-ax1.set_xlabel('Step')
-ax1.set_ylabel('Health (0=Faulty, 1=Healthy)')
-ax1.set_title('Health Status Over Time')
-ax1.legend()
-plt.tight_layout()
-plt.savefig('health_status.png')
-plt.close(fig1)
-
-fig2, axs = plt.subplots(4, 1, figsize=(9, 12), sharex=True)
-for i, sat_name in enumerate(remaining_log):
-    ax = axs[i]
-    ax.plot(step_log, imaged_log[sat_name], label='Imaged')
-    ax.plot(step_log, remaining_log[sat_name], label='Remaining')
-    for fs in faulty_steps[sat_name]:
-        ax.axvspan(fs - 0.5, fs + 0.5, alpha=0.3)
-    ax.set_ylabel(f'{sat_name} (#)')
-    ax.legend()
-axs[-1].set_xlabel('Step')
-fig2.suptitle('Per-Satellite Task Progress (shaded = faulty steps)')
-plt.tight_layout()
-plt.savefig('task_progress.png')
-plt.close(fig2)
-
-fig3, ax3 = plt.subplots(figsize=(9, 3))
-cax = ax3.imshow(remaining_matrix, aspect='auto', interpolation='nearest')
-ax3.set_yticks(range(4))
-ax3.set_yticklabels(['Sat-0', 'Sat-1', 'Sat-2', 'Sat-3'])
-ax3.set_xlabel('Step')
-ax3.set_title('Remaining Tasks Heatmap')
-fig3.colorbar(cax, label='Remaining Tasks')
-plt.tight_layout()
-plt.savefig('remaining_tasks_heatmap.png')
-plt.close(fig3)
-
-print("Testing complete. Plots saved as:")
-print(" - health_status.png")
-print(" - task_progress.png")
-print(" - remaining_tasks_heatmap.png")
-
-
-# =========================================================
-# Excel export
-# =========================================================
-def save_results_to_excel(step_log,
-                          health_log,
-                          imaged_log,
-                          remaining_log,
-                          remaining_matrix,
-                          episode_reward,
-                          algo_name="DQN"):
-    if pd is None:
-        print("[Excel] pandas not installed; skipping Excel export.")
-        return
-
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    fname = f"results_{algo_name}_{ts}.xlsx"
-
-    steps = len(step_log)
-    sats = list(health_log.keys())
-
-    rows = []
-    for s in sats:
-        for i, step in enumerate(step_log):
-            rows.append({
-                "step": step,
-                "sat": s,
-                "health": health_log[s][i] if i < len(health_log[s]) else None,
-                "imaged": imaged_log[s][i] if i < len(imaged_log[s]) else None,
-                "remaining": remaining_log[s][i] if i < len(remaining_log[s]) else None,
-            })
-    df_long = pd.DataFrame(rows)
-
-    health_wide = pd.DataFrame({s: health_log[s][:steps] for s in sats}, index=step_log)
-    imaged_wide = pd.DataFrame({s: imaged_log[s][:steps] for s in sats}, index=step_log)
-    remaining_wide = pd.DataFrame({s: remaining_log[s][:steps] for s in sats}, index=step_log)
-    hm = pd.DataFrame(remaining_matrix[:, :steps], index=sats, columns=step_log)
-
-    summary = pd.DataFrame(
-        {"metric": ["episode_reward", "steps_logged", "sats"],
-         "value": [episode_reward, steps, len(sats)]}
-    )
-
-    engine = "xlsxwriter"
+    
+    # Build algorithm
+    algo = DQN(config=config)
+    
+    print(f"\nStarting training for {num_iterations} iterations...")
+    print("=" * 60)
+    
+    rewards_history = []
+    start_time = time.time()
+    checkpoint_dir = None
+    
     try:
-        import xlsxwriter
-    except Exception:
-        engine = "openpyxl"
+        for iteration in range(num_iterations):
+            result = algo.train()
+            episode_reward_mean = result.get("episode_reward_mean", 0)
+            rewards_history.append(episode_reward_mean)
+            
+            if verbose and (iteration + 1) % 5 == 0:
+                elapsed = time.time() - start_time
+                print(f"Iter {iteration+1}/{num_iterations}, "
+                      f"Mean Reward: {episode_reward_mean:.2f}, "
+                      f"Time: {elapsed:.1f}s")
+            
+            # Save checkpoint
+            if (iteration + 1) % save_freq == 0:
+                checkpoint_dir = algo.save(RESULT_DIR)
+                if verbose:
+                    print(f"  Saved checkpoint: {checkpoint_dir}")
+        
+        # Save final checkpoint
+        checkpoint_dir = algo.save(RESULT_DIR)
+        print(f"Final checkpoint saved at {checkpoint_dir}")
+        
+    except Exception as e:
+        print(f"\nTraining failed with error: {e}")
+        try:
+            checkpoint_dir = algo.save(RESULT_DIR)
+            print(f"Emergency checkpoint saved at {checkpoint_dir}")
+        except:
+            print("Could not save emergency checkpoint")
+    
+    finally:
+        print("\nTraining session completed!")
+        print(f"Total training time: {time.time() - start_time:.2f} seconds")
+    
+    # Save training history plot
+    if rewards_history:
+        plt.figure(figsize=(10, 6))
+        plt.plot(rewards_history)
+        plt.xlabel('Iteration')
+        plt.ylabel('Mean Episode Reward')
+        plt.title('DQN Training Progress')
+        plt.grid(True)
+        plt.savefig(os.path.join(RESULT_DIR, 'dqn_training_rewards.png'))
+        plt.close()
+        print(f"Saved training plot: {os.path.join(RESULT_DIR, 'dqn_training_rewards.png')}")
+    
+    return checkpoint_dir, rewards_history
 
-    with pd.ExcelWriter(fname, engine=engine) as writer:
-        df_long.to_excel(writer, "log_long", index=False)
-        health_wide.to_excel(writer, "health", index=True)
-        imaged_wide.to_excel(writer, "imaged", index=True)
-        remaining_wide.to_excel(writer, "remaining", index=True)
-        hm.to_excel(writer, "heatmap", index=True)
-        summary.to_excel(writer, "summary", index=False)
 
-        if engine == "xlsxwriter":
-            workbook = writer.book
-            ws = workbook.add_worksheet("plots")
-            y = 2
-            for img in ["health_status.png", "task_progress.png", "remaining_tasks_heatmap.png"]:
-                if os.path.exists(img):
-                    ws.insert_image(y, 2, img)
-                    y += 20
+# =========================================================
+# Main
+# =========================================================
 
-    print(f"Saved Excel: {fname}")
+def main():
+    """Main entry point"""
+    print("\nDQN Training Script for Satellite Constellation")
+    print("Using Ray RLlib + bsk_rl")
+    print(f"Results will be saved to: {RESULT_DIR}\n")
+    
+    checkpoint_dir, rewards_history = train_dqn(
+        num_iterations=50,
+        save_freq=10,
+        verbose=True
+    )
+    
+    if checkpoint_dir:
+        print(f"\n✓ Training complete! Checkpoint saved to:")
+        print(f"  {checkpoint_dir}")
+    else:
+        print("\n✗ Training finished but no checkpoint was saved")
+    
+    return 0
 
-save_results_to_excel(
-    step_log=step_log,
-    health_log=health_log,
-    imaged_log=imaged_log,
-    remaining_log=remaining_log,
-    remaining_matrix=remaining_matrix,
-    episode_reward=episode_reward,
-    algo_name="DQN"
-)
+
+if __name__ == "__main__":
+    sys.exit(main())

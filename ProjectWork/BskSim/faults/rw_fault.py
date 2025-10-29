@@ -20,9 +20,10 @@ PLOTTING_DIR = os.path.join(ROOT_DIR, 'plotting')
 sys.path.extend([ROOT_DIR, MODELS_DIR, PLOTTING_DIR])
 
 # Import the specific fault modules - this ensures they are available for the fault loader
-from faults.friction_fault import FrictionFaultScenario, run as run_friction
-from faults.powerlimit_fault import PowerLimitFaultScenario, run as run_powerlimit
-from faults.encoder_fault import EncoderFaultScenario, run as run_encoder
+from .friction_fault import FrictionFaultScenario, run as run_friction
+from .powerlimit_fault import PowerLimitFaultScenario, run as run_powerlimit
+from .encoder_fault import EncoderFaultScenario, run as run_encoder
+
 
 # Create a global fault type that can be changed by users or client code
 _current_fault_type = "friction"

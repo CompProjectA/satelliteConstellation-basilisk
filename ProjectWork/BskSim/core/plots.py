@@ -3,26 +3,7 @@
 """
 Integrated Constellation Plotting
 
-Merges:
-- Claude's ConstellationPlotter (overview, formation check, comm Gantt, distance analysis)
-- Your FIXED plots module (show ALL satellites, real fault simulations only via fault_loader,
-  cluster communication dashboards, inter-satellite distances, Basilisk-friendly helpers)
 
-Usage styles supported:
-
-1) Cluster dictionary style (Claude compatibility)
-   plotter = ConstellationPlotter(output_dir="plots")
-   figpath = plotter.plot_constellation_overview(clusters_data, satellites_data)
-
-2) Basilisk spacecraft list style (Your code)
-   plots = generate_constellation_overview_plots(spacecraft_list, time_data, planet_mu)
-
-Additionally:
-- generate_fault_plots(...) uses ONLY real simulations via fault_loader (no synthetic fallback)
-- generate_cluster_communication_plots(...) and generate_inter_satellite_distance_plots(...)
-  are preserved and enhanced for ALL satellites.
-
-All functions save to ./plots by default when saving figures.
 """
 
 import os
