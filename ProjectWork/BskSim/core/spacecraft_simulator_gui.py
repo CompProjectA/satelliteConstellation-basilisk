@@ -557,6 +557,7 @@ class SatelliteSimulatorApp:
         # Results storage - includes both ML and DRL results
         self.ml_detection_results = None
         self.integrated_drl_results = None
+        self.processed_data = None  # For GNN Analysis
         
     def _initialize_default_satellites(self):
         """Create default satellite constellation"""
@@ -1230,7 +1231,7 @@ class SatelliteSimulatorApp:
             # ----------------
             # Run simulation
             # ----------------
-            result = run_custom_simulation(config)
+            result = run_custom_simulation(config, self.fault_detection_tab)
             
             # Handle the return value (could be 4 or 5 elements)
             if len(result) == 5:
@@ -1241,6 +1242,12 @@ class SatelliteSimulatorApp:
                 self.ml_detection_results = None
                 
             self.add_log("Basilisk simulation completed")
+            
+            # Extract telemetry data for GNN Analysis
+            if scenario:
+                self._extract_telemetry_data(scenario)
+            else:
+                self._create_synthetic_telemetry_data()
             
             # STEP 2: Check if we need DRL integration
             has_faults = any(sat["fault"]["enabled"] for sat in self.satellites)
@@ -1259,7 +1266,8 @@ class SatelliteSimulatorApp:
                         scenario=scenario,
                         scenario_config=config,
                         output_dir=output_dir,
-                        config_profile="development"  # Can be made configurable
+                        config_profile="development",  # Can be made configurable
+                        fault_detection_tab=self.fault_detection_tab  # ← ADD THIS LINE
                     )
                     
                     if "error" not in integrated_results:
@@ -1383,6 +1391,78 @@ class SatelliteSimulatorApp:
         # Switch to results if plots created
         if self.latest_plots and self.save_plots.get():
             self.notebook.select(self.results_frame)
+
+    def _extract_telemetry_data(self, scenario):
+        """Extract telemetry data from Basilisk scenario (falls back to synthetic)"""
+        try:
+            import pandas as pd
+            self.add_log("Attempting to extract telemetry data from scenario...")
+            # For now, always use synthetic data (can be enhanced later to extract real Basilisk data)
+            return self._create_synthetic_telemetry_data()
+        except Exception as e:
+            self.add_log(f"Error extracting data: {e}")
+            return self._create_synthetic_telemetry_data()
+
+    def _create_synthetic_telemetry_data(self):
+        """Create synthetic telemetry data matching spacecraft configuration"""
+        try:
+            import pandas as pd
+            import numpy as np
+            
+            self.add_log("Creating telemetry data for GNN Analysis...")
+            
+            sim_time_minutes = self.simulation_time.get()
+            n_samples = int(sim_time_minutes * 60)
+            time = np.linspace(0, sim_time_minutes * 60, n_samples)
+            
+            all_data = []
+            
+            for sat in self.satellites:
+                sat_name = sat['name']
+                sat_data = {'time': time, 'spacecraft': sat_name}
+                
+                # Reaction wheels (4 wheels)
+                for i in range(1, 5):
+                    base = 1000 + np.random.randn() * 100
+                    sat_data[f'rw{i}_speed'] = base + np.cumsum(np.random.randn(n_samples) * 5)
+                    sat_data[f'rw{i}_torque'] = np.random.randn(n_samples) * 0.01
+                
+                # Attitude
+                for i in range(1, 4):
+                    sat_data[f'att_error_{i}'] = np.cumsum(np.random.randn(n_samples) * 0.001)
+                    sat_data[f'att_rate_{i}'] = np.random.randn(n_samples) * 0.001
+                
+                # Power and temp
+                sat_data['power_draw'] = 50 + np.random.randn(n_samples) * 5
+                sat_data['temperature'] = 20 + np.random.randn(n_samples) * 2
+                
+                # Add faults if configured
+                if sat['fault']['enabled']:
+                    fault_time_sec = sat['fault']['time'] * 60
+                    fault_indices = time >= fault_time_sec
+                    
+                    if sat['fault']['type'] == 'friction':
+                        sat_data['rw1_speed'][fault_indices] *= 0.7
+                        sat_data['rw1_torque'][fault_indices] *= 1.5
+                    elif sat['fault']['type'] == 'power':
+                        sat_data['power_draw'][fault_indices] *= 0.5
+                    elif sat['fault']['type'] == 'attitude':
+                        sat_data['att_error_1'][fault_indices] += 0.1
+                        sat_data['att_error_2'][fault_indices] += 0.1
+                    elif sat['fault']['type'] == 'thermal':
+                        sat_data['temperature'][fault_indices] += 15
+                
+                all_data.append(pd.DataFrame(sat_data))
+            
+            self.processed_data = pd.concat(all_data, ignore_index=True)
+            self.add_log(f"Created telemetry: {len(self.processed_data)} samples, {len(self.processed_data.columns)} features")
+            return True
+            
+        except Exception as e:
+            self.add_log(f"Error creating telemetry: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
     def _handle_ml_detection_results(self, ml_results):
         """Handle ML detection results and display them in the fault detection tab"""

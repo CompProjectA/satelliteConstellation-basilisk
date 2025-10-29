@@ -20,7 +20,7 @@ Key features (all preserved; nothing removed):
 - Battery visualization panels (if battery faults enabled)
 - Full plotting coverage (supports both old/new plots APIs)
 - Detailed summary + binary verification + cameras/targets
-- REAL ML detection hook (run_real_ml_detection_on_scenario)
+- REAL ML detection via fault_detection_router (supports LSTM + Isolation Forest)
 """
 
 import os
@@ -63,13 +63,14 @@ except Exception as e:
     BSK_INSTALL_PATH = None
 
 # ----- REAL ML fault detection integration -----
+# Real ML fault detection integration with ROUTER
 try:
-    from real_ml_fault_detection import run_real_ml_detection_on_scenario
+    from fault_detection_router import run_fault_detection_on_scenario
     REAL_ML_AVAILABLE = True
-    print("Real ML fault detection available")
+    print("Fault detection router available (supports LSTM + Isolation Forest)")
 except ImportError as e:
     REAL_ML_AVAILABLE = False
-    print(f"Real ML fault detection not available: {e}")
+    print(f"Fault detection router not available: {e}")
 
 # ----- Cluster integration (existing feature) -----
 try:
@@ -1008,12 +1009,16 @@ def setup_enhanced_visualization(scSim, simTaskName, sc_objects, config, rich_cl
 # ---------------------------------------------------------------------
 # Main Simulation Function (your existing flow + enhanced target handling)
 # ---------------------------------------------------------------------
-def run_custom_simulation(config):
+def run_custom_simulation(config, fault_detection_tab=None):
     """
     Run a customized simulation based on the configuration.
 
+    Args:
+        config: SimulationConfig object
+        fault_detection_tab: Optional FaultDetectionTab for ML model selection
+
     Returns:
-        tuple: (scenario, viz, figureList, output_dir)
+        tuple: (scenario, viz, figureList, output_dir, ml_results)
     """
     # Check modules
     print("\nChecking module availability...")
@@ -1599,32 +1604,39 @@ def run_custom_simulation(config):
 
     # ---------------- REAL ML Detection ----------------
     print("\n" + "="*60)
-    print("SPRINT 4: REAL ML FAULT DETECTION")
+    print("FAULT DETECTION (LSTM OR ISOLATION FOREST)")
     print("="*60)
 
     ml_results = None
-    if REAL_ML_AVAILABLE:
+    if REAL_ML_AVAILABLE and fault_detection_tab:
         try:
-            print("Running client's ML model on REAL Basilisk data...")
+            print("Running fault detection via router...")
+            print(f"Selected model type: {fault_detection_tab.model_type_var.get()}")
 
-            ml_results = run_real_ml_detection_on_scenario(
+            # Use the router to select between LSTM and Isolation Forest
+            ml_results = run_fault_detection_on_scenario(
                 scenario=scenario,
+                fault_detection_tab=fault_detection_tab,
                 scenario_config=config,
                 output_dir=output_dir
             )
 
             if ml_results:
-                print("REAL ML FAULT DETECTION COMPLETED!")
-                summary = ml_results['summary']
-                print(f"   Spacecraft: {summary['total_spacecraft']}")
-                print(f"   ML Detections: {summary['total_detections']}")
-                if summary['detection_times']:
-                    print(f"   First Detection: {min(summary['detection_times']):.1f} min")
+                print("FAULT DETECTION COMPLETED!")
+                summary = ml_results.get('summary', {})
+                print(f"   Spacecraft: {summary.get('total_spacecraft', 0)}")
+                print(f"   Detections: {summary.get('total_detections', 0)}")
+                if summary.get('detection_times'):
+                    print(f"   First Detection: {min(summary.get('detection_times', [])):.1f} min")
 
         except Exception as e:
-            print(f"Real ML detection error: {e}")
+            print(f"Fault detection error: {e}")
+            import traceback
+            traceback.print_exc()
+    elif not fault_detection_tab:
+        print("WARNING: fault_detection_tab not provided - skipping fault detection")
     else:
-        print("Copy client's model: anomaly_detection_model.keras")
+        print("Fault detection router not available")
 
     # ---------------- Summary file ----------------
     try:
