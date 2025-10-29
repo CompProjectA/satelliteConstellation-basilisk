@@ -3,7 +3,7 @@
 main_integration.py
 
 Main integration script that combines:
-1. Your existing Basilisk fault detection
+1. Your existing Basilisk fault detection (via ROUTER - supports LSTM and Isolation Forest)
 2. DRL-based task reassignment 
 3. Integration with cluster constellation system
 
@@ -26,13 +26,13 @@ for path in [parent_dir, current_dir, bsk_rl_dir]:
     if path not in sys.path:
         sys.path.insert(0, path)
 
-# Import your existing components
+# Import fault detection ROUTER (supports both LSTM and Isolation Forest)
 try:
-    from real_ml_fault_detection import run_real_ml_detection_on_scenario
+    from fault_detection_router import run_fault_detection_on_scenario
     from drl_integration_bridge import DRLTaskReassignmentSystem, integrate_fault_detection_with_drl
     from drl_config import ConfigManager, create_config_manager
     FAULT_DETECTION_AVAILABLE = True
-    print("Fault detection components loaded")
+    print("Fault detection router loaded (supports LSTM + Isolation Forest)")
 except ImportError as e:
     FAULT_DETECTION_AVAILABLE = False
     print(f"Fault detection components not available: {e}")
@@ -134,13 +134,20 @@ class IntegratedFaultDetectionDRLSystem:
         
         print("Component initialization complete\n")
     
-    def run_complete_analysis(self, scenario, scenario_config=None, output_dir="logs") -> Dict:
+    def run_complete_analysis(self, scenario, scenario_config=None, output_dir="logs", 
+                            fault_detection_tab=None) -> Dict:
         """
         Run the complete integrated analysis:
-        1. Fault detection
+        1. Fault detection (via router - LSTM or Isolation Forest)
         2. DRL decision making
         3. Task reassignment
         4. Results integration
+        
+        Args:
+            scenario: Basilisk scenario object
+            scenario_config: Scenario configuration
+            output_dir: Output directory for results
+            fault_detection_tab: GUI fault detection tab (required for router)
         """
         
         print("="*80)
@@ -155,12 +162,12 @@ class IntegratedFaultDetectionDRLSystem:
         os.makedirs(analysis_output_dir, exist_ok=True)
         
         try:
-            # Step 1: Run fault detection
+            # Step 1: Run fault detection via router
             print("\nSTEP 1: FAULT DETECTION")
             print("-" * 50)
             
             self.fault_detection_results = self._run_fault_detection(
-                scenario, scenario_config, analysis_output_dir
+                scenario, scenario_config, analysis_output_dir, fault_detection_tab
             )
             
             if not self.fault_detection_results or "error" in self.fault_detection_results:
@@ -213,27 +220,50 @@ class IntegratedFaultDetectionDRLSystem:
             
             return {"error": str(e), "partial_results": True}
     
-    def _run_fault_detection(self, scenario, scenario_config, output_dir) -> Dict:
-        """Run ML-based fault detection"""
+    def _run_fault_detection(self, scenario, scenario_config, output_dir, 
+                            fault_detection_tab=None) -> Dict:
+        """
+        Run ML-based fault detection via ROUTER
+        
+        The router will automatically select between LSTM and Isolation Forest
+        based on what the user selected in the GUI.
+        """
         
         if not FAULT_DETECTION_AVAILABLE:
-            print("Fault detection not available - using mock results")
+            print("Fault detection router not available - using mock results")
+            return self._generate_mock_fault_results()
+        
+        if not fault_detection_tab:
+            print("WARNING: fault_detection_tab not provided - using mock results")
+            print("  Please pass fault_detection_tab to enable LSTM/Isolation Forest selection")
             return self._generate_mock_fault_results()
         
         try:
-            # Use your existing fault detection system
-            results = run_real_ml_detection_on_scenario(
-                scenario, scenario_config, output_dir
+            # Get selected model type from GUI
+            model_type = fault_detection_tab.model_type_var.get()
+            print(f"Using fault detection router (selected model: {model_type})")
+            
+            # Use the router - it will automatically route to LSTM or Isolation Forest
+            results = run_fault_detection_on_scenario(
+                scenario=scenario,
+                fault_detection_tab=fault_detection_tab,
+                scenario_config=scenario_config,
+                output_dir=output_dir
             )
             
             if results and "detections" in results:
                 total_detections = sum(len(detections) for detections in results["detections"].values())
+                print(f"  Fault detection completed: {total_detections} faults detected")
+            elif results and "summary" in results:
+                total_detections = results["summary"].get("total_detections", 0)
                 print(f"  Fault detection completed: {total_detections} faults detected")
             
             return results
             
         except Exception as e:
             print(f"  Fault detection error: {e}")
+            import traceback
+            traceback.print_exc()
             return {"error": str(e)}
     
     def _prepare_drl_state(self) -> np.ndarray:
@@ -410,7 +440,6 @@ class IntegratedFaultDetectionDRLSystem:
             print("    Warning: No healthy spacecraft available for reassignment")
             return plan
         
-        # Collect tasks from faulty spacecraft
         # Collect tasks from faulty spacecraft
         orphaned_tasks = []
         for faulty in faulty_sc:
@@ -763,7 +792,8 @@ class IntegratedFaultDetectionDRLSystem:
             print(f"Could not save partial results: {e}")
 
 
-def run_integrated_analysis(scenario, scenario_config=None, output_dir="logs", config_profile="development"):
+def run_integrated_analysis(scenario, scenario_config=None, output_dir="logs", 
+                           config_profile="development", fault_detection_tab=None):
     """
     Main function to run the complete integrated fault detection + DRL analysis
     
@@ -774,6 +804,7 @@ def run_integrated_analysis(scenario, scenario_config=None, output_dir="logs", c
         scenario_config: Configuration for your constellation scenario  
         output_dir: Directory to save results
         config_profile: Configuration profile ("development", "production", "research")
+        fault_detection_tab: GUI fault detection tab (REQUIRED for router to work)
     
     Returns:
         Dict containing complete analysis results
@@ -788,8 +819,13 @@ def run_integrated_analysis(scenario, scenario_config=None, output_dir="logs", c
     # Print configuration summary
     system.config_manager.print_config_summary()
     
-    # Run complete analysis
-    results = system.run_complete_analysis(scenario, scenario_config, output_dir)
+    # Run complete analysis with fault_detection_tab
+    results = system.run_complete_analysis(
+        scenario, 
+        scenario_config, 
+        output_dir,
+        fault_detection_tab  # Pass to enable router
+    )
     
     if "error" not in results:
         print("\nANALYSIS COMPLETED SUCCESSFULLY!")
@@ -857,14 +893,14 @@ def validate_integration_requirements() -> Dict[str, bool]:
     
     status = {
         "tensorflow": ML_AVAILABLE,
-        "fault_detection": FAULT_DETECTION_AVAILABLE, 
+        "fault_detection_router": FAULT_DETECTION_AVAILABLE, 
         "drl_task_reassignment": SIMPLE_DRL_AVAILABLE,
         "basilisk": True  # Assume available since we're in Basilisk environment
     }
     
     print("Integration Requirements Status:")
     for component, available in status.items():
-        symbol = "AVAILABLE" if available else "UNAVAILABLE"
+        symbol = "✓ AVAILABLE" if available else "✗ UNAVAILABLE"
         print(f"  {symbol}: {component.replace('_', ' ').title()}")
     
     return status
@@ -878,9 +914,9 @@ if __name__ == "__main__":
     requirements = validate_integration_requirements()
     
     if all(requirements.values()):
-        print("\nAll requirements satisfied - ready for integration!")
+        print("\n✓ All requirements satisfied - ready for integration!")
     else:
-        print("\nSome requirements missing:")
+        print("\n⚠ Some requirements missing:")
         for comp, avail in requirements.items():
             if not avail:
                 print(f"  - {comp.replace('_', ' ').title()}")
@@ -889,7 +925,9 @@ if __name__ == "__main__":
             print("  pip install tensorflow")
     
     print("\nUsage:")
-    print("1. Ensure simple_task_drl.py is in the same directory")
-    print("2. Run your Basilisk constellation simulation")
-    print("3. Call: run_integrated_analysis(scenario, config, output_dir)")
-    print("4. View comprehensive results in output directory")
+    print("1. Ensure fault_detection_router.py is available")
+    print("2. Ensure simple_task_drl.py is in the same directory")
+    print("3. Run your Basilisk constellation simulation")
+    print("4. Call: run_integrated_analysis(scenario, config, output_dir, fault_detection_tab=tab)")
+    print("5. View comprehensive results in output directory")
+    print("\nNOTE: fault_detection_tab parameter is REQUIRED for router to select between LSTM and Isolation Forest!")

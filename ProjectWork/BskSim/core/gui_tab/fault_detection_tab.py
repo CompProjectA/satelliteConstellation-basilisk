@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """
-fault_detection_tab.py (UPDATED WITH XAI MODEL SELECTION)
+fault_detection_tab.py (UPDATED WITH ISOLATION FOREST)
 
-Enhanced Fault Detection Tab with integrated LIME and SHAP model selection.
-Users can now choose between Autoencoder, LIME, and SHAP models from a dropdown.
+Enhanced Fault Detection Tab with integrated LIME, SHAP, and Isolation Forest model selection.
+Users can now choose between Autoencoder, Isolation Forest, LIME, and SHAP models from a dropdown.
 """
 
 import tkinter as tk
@@ -19,23 +19,26 @@ import sys
 
 class FaultDetectionTab:
     """
-    Enhanced Fault Detection Tab with XAI model selection
+    Enhanced Fault Detection Tab with XAI and Isolation Forest support
     """
     
     def __init__(self, parent_app, parent_frame):
-        """Initialize the fault detection tab with XAI support"""
+        """Initialize the fault detection tab with XAI and Isolation Forest support"""
         self.parent_app = parent_app
         self.parent_frame = parent_frame
         
         self.fault_detection_results = None
         self.ml_detector = None
-        self.xai_explainer = None  # NEW: XAI explainer instance
+        self.isolation_forest_detector = None  # NEW: Isolation Forest detector
+        self.xai_explainer = None
+        self.gnn_model = None  # NEW: GNN Autoencoder model
         self.detection_history = []
         self.monitoring_active = False
         
         # Check ML and XAI availability
         self.ml_available = self.check_ml_availability()
         self.xai_available = self.check_xai_availability()
+        self.sklearn_available = self.check_sklearn_availability()  # NEW: Check for sklearn
         
         # Create the tab UI
         self.create_tab_ui()
@@ -60,6 +63,14 @@ class FaultDetectionTab:
         except ImportError:
             return False
     
+    def check_sklearn_availability(self):
+        """Check if scikit-learn (for Isolation Forest) is available"""
+        try:
+            from sklearn.ensemble import IsolationForest
+            return True
+        except ImportError:
+            return False
+    
     def create_tab_ui(self):
         """Create the Fault Detection tab UI"""
         # Create a notebook for sub-tabs
@@ -70,24 +81,21 @@ class FaultDetectionTab:
         overview_frame = ttk.Frame(self.detection_notebook)
         config_frame = ttk.Frame(self.detection_notebook)
         results_frame = ttk.Frame(self.detection_notebook)
-        xai_frame = ttk.Frame(self.detection_notebook)  # NEW: XAI explanations tab
-        monitoring_frame = ttk.Frame(self.detection_notebook)
+        xai_frame = ttk.Frame(self.detection_notebook)
         analysis_frame = ttk.Frame(self.detection_notebook)
         
         # Add sub-tabs
         self.detection_notebook.add(overview_frame, text="Overview")
         self.detection_notebook.add(config_frame, text="ML Configuration")
         self.detection_notebook.add(results_frame, text="Detection Results")
-        self.detection_notebook.add(xai_frame, text="XAI Explanations")  # NEW
-        self.detection_notebook.add(monitoring_frame, text="Live Monitoring")
-        self.detection_notebook.add(analysis_frame, text="Analysis")
+        self.detection_notebook.add(xai_frame, text="XAI Explanations")
+        self.detection_notebook.add(analysis_frame, text="GNN Analysis")
         
         # Create tab contents
         self._create_overview_tab(overview_frame)
         self._create_config_tab(config_frame)
         self._create_results_tab(results_frame)
-        self._create_xai_tab(xai_frame)  # NEW: XAI tab
-        self._create_monitoring_tab(monitoring_frame)
+        self._create_xai_tab(xai_frame)
         self._create_analysis_tab(analysis_frame)
         
     def _create_overview_tab(self, parent):
@@ -96,11 +104,11 @@ class FaultDetectionTab:
         title_frame = ttk.Frame(parent)
         title_frame.pack(fill=tk.X, pady=(10, 20))
         
-        title_label = ttk.Label(title_frame, text="ML Fault Detection System with XAI", 
+        title_label = ttk.Label(title_frame, text="ML Fault Detection System with XAI & Isolation Forest", 
                                font=('Segoe UI', 16, 'bold'))
         title_label.pack()
         
-        subtitle_label = ttk.Label(title_frame, text="Real-time fault detection with LIME and SHAP explanations",
+        subtitle_label = ttk.Label(title_frame, text="Real-time fault detection with LSTM, Isolation Forest, LIME and SHAP explanations",
                                   font=('Segoe UI', 10), foreground='gray')
         subtitle_label.pack()
         
@@ -112,7 +120,7 @@ class FaultDetectionTab:
         ml_status_frame = ttk.Frame(status_frame)
         ml_status_frame.pack(fill=tk.X, pady=5)
         
-        ttk.Label(ml_status_frame, text="ML Model Status:").pack(side=tk.LEFT)
+        ttk.Label(ml_status_frame, text="LSTM Model Status:").pack(side=tk.LEFT)
         
         self.ml_status_label = ttk.Label(ml_status_frame, text="", font=('Segoe UI', 10, 'bold'))
         if self.ml_available:
@@ -121,7 +129,20 @@ class FaultDetectionTab:
             self.ml_status_label.config(text="Not Available", foreground='red')
         self.ml_status_label.pack(side=tk.LEFT, padx=10)
         
-        # XAI Status (NEW)
+        # Isolation Forest Status (NEW)
+        if_status_frame = ttk.Frame(status_frame)
+        if_status_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(if_status_frame, text="Isolation Forest Status:").pack(side=tk.LEFT)
+        
+        self.if_status_label = ttk.Label(if_status_frame, text="", font=('Segoe UI', 10, 'bold'))
+        if self.sklearn_available:
+            self.if_status_label.config(text="Available", foreground='green')
+        else:
+            self.if_status_label.config(text="Not Available (install scikit-learn)", foreground='red')
+        self.if_status_label.pack(side=tk.LEFT, padx=10)
+        
+        # XAI Status
         xai_status_frame = ttk.Frame(status_frame)
         xai_status_frame.pack(fill=tk.X, pady=5)
         
@@ -170,7 +191,7 @@ class FaultDetectionTab:
                                            foreground='green')
         self.success_rate_label.grid(row=2, column=1, sticky=tk.W, padx=10)
         
-        # XAI Explanations generated (NEW)
+        # XAI Explanations generated
         ttk.Label(stats_grid, text="XAI Explanations:").grid(row=3, column=0, sticky=tk.W, pady=2)
         self.xai_explanations_label = ttk.Label(stats_grid, text="0", font=('Segoe UI', 10, 'bold'), 
                                                foreground='purple')
@@ -196,12 +217,12 @@ class FaultDetectionTab:
                                              command=self.start_fault_detection)
         self.start_detection_btn.pack(side=tk.LEFT, padx=5)
         
-        # NEW: Generate XAI button
+        # Generate XAI button
         self.generate_xai_btn = ttk.Button(buttons_frame, text="Generate XAI", 
                                           command=self.generate_xai_explanations,
                                           style="Accent.TButton")
         self.generate_xai_btn.pack(side=tk.LEFT, padx=5)
-        self.generate_xai_btn.config(state="disabled")  # Disabled until detection complete
+        self.generate_xai_btn.config(state="disabled")
         
         self.simulate_btn = ttk.Button(buttons_frame, text="Simulate Results", 
                                       command=self.simulate_detection_results)
@@ -233,19 +254,22 @@ class FaultDetectionTab:
         self.recent_detections_listbox.insert(tk.END, "No recent detections...")
         
     def _create_config_tab(self, parent):
-        """Create the ML configuration tab content with XAI model selection"""
+        """Create the ML configuration tab content with Isolation Forest support"""
         # ML Model Configuration
         model_frame = ttk.LabelFrame(parent, text="ML Model Selection", padding=15)
         model_frame.pack(fill=tk.X, padx=20, pady=10)
         
-        # NEW: Model type selection (Autoencoder, LIME, SHAP)
+        # Model type selection (Autoencoder and Isolation Forest only)
         model_type_frame = ttk.Frame(model_frame)
         model_type_frame.pack(fill=tk.X, pady=10)
         
-        ttk.Label(model_type_frame, text="Select Model Type:", font=('Segoe UI', 10, 'bold')).pack(side=tk.LEFT)
+        ttk.Label(model_type_frame, text="Select Model Type:", font=('Segoe UI', 10, 'bold')).pack(anchor=tk.W)
         
         self.model_type_var = tk.StringVar(value="Autoencoder")
-        model_types = ["Autoencoder (Base ML)", "LIME (Local Explanations)", "SHAP (Global Explanations)", "All Models (Ensemble)"]
+        model_types = [
+            "Autoencoder (LSTM/Deep Learning)",
+            "Isolation Forest (Unsupervised)"
+        ]
         
         for model_type in model_types:
             rb = ttk.Radiobutton(
@@ -257,11 +281,11 @@ class FaultDetectionTab:
             )
             rb.pack(anchor=tk.W, padx=(20, 0), pady=2)
         
-        # Model file selection (only for Autoencoder or when browsing)
+        # Model file selection (only for Autoencoder)
         file_frame = ttk.Frame(model_frame)
         file_frame.pack(fill=tk.X, pady=5)
         
-        ttk.Label(file_frame, text="Base Model File:").pack(side=tk.LEFT)
+        ttk.Label(file_frame, text="Base Model File (for LSTM):").pack(side=tk.LEFT)
         
         self.model_path_var = tk.StringVar(value="anomaly_detection_model.keras")
         self.model_path_entry = ttk.Entry(file_frame, textvariable=self.model_path_var, width=50)
@@ -271,7 +295,40 @@ class FaultDetectionTab:
                                           command=self.browse_model_file)
         self.browse_model_btn.pack(side=tk.RIGHT, padx=5)
         
-        # XAI Configuration (NEW)
+        # Isolation Forest Configuration (NEW)
+        if_config_frame = ttk.LabelFrame(parent, text="Isolation Forest Configuration", padding=15)
+        if_config_frame.pack(fill=tk.X, padx=20, pady=10)
+        
+        # Contamination parameter
+        contam_frame = ttk.Frame(if_config_frame)
+        contam_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(contam_frame, text="Contamination:").grid(row=0, column=0, sticky=tk.W)
+        self.if_contamination_var = tk.DoubleVar(value=0.1)
+        ttk.Scale(contam_frame, from_=0.01, to=0.5, variable=self.if_contamination_var, 
+                 orient=tk.HORIZONTAL, length=200).grid(row=0, column=1, padx=5, sticky=tk.W)
+        self.if_contamination_label = ttk.Label(contam_frame, text="10.0%")
+        self.if_contamination_label.grid(row=0, column=2, sticky=tk.W, padx=5)
+        ttk.Label(contam_frame, text="(expected % of anomalies)").grid(row=0, column=3, sticky=tk.W, padx=5)
+        
+        # Update contamination label
+        def update_contam_label(val):
+            self.if_contamination_label.config(text=f"{float(val)*100:.1f}%")
+        
+        contam_frame.grid_columnconfigure(1, weight=1)
+        self.if_contamination_var.trace('w', lambda *args: update_contam_label(self.if_contamination_var.get()))
+        
+        # Number of estimators
+        estimators_frame = ttk.Frame(if_config_frame)
+        estimators_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(estimators_frame, text="N Estimators:").grid(row=0, column=0, sticky=tk.W)
+        self.if_estimators_var = tk.IntVar(value=150)
+        ttk.Spinbox(estimators_frame, from_=50, to=500, textvariable=self.if_estimators_var, 
+                   width=10, increment=50).grid(row=0, column=1, padx=5, sticky=tk.W)
+        ttk.Label(estimators_frame, text="(number of isolation trees)").grid(row=0, column=2, sticky=tk.W, padx=5)
+        
+        # XAI Configuration
         xai_config_frame = ttk.LabelFrame(parent, text="XAI Configuration", padding=15)
         xai_config_frame.pack(fill=tk.X, padx=20, pady=10)
         
@@ -355,33 +412,6 @@ class FaultDetectionTab:
         self.threshold_detection_cb = ttk.Checkbutton(methods_frame, text="Threshold-based Detection", 
                                                      variable=self.threshold_detection_var)
         self.threshold_detection_cb.pack(anchor=tk.W, pady=2)
-        
-        # Real-time Configuration
-        realtime_frame = ttk.LabelFrame(parent, text="Real-time Detection", padding=15)
-        realtime_frame.pack(fill=tk.X, padx=20, pady=10)
-        
-        # Enable real-time
-        self.realtime_var = tk.BooleanVar(value=False)
-        self.realtime_cb = ttk.Checkbutton(realtime_frame, text="Enable Real-time Monitoring", 
-                                          variable=self.realtime_var,
-                                          command=self.toggle_realtime_monitoring)
-        self.realtime_cb.pack(anchor=tk.W, pady=5)
-        
-        # Real-time parameters
-        realtime_params_frame = ttk.Frame(realtime_frame)
-        realtime_params_frame.pack(fill=tk.X, pady=5)
-        
-        # Update interval
-        ttk.Label(realtime_params_frame, text="Update Interval (sec):").grid(row=0, column=0, sticky=tk.W)
-        self.update_interval_var = tk.IntVar(value=5)
-        ttk.Spinbox(realtime_params_frame, from_=1, to=60, textvariable=self.update_interval_var, 
-                   width=10).grid(row=0, column=1, padx=5, sticky=tk.W)
-        
-        # Buffer size
-        ttk.Label(realtime_params_frame, text="Data Buffer Size:").grid(row=1, column=0, sticky=tk.W)
-        self.buffer_size_var = tk.IntVar(value=100)
-        ttk.Spinbox(realtime_params_frame, from_=10, to=1000, textvariable=self.buffer_size_var, 
-                   width=10).grid(row=1, column=1, padx=5, sticky=tk.W)
     
     def on_model_type_changed(self):
         """Handle model type selection change"""
@@ -391,30 +421,21 @@ class FaultDetectionTab:
         # Update model info label
         if model_type == "Autoencoder":
             self.model_info_label.config(
-                text="Base autoencoder model for anomaly detection", 
+                text="LSTM-based autoencoder model for supervised anomaly detection\nRequires .keras model file", 
                 foreground='blue'
             )
-        elif model_type == "LIME":
+            self.model_path_entry.config(state="normal")
+            self.browse_model_btn.config(state="normal")
+        elif model_type == "Isolation":
             self.model_info_label.config(
-                text="LIME will explain individual anomaly detections", 
+                text="Unsupervised Isolation Forest - no model file needed\nTrained on normal telemetry data", 
                 foreground='green'
             )
-        elif model_type == "SHAP":
-            self.model_info_label.config(
-                text="SHAP will show global feature importance across all detections", 
-                foreground='purple'
-            )
-        elif model_type == "All":
-            self.model_info_label.config(
-                text="Ensemble mode: Use all models for comprehensive analysis", 
-                foreground='orange'
-            )
-    
-    # [Continue with remaining methods from original file...]
-    # The rest of the methods remain largely the same, with additions for XAI
+            self.model_path_entry.config(state="disabled")
+            self.browse_model_btn.config(state="disabled")
     
     def _create_xai_tab(self, parent):
-        """NEW: Create the XAI explanations tab"""
+        """Create the XAI explanations tab"""
         # Title
         title_frame = ttk.Frame(parent)
         title_frame.pack(fill=tk.X, padx=10, pady=10)
@@ -466,7 +487,7 @@ class FaultDetectionTab:
         self.xai_canvas.draw()
     
     def generate_xai_explanations(self):
-        """NEW: Generate LIME and/or SHAP explanations for detected faults"""
+        """Generate LIME and/or SHAP explanations for detected faults"""
         if not self.fault_detection_results:
             messagebox.showwarning("No Results", "Please run fault detection first!")
             return
@@ -479,7 +500,7 @@ class FaultDetectionTab:
             if response:
                 messagebox.showinfo("Install XAI Libraries", 
                                   "To enable XAI explanations, install:\n\n" +
-                                  "pip install --user shap lime\n\n" +
+                                  "pip install shap lime\n\n" +
                                   "Then restart the application.")
             return
         
@@ -518,16 +539,16 @@ class FaultDetectionTab:
                 self.detection_notebook.select(3)
                 
                 # Show success message
-                success_msg = f"✓ XAI Explanations Generated!\n\n"
+                success_msg = f"XAI Explanations Generated!\n\n"
                 success_msg += f"LIME Explanations: {num_lime}\n"
                 success_msg += f"SHAP Analysis: {'Yes' if has_shap else 'No'}\n\n"
                 success_msg += f"Results are now displayed in the XAI Explanations tab.\n\n"
                 success_msg += f"Plots also saved to:\n"
                 if num_lime > 0:
-                    success_msg += f"  • lime_anomaly_1.png\n"
+                    success_msg += f"  - lime_anomaly_1.png\n"
                 if has_shap:
-                    success_msg += f"  • shap_summary.png\n"
-                    success_msg += f"  • shap_waterfall_anomaly_1.png\n"
+                    success_msg += f"  - shap_summary.png\n"
+                    success_msg += f"  - shap_waterfall_anomaly_1.png\n"
                 
                 messagebox.showinfo("XAI Complete", success_msg)
                 
@@ -544,8 +565,6 @@ class FaultDetectionTab:
         finally:
             self.generate_xai_btn.config(state="normal", text="Generate XAI")
     
-
-            
     def display_xai_results(self, xai_results):
         """Display XAI results by loading saved PNG files"""
         print("\nDEBUG: display_xai_results called")
@@ -608,123 +627,6 @@ class FaultDetectionTab:
             print(f"ERROR: {e}")
             import traceback
             traceback.print_exc()
-    
-    def _display_lime_plot(self, lime_explanation, ax):
-        """Display a LIME explanation in the given axis"""
-        try:
-            print("DEBUG: Attempting to display LIME plot...")
-            
-            # Get the explanation as a list of (feature, importance) tuples
-            exp_list = lime_explanation.as_list()
-            print(f"DEBUG: LIME explanation has {len(exp_list)} features")
-            
-            if len(exp_list) == 0:
-                ax.text(0.5, 0.5, "No LIME features to display", 
-                       ha='center', va='center', transform=ax.transAxes, fontsize=12)
-                ax.axis('off')
-                return
-            
-            # Extract features and values (top 15)
-            num_features = min(15, len(exp_list))
-            features = [feat for feat, _ in exp_list[:num_features]]
-            values = [val for _, val in exp_list[:num_features]]
-            
-            print(f"DEBUG: Displaying {num_features} features")
-            print(f"DEBUG: Features: {features[:3]}...")  # Show first 3
-            print(f"DEBUG: Values: {values[:3]}...")
-            
-            # Create horizontal bar plot
-            colors = ['green' if v > 0 else 'red' for v in values]
-            y_pos = np.arange(len(features))
-            
-            ax.barh(y_pos, values, color=colors, alpha=0.7)
-            ax.set_yticks(y_pos)
-            ax.set_yticklabels(features, fontsize=8)
-            ax.set_xlabel('Feature Importance', fontsize=10)
-            ax.set_title('LIME: Top Features for Anomaly Detection', fontsize=12, fontweight='bold')
-            ax.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
-            ax.grid(axis='x', alpha=0.3)
-            
-            # Add legend
-            from matplotlib.patches import Patch
-            legend_elements = [
-                Patch(facecolor='green', alpha=0.7, label='Increases anomaly score'),
-                Patch(facecolor='red', alpha=0.7, label='Decreases anomaly score')
-            ]
-            ax.legend(handles=legend_elements, loc='lower right', fontsize=8)
-            
-            print("DEBUG: LIME plot created successfully")
-            
-        except Exception as e:
-            print(f"ERROR in _display_lime_plot: {e}")
-            import traceback
-            traceback.print_exc()
-            
-            ax.text(0.5, 0.5, f"Error displaying LIME:\n{str(e)}\n\nCheck console for details\nPlots saved to working directory", 
-                   ha='center', va='center', transform=ax.transAxes, fontsize=10, wrap=True)
-            ax.axis('off')
-    
-    def _display_shap_plot(self, shap_values, xai_results, ax):
-        """Display SHAP summary in the given axis"""
-        try:
-            print("DEBUG: Attempting to display SHAP plot...")
-            print(f"DEBUG: SHAP values shape: {shap_values.shape if hasattr(shap_values, 'shape') else type(shap_values)}")
-            
-            # Get the explainer from results
-            explainer = xai_results.get('explainer')
-            
-            # Flatten SHAP values if needed
-            if len(shap_values.shape) > 2:
-                shap_flat = shap_values.reshape(shap_values.shape[0], -1)
-            else:
-                shap_flat = shap_values
-            
-            print(f"DEBUG: Flattened SHAP shape: {shap_flat.shape}")
-            
-            # Get top features by absolute mean SHAP value
-            mean_abs_shap = np.mean(np.abs(shap_flat), axis=0)
-            print(f"DEBUG: Mean absolute SHAP computed, shape: {mean_abs_shap.shape}")
-            
-            top_indices = np.argsort(mean_abs_shap)[-15:][::-1]  # Top 15
-            
-            # Get feature names
-            if explainer:
-                feature_names = explainer._get_flat_feature_names()
-                print(f"DEBUG: Got {len(feature_names)} feature names from explainer")
-            else:
-                feature_names = [f"Feature_{i}" for i in range(shap_flat.shape[1])]
-                print(f"DEBUG: Using default feature names")
-            
-            # Create bar plot of mean absolute SHAP values
-            top_features = [feature_names[i] for i in top_indices]
-            top_values = mean_abs_shap[top_indices]
-            
-            print(f"DEBUG: Top 3 features: {top_features[:3]}")
-            print(f"DEBUG: Top 3 values: {top_values[:3]}")
-            
-            y_pos = np.arange(len(top_features))
-            ax.barh(y_pos, top_values, color='steelblue', alpha=0.7)
-            ax.set_yticks(y_pos)
-            ax.set_yticklabels(top_features, fontsize=8)
-            ax.set_xlabel('Mean |SHAP Value|', fontsize=10)
-            ax.set_title('SHAP: Global Feature Importance', fontsize=12, fontweight='bold')
-            ax.grid(axis='x', alpha=0.3)
-            
-            # Add note
-            ax.text(0.98, 0.02, f'Based on {shap_flat.shape[0]} samples', 
-                   transform=ax.transAxes, ha='right', va='bottom', 
-                   fontsize=8, style='italic', color='gray')
-            
-            print("DEBUG: SHAP plot created successfully")
-            
-        except Exception as e:
-            print(f"ERROR in _display_shap_plot: {e}")
-            import traceback
-            traceback.print_exc()
-            
-            ax.text(0.5, 0.5, f"Error displaying SHAP:\n{str(e)}\n\nCheck console for details\nPlots saved to working directory", 
-                   ha='center', va='center', transform=ax.transAxes, fontsize=10, wrap=True)
-            ax.axis('off')
     
     def export_xai_results(self):
         """Export XAI results to folder"""
@@ -803,79 +705,101 @@ class FaultDetectionTab:
         
         self.results_summary_text.insert(tk.END, "Detection results summary will appear here...")
     
-    def _create_monitoring_tab(self, parent):
-        """Create the live monitoring tab content"""
-        # Monitoring controls
-        controls_frame = ttk.Frame(parent)
-        controls_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        self.monitoring_status_label = ttk.Label(controls_frame, text="Monitoring Inactive", 
-                                                font=('Segoe UI', 10, 'bold'), foreground='red')
-        self.monitoring_status_label.pack(side=tk.LEFT)
-        
-        # Spacecraft selection
-        ttk.Label(controls_frame, text="Monitor:").pack(side=tk.RIGHT, padx=5)
-        self.monitoring_spacecraft_var = tk.StringVar(value="All Spacecraft")
-        self.monitoring_spacecraft_combo = ttk.Combobox(controls_frame, 
-                                                       textvariable=self.monitoring_spacecraft_var,
-                                                       values=["All Spacecraft"])
-        self.monitoring_spacecraft_combo.pack(side=tk.RIGHT, padx=5)
-        
-        # Live plot frame
-        plot_frame = ttk.LabelFrame(parent, text="Real-time Anomaly Detection", padding=10)
-        plot_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        
-        # Create matplotlib figure
-        self.monitoring_figure = Figure(figsize=(10, 6), dpi=100)
-        self.monitoring_canvas = FigureCanvasTkAgg(self.monitoring_figure, plot_frame)
-        self.monitoring_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        
-        # Initialize empty plot
-        self.init_monitoring_plot()
-    
     def _create_analysis_tab(self, parent):
-        """Create the analysis tab content"""
-        # Analysis controls
-        controls_frame = ttk.Frame(parent)
-        controls_frame.pack(fill=tk.X, padx=10, pady=5)
+        """Create the GNN Autoencoder Analysis tab with OSHAD-CSL implementation"""
+        # Title
+        title_frame = ttk.Frame(parent)
+        title_frame.pack(fill=tk.X, pady=10)
         
-        ttk.Label(controls_frame, text="Analysis Type:").pack(side=tk.LEFT)
+        ttk.Label(title_frame, text="GNN Autoencoder Analysis (OSHAD-CSL)", 
+                 font=('Segoe UI', 14, 'bold')).pack()
+        ttk.Label(title_frame, text="Online Spacecraft Health Anomaly Detection with Causal Structure Learning",
+                 font=('Segoe UI', 10), foreground='gray').pack()
         
-        self.analysis_type_var = tk.StringVar(value="Detection Confidence Over Time")
-        analysis_types = [
-            "Detection Confidence Over Time",
-            "Fault Distribution by Spacecraft", 
-            "Detection Method Comparison",
-            "Error Rate Analysis",
-            "Performance Metrics"
-        ]
-        self.analysis_type_combo = ttk.Combobox(controls_frame, textvariable=self.analysis_type_var,
-                                               values=analysis_types, state="readonly")
-        self.analysis_type_combo.pack(side=tk.LEFT, padx=5)
+        # Configuration frame
+        config_frame = ttk.LabelFrame(parent, text="GNN Configuration", padding=10)
+        config_frame.pack(fill=tk.X, padx=20, pady=10)
         
-        ttk.Button(controls_frame, text="Generate Analysis", 
-                  command=self.generate_analysis).pack(side=tk.LEFT, padx=5)
+        # Parameters
+        param_grid = ttk.Frame(config_frame)
+        param_grid.pack(fill=tk.X)
         
-        # Analysis plot frame
-        plot_frame = ttk.LabelFrame(parent, text="Analysis Results", padding=10)
-        plot_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        ttk.Label(param_grid, text="Sequence Length:").grid(row=0, column=0, sticky='w', padx=5, pady=5)
+        self.gnn_seq_len_var = tk.IntVar(value=10)
+        ttk.Spinbox(param_grid, from_=5, to=50, textvariable=self.gnn_seq_len_var, 
+                   width=10).grid(row=0, column=1, sticky='w', padx=5, pady=5)
         
-        # Create matplotlib figure for analysis
-        self.analysis_figure = Figure(figsize=(10, 8), dpi=100)
-        self.analysis_canvas = FigureCanvasTkAgg(self.analysis_figure, plot_frame)
-        self.analysis_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-    
-    def init_monitoring_plot(self):
-        """Initialize the monitoring plot"""
-        self.monitoring_figure.clear()
-        ax = self.monitoring_figure.add_subplot(111)
-        ax.set_title("Real-time Fault Detection Monitoring")
-        ax.set_xlabel("Time (minutes)")
-        ax.set_ylabel("Anomaly Score")
-        ax.grid(True, alpha=0.3)
-        ax.text(0.5, 0.5, "Start monitoring to see live data...", 
-               ha='center', va='center', transform=ax.transAxes)
-        self.monitoring_canvas.draw()
+        ttk.Label(param_grid, text="Hidden Dimensions:").grid(row=0, column=2, sticky='w', padx=5, pady=5)
+        self.gnn_hidden_dim_var = tk.IntVar(value=16)
+        ttk.Spinbox(param_grid, from_=8, to=64, textvariable=self.gnn_hidden_dim_var, 
+                   width=10).grid(row=0, column=3, sticky='w', padx=5, pady=5)
+        
+        ttk.Label(param_grid, text="Epochs:").grid(row=1, column=0, sticky='w', padx=5, pady=5)
+        self.gnn_epochs_var = tk.IntVar(value=300)
+        ttk.Spinbox(param_grid, from_=100, to=1000, textvariable=self.gnn_epochs_var, 
+                   width=10, increment=50).grid(row=1, column=1, sticky='w', padx=5, pady=5)
+        
+        ttk.Label(param_grid, text="Learning Rate:").grid(row=1, column=2, sticky='w', padx=5, pady=5)
+        self.gnn_lr_var = tk.DoubleVar(value=0.001)
+        ttk.Entry(param_grid, textvariable=self.gnn_lr_var, width=10).grid(row=1, column=3, sticky='w', padx=5, pady=5)
+        
+        ttk.Label(param_grid, text="POT Quantile:").grid(row=2, column=0, sticky='w', padx=5, pady=5)
+        self.gnn_pot_q_var = tk.DoubleVar(value=0.01)
+        ttk.Entry(param_grid, textvariable=self.gnn_pot_q_var, width=10).grid(row=2, column=1, sticky='w', padx=5, pady=5)
+        
+        # Control buttons
+        button_frame = ttk.Frame(config_frame)
+        button_frame.pack(pady=10)
+        
+        ttk.Button(button_frame, text="Train GNN Model", 
+                  command=self.train_gnn_model).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Run Analysis", 
+                  command=self.run_gnn_analysis).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Export Results", 
+                  command=self.export_gnn_results).pack(side=tk.LEFT, padx=5)
+        
+        # Status label
+        self.gnn_status_label = ttk.Label(config_frame, text="Ready to train", foreground='gray')
+        self.gnn_status_label.pack()
+        
+        # Create notebook for visualizations
+        viz_notebook = ttk.Notebook(parent)
+        viz_notebook.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        # Anomaly Detection Plot
+        anomaly_frame = ttk.Frame(viz_notebook)
+        viz_notebook.add(anomaly_frame, text="Anomaly Detection")
+        
+        self.gnn_anomaly_figure = Figure(figsize=(10, 5))
+        self.gnn_anomaly_canvas = FigureCanvasTkAgg(self.gnn_anomaly_figure, anomaly_frame)
+        self.gnn_anomaly_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Causal Graph Plot
+        causal_frame = ttk.Frame(viz_notebook)
+        viz_notebook.add(causal_frame, text="Causal Graph")
+        
+        self.gnn_causal_figure = Figure(figsize=(10, 6))
+        self.gnn_causal_canvas = FigureCanvasTkAgg(self.gnn_causal_figure, causal_frame)
+        self.gnn_causal_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Training History Plot
+        training_frame = ttk.Frame(viz_notebook)
+        viz_notebook.add(training_frame, text="Training History")
+        
+        self.gnn_training_figure = Figure(figsize=(10, 5))
+        self.gnn_training_canvas = FigureCanvasTkAgg(self.gnn_training_figure, training_frame)
+        self.gnn_training_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Results text
+        results_frame = ttk.Frame(viz_notebook)
+        viz_notebook.add(results_frame, text="Detailed Results")
+        
+        text_scroll = ttk.Scrollbar(results_frame)
+        text_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.gnn_results_text = tk.Text(results_frame, wrap=tk.WORD, yscrollcommand=text_scroll.set)
+        self.gnn_results_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        text_scroll.config(command=self.gnn_results_text.yview)
     
     def check_for_default_model(self):
         """Check if default model file exists and set it"""
@@ -885,7 +809,6 @@ class FaultDetectionTab:
             "../../anomaly_detection_model.keras",
             os.path.join(os.path.dirname(__file__), "anomaly_detection_model.keras"),
             os.path.join(os.path.dirname(__file__), "..", "anomaly_detection_model.keras"),
-            r"C:\Uni\Uni\satelliteConstellation-basilisk\ProjectWork\DRL\Agent-based-Architecture-for-Proactive-Fault-Tolerance-and-Management-in-Small-Satellite-Missions\anomaly_detection_model.keras"
         ]
         
         for path in possible_paths:
@@ -918,8 +841,85 @@ class FaultDetectionTab:
             self.model_info_label.config(text=f"Selected: {os.path.basename(file_path)}")
     
     def load_ml_model(self):
-        """Load the ML model based on selected type"""
+        """Load the ML model based on selected type - UPDATED WITH ISOLATION FOREST"""
         model_type = self.model_type_var.get()
+        
+        # Handle Isolation Forest separately
+        if model_type == "Isolation":
+            if not self.sklearn_available:
+                messagebox.showerror(
+                    "scikit-learn Not Available",
+                    "Isolation Forest requires scikit-learn.\n\n" +
+                    "Install with: pip install scikit-learn\n\n" +
+                    "Then restart the application."
+                )
+                return
+            
+            try:
+                from isolation_forest_fault_detection import SatelliteIsolationForestDetector
+                
+                self.parent_app.add_log(f"Initializing Isolation Forest detector...")
+                self.model_info_label.config(text="Initializing Isolation Forest...", foreground='orange')
+                self.parent_app.root.update()
+                
+                # Create Isolation Forest detector with configured parameters
+                self.isolation_forest_detector = SatelliteIsolationForestDetector(
+                    contamination=self.if_contamination_var.get(),
+                    n_estimators=self.if_estimators_var.get(),
+                    random_state=42
+                )
+                
+                self.parent_app.add_log("Isolation Forest detector initialized successfully")
+                
+                # Update UI
+                status_msg = "Isolation Forest Ready!"
+                self.model_info_label.config(
+                    text=status_msg + f"\n" +
+                         f"Algorithm: Unsupervised Anomaly Detection\n" +
+                         f"Contamination: {self.if_contamination_var.get()*100:.1f}%\n" +
+                         f"N Estimators: {self.if_estimators_var.get()}\n" +
+                         f"Note: Will train on normal spacecraft telemetry", 
+                    foreground='green'
+                )
+                
+                self.if_status_label.config(text="Loaded", foreground='green')
+                self.parent_app.add_log("Isolation Forest configuration complete")
+                self.parent_app.update_status_counts()
+                
+                success_msg = f"Isolation Forest Initialized!\n\n"
+                success_msg += f"Algorithm: Unsupervised Anomaly Detection\n"
+                success_msg += f"Contamination: {self.if_contamination_var.get()*100:.1f}% (expected anomalies)\n"
+                success_msg += f"Number of Trees: {self.if_estimators_var.get()}\n\n"
+                success_msg += f"How it works:\n"
+                success_msg += f"1. Trains on normal (fault-free) spacecraft telemetry\n"
+                success_msg += f"2. Detects anomalies by measuring isolation difficulty\n"
+                success_msg += f"3. No labeled data required\n"
+                success_msg += f"4. Extracts 22 telemetry features automatically\n\n"
+                success_msg += f"Features include:\n"
+                success_msg += f"- RW speeds, torques, derivatives\n"
+                success_msg += f"- Attitude error and rates\n"
+                success_msg += f"- Cross-wheel correlations\n"
+                success_msg += f"- System momentum and power\n\n"
+                success_msg += f"Ready for detection!"
+                
+                messagebox.showinfo("Isolation Forest Ready", success_msg)
+                return
+                
+            except ImportError as e:
+                error_msg = f"Isolation Forest module not found: {str(e)}\n\nMake sure isolation_forest_fault_detection.py is in the same directory."
+                self.model_info_label.config(text="Isolation Forest module not found", foreground='red')
+                self.parent_app.add_log(error_msg)
+                messagebox.showerror("Import Error", error_msg)
+                return
+                
+            except Exception as e:
+                error_msg = f"Error initializing Isolation Forest: {str(e)}"
+                self.model_info_label.config(text=error_msg, foreground='red')
+                self.parent_app.add_log(error_msg)
+                messagebox.showerror("Error", error_msg)
+                return
+        
+        # For LSTM/Autoencoder models, check for model file
         model_path = self.model_path_var.get().strip()
         
         if not model_path:
@@ -945,25 +945,25 @@ class FaultDetectionTab:
             
             if self.ml_detector.is_loaded:
                 # Check if we need to initialize XAI explainers
-                if model_type in ["LIME", "SHAP", "All"] and self.xai_available:
+                if model_type in ["LIME", "SHAP", "Ensemble"] and self.xai_available:
                     self.parent_app.add_log(f"Base model loaded, initializing {model_type} explainer...")
                     
                     try:
                         from satellite_xai import SatelliteXAIExplainer
                         
                         self.xai_explainer = SatelliteXAIExplainer(self.ml_detector.model)
-                        self.parent_app.add_log(f"✓ {model_type} explainer initialized successfully")
+                        self.parent_app.add_log(f"{model_type} explainer initialized successfully")
                         
-                        xai_info = f"\n\n📊 XAI Explainer: {model_type}\n"
+                        xai_info = f"\n\nXAI Explainer: {model_type}\n"
                         xai_info += f"Base Detector: Autoencoder\n"
-                        if model_type in ["LIME", "All"]:
+                        if model_type in ["LIME", "Ensemble"]:
                             xai_info += f"LIME Features: {self.lime_features_var.get()}\n"
-                        if model_type in ["SHAP", "All"]:
+                        if model_type in ["SHAP", "Ensemble"]:
                             xai_info += f"SHAP Type: {self.shap_type_var.get()}\n"
                             xai_info += f"SHAP Samples: {self.shap_samples_var.get()}\n"
                         xai_info += "\nNote: LIME/SHAP wrap around the base autoencoder"
                     except ImportError as e:
-                        xai_info = f"\n\n⚠ XAI libraries not available\nInstall: pip install shap lime"
+                        xai_info = f"\n\nXAI libraries not available\nInstall: pip install shap lime"
                         self.xai_explainer = None
                         self.parent_app.add_log(f"Warning: Could not initialize XAI - {e}")
                 else:
@@ -972,11 +972,11 @@ class FaultDetectionTab:
                 
                 # Create status message based on model type
                 if model_type == "Autoencoder":
-                    status_msg = f"✓ Autoencoder loaded successfully!"
+                    status_msg = f"Autoencoder loaded successfully!"
                 elif model_type in ["LIME", "SHAP"]:
-                    status_msg = f"✓ {model_type} Explainer Ready!"
-                else:  # All
-                    status_msg = f"✓ Full XAI Suite Ready!"
+                    status_msg = f"{model_type} Explainer Ready!"
+                else:  # Ensemble
+                    status_msg = f"Full XAI Suite Ready!"
                 
                 self.model_info_label.config(
                     text=status_msg + f"\n" +
@@ -988,7 +988,7 @@ class FaultDetectionTab:
                 )
                 
                 # Update status label
-                if model_type == "All":
+                if model_type == "Ensemble":
                     self.ml_status_label.config(text="Autoencoder + XAI", foreground='green')
                 elif model_type == "LIME":
                     self.ml_status_label.config(text="Autoencoder + LIME", foreground='green')
@@ -997,7 +997,7 @@ class FaultDetectionTab:
                 else:
                     self.ml_status_label.config(text="Autoencoder Only", foreground='green')
                 
-                self.parent_app.add_log(f"✓ {model_type} configuration loaded successfully")
+                self.parent_app.add_log(f"{model_type} configuration loaded successfully")
                 
                 # Update main GUI status
                 self.parent_app.update_status_counts()
@@ -1015,22 +1015,22 @@ class FaultDetectionTab:
                     success_msg += f"Base Model: {os.path.basename(model_path)}\n"
                     success_msg += f"Input shape: {self.ml_detector.model.input_shape}\n"
                     success_msg += f"Parameters: {self.ml_detector.model.count_params():,}\n\n"
-                    success_msg += f"✓ Autoencoder will detect faults\n"
-                    success_msg += f"✓ {model_type} will explain WHY faults were detected\n\n"
+                    success_msg += f"Autoencoder will detect faults\n"
+                    success_msg += f"{model_type} will explain WHY faults were detected\n\n"
                     if model_type == "LIME":
                         success_msg += f"LIME explains individual detections\n"
                         success_msg += f"Top {self.lime_features_var.get()} features per anomaly"
                     else:
                         success_msg += f"SHAP shows global feature importance\n"
                         success_msg += f"Analyzing up to {self.shap_samples_var.get()} samples"
-                else:  # All
+                else:  # Ensemble
                     success_msg = f"Full XAI Suite Loaded!\n\n"
                     success_msg += f"Base Model: {os.path.basename(model_path)}\n"
                     success_msg += f"Input shape: {self.ml_detector.model.input_shape}\n"
                     success_msg += f"Parameters: {self.ml_detector.model.count_params():,}\n\n"
-                    success_msg += f"✓ Autoencoder: Detects faults\n"
-                    success_msg += f"✓ LIME: Explains individual detections\n"
-                    success_msg += f"✓ SHAP: Shows global feature importance\n\n"
+                    success_msg += f"Autoencoder: Detects faults\n"
+                    success_msg += f"LIME: Explains individual detections\n"
+                    success_msg += f"SHAP: Shows global feature importance\n\n"
                     success_msg += f"You'll get comprehensive explanations!"
                 
                 messagebox.showinfo("Model Loaded Successfully", success_msg)
@@ -1053,22 +1053,36 @@ class FaultDetectionTab:
             messagebox.showerror("Error", error_msg)
     
     def start_fault_detection(self):
-        """Start fault detection process"""
+        """Start fault detection process - UPDATED TO SUPPORT ISOLATION FOREST"""
         
-        # Check if ML model is loaded (if ML detection is enabled)
-        if self.ml_detection_var.get() and not self.is_ml_ready():
-            response = messagebox.askyesno(
-                "ML Model Not Ready", 
-                "ML detection is enabled but no model is loaded.\n\nWould you like to:\n- Click 'Yes' to continue without ML\n- Click 'No' to load a model first"
-            )
-            if not response:
+        model_type = self.model_type_var.get()
+        
+        # Check if appropriate model is loaded
+        if model_type == "Isolation":
+            if not hasattr(self, 'isolation_forest_detector') or self.isolation_forest_detector is None:
+                response = messagebox.askyesno(
+                    "Isolation Forest Not Ready", 
+                    "Isolation Forest detector is not initialized.\n\nLoad it first?"
+                )
+                if response:
+                    self.load_ml_model()
                 return
+        else:
+            # Check LSTM/Autoencoder
+            if self.ml_detection_var.get() and not self.is_ml_ready():
+                response = messagebox.askyesno(
+                    "ML Model Not Ready", 
+                    "ML detection is enabled but no model is loaded.\n\nWould you like to:\n- Click 'Yes' to continue without ML\n- Click 'No' to load a model first"
+                )
+                if not response:
+                    return
         
         # Check if any detection method is enabled
         methods_enabled = (self.ml_detection_var.get() or 
                           self.statistical_detection_var.get() or
                           self.trend_detection_var.get() or 
-                          self.threshold_detection_var.get())
+                          self.threshold_detection_var.get() or
+                          model_type == "Isolation")
         
         if not methods_enabled:
             messagebox.showwarning("Warning", "Please enable at least one detection method!")
@@ -1092,8 +1106,9 @@ class FaultDetectionTab:
         
         # Get enabled methods
         enabled_methods = []
-        if self.ml_detection_var.get():
-            model_type = self.model_type_var.get()
+        if model_type == "Isolation":
+            enabled_methods.append("Isolation Forest (Unsupervised)")
+        elif self.ml_detection_var.get():
             enabled_methods.append(f"ML {model_type}")
         if self.statistical_detection_var.get():
             enabled_methods.append("Statistical Analysis")
@@ -1104,10 +1119,17 @@ class FaultDetectionTab:
         
         # Show configuration summary
         config_summary = f"Detection Configuration:\n\n"
+        config_summary += f"Primary Method: {model_type}\n"
         config_summary += f"Enabled Methods: {', '.join(enabled_methods)}\n"
-        config_summary += f"ML Model Type: {self.model_type_var.get()}\n"
-        config_summary += f"ML Model: {'Loaded' if self.is_ml_ready() else 'Not Loaded'}\n"
-        config_summary += f"XAI Explainer: {'Ready' if self.xai_explainer else 'Not Ready'}\n"
+        
+        if model_type == "Isolation":
+            config_summary += f"IF Contamination: {self.if_contamination_var.get()*100:.1f}%\n"
+            config_summary += f"IF Estimators: {self.if_estimators_var.get()}\n"
+            config_summary += f"Status: {'Ready' if self.isolation_forest_detector else 'Not Loaded'}\n"
+        else:
+            config_summary += f"ML Model: {'Loaded' if self.is_ml_ready() else 'Not Loaded'}\n"
+            config_summary += f"XAI Explainer: {'Ready' if self.xai_explainer else 'Not Ready'}\n"
+        
         config_summary += f"Satellites: {len(self.parent_app.satellites)}\n"
         config_summary += f"Faulty Satellites: {len(faulty_sats)}\n"
         
@@ -1119,7 +1141,7 @@ class FaultDetectionTab:
         
         config_summary += f"\nNext Step: Click 'Run Simulation' to start detection"
         
-        self.parent_app.add_log("Fault detection configured and ready")
+        self.parent_app.add_log(f"Fault detection configured ({model_type}) and ready")
         self.detection_status_label.config(text="Ready for Simulation", foreground='green')
         
         # Update buttons
@@ -1132,7 +1154,6 @@ class FaultDetectionTab:
     
     def simulate_detection_results(self):
         """Simulate detection results for testing"""
-        # [Keep existing simulate_detection_results method from original file]
         self.parent_app.add_log("Simulating detection results...")
         messagebox.showinfo("Simulation", "Detection simulation not yet implemented in this version")
     
@@ -1142,17 +1163,6 @@ class FaultDetectionTab:
         self.start_detection_btn.config(text="Start Detection", state="normal")
         self.generate_xai_btn.config(state="disabled")
         self.parent_app.add_log("Detection state reset")
-    
-    def toggle_realtime_monitoring(self):
-        """Toggle real-time monitoring"""
-        if self.realtime_var.get():
-            self.monitoring_status_label.config(text="Monitoring Active", foreground='green')
-            self.monitoring_active = True
-            self.parent_app.add_log("Real-time monitoring enabled")
-        else:
-            self.monitoring_status_label.config(text="Monitoring Inactive", foreground='red')
-            self.monitoring_active = False
-            self.parent_app.add_log("Real-time monitoring disabled")
     
     def clear_results(self):
         """Clear all detection results"""
@@ -1210,7 +1220,6 @@ class FaultDetectionTab:
     
     def generate_analysis(self):
         """Generate analysis plot"""
-        # [Keep existing generate_analysis method from original file]
         self.parent_app.add_log("Generating analysis...")
         messagebox.showinfo("Analysis", "Analysis generation not yet implemented in this version")
     
@@ -1240,11 +1249,10 @@ class FaultDetectionTab:
     
     def save_results_to_file(self, file_path):
         """Save detection results to file"""
-        # [Keep existing save_results_to_file method from original file]
         pass
     
     def display_ml_results(self, ml_results):
-        """Display ML detection results and enable XAI button"""
+        """Display ML detection results (LSTM or Isolation Forest) and enable XAI button"""
         if not ml_results:
             return
         
@@ -1253,8 +1261,15 @@ class FaultDetectionTab:
             try:
                 self.fault_detection_results = ml_results
                 
+                # Detect which detector was used
+                detector_type = "Unknown"
+                if 'detector' in ml_results:
+                    detector_type = "Isolation Forest"
+                elif 'ml_detector' in ml_results:
+                    detector_type = "LSTM/Autoencoder"
+                
                 # Update detection status
-                self.detection_status_label.config(text="Detection Complete", foreground='green')
+                self.detection_status_label.config(text=f"Detection Complete ({detector_type})", foreground='green')
                 
                 # Clear existing results
                 for item in self.results_tree.get_children():
@@ -1273,8 +1288,11 @@ class FaultDetectionTab:
                 # Add detections to table and recent list
                 for spacecraft_name, spacecraft_detections in detections.items():
                     for detection in spacecraft_detections:
-                        # Add to results table
-                        method_used = detection.details.get('primary_method', 'ML Detection')
+                        # Get detection method
+                        if detector_type == "Isolation Forest":
+                            method_used = f"Isolation Forest ({detection.fault_type})"
+                        else:
+                            method_used = detection.details.get('primary_method', 'ML Detection')
                         
                         self.results_tree.insert('', 'end', values=(
                             f"{detection.detection_time_minutes:.1f} min",
@@ -1315,45 +1333,59 @@ class FaultDetectionTab:
                 
                 # Update results summary
                 self.results_summary_text.delete(1.0, tk.END)
-                summary_text = f"""ML FAULT DETECTION RESULTS:
+                summary_text = f"""FAULT DETECTION RESULTS ({detector_type}):
 ========================================
 Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-Data Source: Enhanced Telemetry Analysis
-Detection Method: Multi-Criteria Approach
+Detection Method: {detector_type}
 
 SUMMARY:
   Spacecraft Analyzed: {summary.get('total_spacecraft', 0)}
-  Total ML Detections: {summary.get('total_detections', 0)}
+  Total Detections: {summary.get('total_detections', 0)}
   Success Rate: {summary.get('success_rate', 1.0):.1%}
 
-DETECTIONS BY SPACECRAFT:
 """
+                
+                if detector_type == "Isolation Forest":
+                    summary_text += f"ALGORITHM DETAILS:\n"
+                    summary_text += f"  Method: Unsupervised Anomaly Detection\n"
+                    summary_text += f"  Features: 22 telemetry parameters\n"
+                    if 'confidence_scores' in summary:
+                        summary_text += f"  Avg Confidence: {np.mean(summary['confidence_scores']):.3f}\n"
+                    if 'isolation_scores' in summary:
+                        summary_text += f"  Avg Isolation Score: {np.mean(summary['isolation_scores']):.3f}\n"
+                    summary_text += f"\n"
+                
+                summary_text += f"DETECTIONS BY SPACECRAFT:\n"
                 
                 for spacecraft, spacecraft_detections in detections.items():
                     summary_text += f"\n{spacecraft}: {len(spacecraft_detections)} detections"
                     for detection in spacecraft_detections[:3]:  # Show first 3
-                        method = detection.details.get('primary_method', 'ML')
-                        summary_text += f"\n  - {detection.detection_time_minutes:.1f}min via {method} (conf: {detection.confidence:.3f})"
-                        
-                        # Add detection details
-                        if 'detection_criteria' in detection.details:
-                            criteria = detection.details['detection_criteria']
-                            if criteria.get('rw_speed_change', False):
-                                summary_text += f"\n    * RW speed change: {criteria.get('max_speed_change_percent', 0):.1f}%"
-                            if criteria.get('attitude_change', False):
-                                summary_text += f"\n    * Attitude error increase: {criteria.get('attitude_change_percent', 0):.1f}%"
-                            if criteria.get('ml_input_change', False):
-                                summary_text += f"\n    * ML input difference: {criteria.get('input_difference', 0):.6f}"
+                        if detector_type == "Isolation Forest":
+                            summary_text += f"\n  - {detection.detection_time_minutes:.1f}min: {detection.fault_type} (conf: {detection.confidence:.3f}, iso: {detection.isolation_score:.3f})"
+                            if hasattr(detection, 'feature_importance'):
+                                top_features = list(detection.feature_importance.items())[:3]
+                                summary_text += f"\n    Top features: {', '.join([f[0] for f in top_features])}"
+                        else:
+                            method = detection.details.get('primary_method', 'ML')
+                            summary_text += f"\n  - {detection.detection_time_minutes:.1f}min via {method} (conf: {detection.confidence:.3f})"
+                            
+                            # Add detection details
+                            if 'detection_criteria' in detection.details:
+                                criteria = detection.details['detection_criteria']
+                                if criteria.get('rw_speed_change', False):
+                                    summary_text += f"\n    * RW speed change: {criteria.get('max_speed_change_percent', 0):.1f}%"
+                                if criteria.get('attitude_change', False):
+                                    summary_text += f"\n    * Attitude error increase: {criteria.get('attitude_change_percent', 0):.1f}%"
                 
                 if total_detections == 0:
                     summary_text += "\n\nNOTE: No faults were detected."
                 else:
-                    summary_text += f"\n\nSUCCESS: Detected {total_detections} faults!"
+                    summary_text += f"\n\nSUCCESS: Detected {total_detections} faults using {detector_type}!"
                     
                     # Enable XAI button if we have detections
                     if hasattr(self, 'generate_xai_btn'):
                         self.generate_xai_btn.config(state="normal")
-                        summary_text += "\n\n✓ XAI explanations available - click 'Generate XAI' button"
+                        summary_text += "\n\nXAI explanations available - click 'Generate XAI' button"
                 
                 self.results_summary_text.insert(tk.END, summary_text)
                 
@@ -1361,14 +1393,10 @@ DETECTIONS BY SPACECRAFT:
                 self.detection_notebook.select(2)
                 
                 # Log the results
-                self.parent_app.add_log(f"ML Detection Results: {total_detections} detections from {len(detections)} spacecraft")
-                
-                # Update monitoring plot if active
-                if self.monitoring_active:
-                    self.update_monitoring_plot(ml_results)
+                self.parent_app.add_log(f"{detector_type} Detection Results: {total_detections} detections from {len(detections)} spacecraft")
                     
             except Exception as e:
-                self.parent_app.add_log(f"Error displaying ML results: {e}")
+                self.parent_app.add_log(f"Error displaying results: {e}")
                 import traceback
                 traceback.print_exc()
         
@@ -1376,65 +1404,367 @@ DETECTIONS BY SPACECRAFT:
         try:
             import threading
             if threading.current_thread() is threading.main_thread():
-                # Already on main thread, run directly
                 _update_gui()
             else:
-                # Schedule on main thread
                 self.parent_app.root.after(0, _update_gui)
         except:
-            # Fallback if threading check fails
             try:
                 self.parent_app.root.after(0, _update_gui)
             except:
                 _update_gui()
     
-    def update_monitoring_plot(self, ml_results):
-        """Update the monitoring plot with real data"""
+    def train_gnn_model(self):
+        """Train the GNN Autoencoder model"""
         try:
-            self.monitoring_figure.clear()
-            ax = self.monitoring_figure.add_subplot(111)
+            import torch
+            import torch.nn as nn
+            import torch.optim as optim
+            from sklearn.preprocessing import StandardScaler
+            from scipy.stats import genpareto
+            import networkx as nx
+        except ImportError as e:
+            messagebox.showerror("Error", f"Required library not available: {e}\n\nPlease install: torch, scikit-learn, scipy, networkx")
+            return
+        
+        # Check if we have data
+        if not hasattr(self.parent_app, 'processed_data') or self.parent_app.processed_data is None:
+            messagebox.showwarning("No Data", "Please load and process spacecraft data first.")
+            return
+        
+        try:
+            self.gnn_status_label.config(text="Training GNN model...", foreground='orange')
+            self.parent_app.add_log("Starting GNN Autoencoder training...")
+            self.parent_app.root.update()
             
-            # Extract time series data from ML results
-            time_points = np.linspace(0, 30, 100)
-            anomaly_scores = np.random.normal(0.2, 0.1, len(time_points))
+            # Get parameters
+            seq_len = self.gnn_seq_len_var.get()
+            hidden_dim = self.gnn_hidden_dim_var.get()
+            epochs = self.gnn_epochs_var.get()
+            lr = self.gnn_lr_var.get()
             
-            # Add spikes where detections occurred
-            detections = ml_results.get('detections', {})
-            detection_times = []
-            detection_scores = []
+            # Prepare data
+            df = self.parent_app.processed_data
             
-            for spacecraft_detections in detections.values():
-                for detection in spacecraft_detections:
-                    detection_times.append(detection.detection_time_minutes)
-                    detection_scores.append(detection.confidence)
-                    
-                    # Add spike in anomaly score
-                    time_idx = np.argmin(np.abs(time_points - detection.detection_time_minutes))
-                    anomaly_scores[time_idx] = detection.confidence
+            # Select numerical columns
+            numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            if 'spacecraft_id' in numerical_cols:
+                numerical_cols.remove('spacecraft_id')
             
-            # Plot the data
-            ax.plot(time_points, anomaly_scores, 'b-', linewidth=2, label='Anomaly Score')
-            ax.axhline(y=self.threshold_var.get(), color='r', linestyle='--', 
-                      label=f'Threshold ({self.threshold_var.get():.3f})')
+            # Normalize data
+            scaler = StandardScaler()
+            data = scaler.fit_transform(df[numerical_cols].values)
             
-            # Mark detections
-            if detection_times:
-                ax.scatter(detection_times, detection_scores, color='red', s=100, alpha=0.8, 
-                          label=f'Detections ({len(detection_times)})', zorder=5)
+            n_features = data.shape[1]
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            
+            self.parent_app.add_log(f"Data prepared: {len(data)} samples, {n_features} features")
+            self.parent_app.add_log(f"Using device: {device}")
+            
+            # Convert to sliding windows
+            X = []
+            y = []
+            for i in range(seq_len, len(data)):
+                X.append(data[i - 1])
+                y.append(data[i])
+            
+            X = np.array(X)
+            y = np.array(y)
+            X_tensor = torch.tensor(X, dtype=torch.float32).to(device)
+            y_tensor = torch.tensor(y, dtype=torch.float32).to(device)
+            
+            # Define GNN Autoencoder classes
+            class GCNLayer(nn.Module):
+                def __init__(self, in_features, out_features):
+                    super().__init__()
+                    self.linear = nn.Linear(in_features, out_features)
+
+                def forward(self, X, A):
+                    XW = self.linear(X)
+                    return torch.relu(torch.matmul(XW, A))
+
+            class GNNEncoder(nn.Module):
+                def __init__(self, n_features, hidden_dim):
+                    super().__init__()
+                    self.gcn1 = GCNLayer(n_features, hidden_dim)
+                    self.gcn2 = GCNLayer(hidden_dim, hidden_dim)
+
+                def forward(self, X, A):
+                    X = self.gcn1(X, A)
+                    return self.gcn2(X, A)
+
+            class AutoEncoder(nn.Module):
+                def __init__(self, n_features, hidden_dim):
+                    super().__init__()
+                    self.encoder = GNNEncoder(n_features, hidden_dim)
+                    self.decoder = nn.Sequential(
+                        nn.Linear(hidden_dim, hidden_dim),
+                        nn.ReLU(),
+                        nn.Linear(hidden_dim, n_features)
+                    )
+
+                def forward(self, X, A):
+                    H = self.encoder(X, A)
+                    return self.decoder(H)
+            
+            # Initialize model
+            A = torch.eye(hidden_dim, requires_grad=True, device=device)
+            model = AutoEncoder(n_features, hidden_dim).to(device)
+            optimizer = optim.Adam(list(model.parameters()) + [A], lr=lr)
+            loss_fn = nn.MSELoss()
+            
+            self.parent_app.add_log("Model initialized. Starting training...")
+            
+            # Training loop
+            training_losses = []
+            for epoch in range(epochs):
+                model.train()
+                optimizer.zero_grad()
+                output = model(X_tensor, A)
+                loss = loss_fn(output, y_tensor)
+                loss.backward()
+                optimizer.step()
                 
-                for time, score in zip(detection_times, detection_scores):
-                    ax.axvline(x=time, color='red', alpha=0.3, linestyle=':')
+                training_losses.append(loss.item())
+                
+                if epoch % 50 == 0:
+                    self.parent_app.add_log(f"Epoch {epoch}, Loss: {loss.item():.4f}")
+                    self.gnn_status_label.config(text=f"Training... Epoch {epoch}/{epochs}, Loss: {loss.item():.4f}")
+                    self.parent_app.root.update()
             
-            ax.set_xlabel('Time (minutes)')
-            ax.set_ylabel('Anomaly Score / Confidence')
-            ax.set_title('Real-time Fault Detection Results')
+            # Plot training history
+            self.gnn_training_figure.clear()
+            ax = self.gnn_training_figure.add_subplot(111)
+            ax.plot(training_losses, linewidth=2)
+            ax.set_xlabel('Epoch')
+            ax.set_ylabel('Loss (MSE)')
+            ax.set_title('GNN Autoencoder Training History')
+            ax.grid(True, alpha=0.3)
+            self.gnn_training_canvas.draw()
+            
+            # Save trained model
+            self.gnn_model = {
+                'model': model,
+                'A': A,
+                'scaler': scaler,
+                'device': device,
+                'n_features': n_features,
+                'hidden_dim': hidden_dim,
+                'seq_len': seq_len,
+                'numerical_cols': numerical_cols
+            }
+            
+            self.gnn_status_label.config(text="Training completed successfully!", foreground='green')
+            self.parent_app.add_log("GNN Autoencoder training completed successfully!")
+            
+            messagebox.showinfo("Success", f"GNN model trained successfully!\nFinal Loss: {training_losses[-1]:.4f}")
+            
+        except Exception as e:
+            self.gnn_status_label.config(text="Training failed", foreground='red')
+            self.parent_app.add_log(f"Error training GNN model: {e}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("Training Error", f"Failed to train GNN model:\n{str(e)}")
+    
+    def run_gnn_analysis(self):
+        """Run GNN Autoencoder analysis on the data"""
+        try:
+            import torch
+            import networkx as nx
+            from scipy.stats import genpareto
+        except ImportError as e:
+            messagebox.showerror("Error", f"Required library not available: {e}")
+            return
+        
+        if not hasattr(self, 'gnn_model') or self.gnn_model is None:
+            messagebox.showwarning("No Model", "Please train the GNN model first.")
+            return
+        
+        if not hasattr(self.parent_app, 'processed_data') or self.parent_app.processed_data is None:
+            messagebox.showwarning("No Data", "Please load and process spacecraft data first.")
+            return
+        
+        try:
+            self.gnn_status_label.config(text="Running analysis...", foreground='orange')
+            self.parent_app.add_log("Running GNN Autoencoder analysis...")
+            self.parent_app.root.update()
+            
+            # Get model components
+            model = self.gnn_model['model']
+            A = self.gnn_model['A']
+            scaler = self.gnn_model['scaler']
+            device = self.gnn_model['device']
+            seq_len = self.gnn_model['seq_len']
+            numerical_cols = self.gnn_model['numerical_cols']
+            
+            # Prepare data
+            df = self.parent_app.processed_data
+            data = scaler.transform(df[numerical_cols].values)
+            
+            # Convert to sliding windows
+            X = []
+            y = []
+            for i in range(seq_len, len(data)):
+                X.append(data[i - 1])
+                y.append(data[i])
+            
+            X = np.array(X)
+            y = np.array(y)
+            X_tensor = torch.tensor(X, dtype=torch.float32).to(device)
+            y_tensor = torch.tensor(y, dtype=torch.float32).to(device)
+            
+            # Predict and calculate errors
+            model.eval()
+            with torch.no_grad():
+                predictions = model(X_tensor, A).cpu().numpy()
+                targets = y_tensor.cpu().numpy()
+                errors = np.abs(predictions - targets).mean(axis=1)
+            
+            # Dynamic Threshold using POT
+            def dynamic_threshold(errors, q=0.01, n=100):
+                fit_data = errors[:n]
+                if len(fit_data) == 0 or all(fit_data <= 0):
+                    return np.mean(errors) + 3 * np.std(errors)
+                threshold = np.percentile(fit_data, 100 * (1 - q))
+                excesses = fit_data[fit_data > threshold] - threshold
+                if len(excesses) == 0:
+                    return threshold
+                try:
+                    shape, loc, scale = genpareto.fit(excesses)
+                except:
+                    pass
+                return threshold
+            
+            pot_q = self.gnn_pot_q_var.get()
+            thresh = dynamic_threshold(errors, q=pot_q)
+            labels = (errors > thresh).astype(int)
+            
+            anomaly_count = np.sum(labels)
+            anomaly_rate = anomaly_count / len(labels) * 100
+            
+            # Plot anomaly detection results
+            self.gnn_anomaly_figure.clear()
+            ax = self.gnn_anomaly_figure.add_subplot(111)
+            ax.plot(errors, label="Reconstruction Error", linewidth=2)
+            ax.axhline(y=thresh, color='r', linestyle='--', label=f"Dynamic Threshold ({thresh:.4f})", linewidth=2)
+            
+            # Highlight anomalies
+            anomaly_indices = np.where(labels == 1)[0]
+            if len(anomaly_indices) > 0:
+                ax.scatter(anomaly_indices, errors[anomaly_indices], color='red', s=50, 
+                          alpha=0.6, label=f'Anomalies ({anomaly_count})', zorder=5)
+            
+            ax.set_xlabel('Time Step')
+            ax.set_ylabel('Reconstruction Error')
+            ax.set_title('GNN Autoencoder Anomaly Detection')
             ax.legend()
             ax.grid(True, alpha=0.3)
-            ax.set_ylim(0, 1.1)
+            self.gnn_anomaly_canvas.draw()
             
-            self.monitoring_canvas.draw()
+            # Visualize Learned Causal Graph
+            adj_matrix = A.detach().cpu().numpy()
+            G = nx.DiGraph()
+            
+            for i in range(adj_matrix.shape[0]):
+                for j in range(adj_matrix.shape[1]):
+                    if abs(adj_matrix[i, j]) > 0.05:
+                        G.add_edge(f"H{i}", f"H{j}", weight=round(adj_matrix[i, j], 2))
+            
+            self.gnn_causal_figure.clear()
+            ax2 = self.gnn_causal_figure.add_subplot(111)
+            
+            pos = nx.spring_layout(G, seed=42)
+            nx.draw(G, pos, ax=ax2, with_labels=True, node_color='lightblue', 
+                   node_size=500, font_size=9, edge_color='gray', arrows=True, 
+                   arrowsize=15, arrowstyle='->')
+            
+            edge_labels = nx.get_edge_attributes(G, 'weight')
+            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, ax=ax2, font_size=7)
+            
+            ax2.set_title(f"Learned Causal Graph ({G.number_of_nodes()} nodes, {G.number_of_edges()} edges)")
+            ax2.axis('off')
+            self.gnn_causal_canvas.draw()
+            
+            # Display detailed results
+            self.gnn_results_text.delete(1.0, tk.END)
+            results_summary = f"""GNN AUTOENCODER ANALYSIS RESULTS
+{'=' * 60}
+Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+MODEL CONFIGURATION:
+  Sequence Length: {seq_len}
+  Hidden Dimensions: {self.gnn_model['hidden_dim']}
+  Number of Features: {self.gnn_model['n_features']}
+  Device: {device}
+
+ANOMALY DETECTION SUMMARY:
+  Total Time Steps: {len(errors)}
+  Anomalies Detected: {anomaly_count}
+  Anomaly Rate: {anomaly_rate:.2f}%
+  Dynamic Threshold: {thresh:.6f}
+  POT Quantile: {pot_q}
+
+ERROR STATISTICS:
+  Mean Error: {np.mean(errors):.6f}
+  Std Error: {np.std(errors):.6f}
+  Min Error: {np.min(errors):.6f}
+  Max Error: {np.max(errors):.6f}
+
+CAUSAL GRAPH STATISTICS:
+  Nodes: {G.number_of_nodes()}
+  Edges: {G.number_of_edges()}
+  Avg Degree: {2 * G.number_of_edges() / G.number_of_nodes() if G.number_of_nodes() > 0 else 0:.2f}
+
+TOP ANOMALOUS TIME STEPS:
+"""
+            # Get top 10 anomalies
+            top_anomaly_indices = np.argsort(errors)[-10:][::-1]
+            for idx in top_anomaly_indices:
+                results_summary += f"  Step {idx}: Error = {errors[idx]:.6f} {'[ANOMALY]' if labels[idx] == 1 else ''}\n"
+            
+            results_summary += f"\nFEATURES ANALYZED:\n"
+            for i, col in enumerate(numerical_cols):
+                results_summary += f"  {i+1}. {col}\n"
+            
+            self.gnn_results_text.insert(tk.END, results_summary)
+            
+            self.gnn_status_label.config(text="Analysis completed successfully!", foreground='green')
+            self.parent_app.add_log(f"GNN Analysis completed: {anomaly_count} anomalies detected ({anomaly_rate:.2f}%)")
+            
+            messagebox.showinfo("Analysis Complete", 
+                              f"GNN Autoencoder analysis completed!\n\n"
+                              f"Anomalies Detected: {anomaly_count}\n"
+                              f"Anomaly Rate: {anomaly_rate:.2f}%\n"
+                              f"Causal Graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+            
         except Exception as e:
-            self.parent_app.add_log(f"Error updating monitoring plot: {e}")
+            self.gnn_status_label.config(text="Analysis failed", foreground='red')
+            self.parent_app.add_log(f"Error during GNN analysis: {e}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("Analysis Error", f"Failed to run GNN analysis:\n{str(e)}")
+    
+    def export_gnn_results(self):
+        """Export GNN analysis results"""
+        if not hasattr(self, 'gnn_model') or self.gnn_model is None:
+            messagebox.showwarning("No Results", "Please run GNN analysis first.")
+            return
+        
+        try:
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".txt",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+                title="Export GNN Results"
+            )
+            
+            if filename:
+                with open(filename, 'w') as f:
+                    f.write(self.gnn_results_text.get(1.0, tk.END))
+                
+                messagebox.showinfo("Success", f"Results exported to:\n{filename}")
+                self.parent_app.add_log(f"GNN results exported to {filename}")
+        
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Failed to export results:\n{str(e)}")
     
     def is_ml_ready(self):
         """Check if ML detection is ready"""
@@ -1443,4 +1773,12 @@ DETECTIONS BY SPACECRAFT:
             hasattr(self, 'ml_detector') and 
             self.ml_detector is not None and 
             self.ml_detector.is_loaded
+        )
+    
+    def is_isolation_forest_ready(self):
+        """Check if Isolation Forest detection is ready"""
+        return (
+            self.sklearn_available and
+            hasattr(self, 'isolation_forest_detector') and
+            self.isolation_forest_detector is not None
         )
