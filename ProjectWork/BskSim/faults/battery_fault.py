@@ -502,37 +502,34 @@ def run(show_plots=False, liveStream=False, timeStep=1.0, orbitCase='LEO',
     return scenario, None, figureList
 
 
-def run_with_parameters(fault_magnitude=50.0, fault_wheel=3, fault_time_min=15.0, 
-                       simulation_time_min=30.0, showPlots=False, saveBinary=False):
+
+# --- Add to faults/battery_fault.py ---
+
+def run_with_parameters(fault_magnitude=50.0,
+                        fault_wheel=3,               # kept for API parity; not used by battery
+                        fault_time_min=15.0,
+                        simulation_time_min=30.0,
+                        showPlots=False,
+                        saveBinary=False,
+                        **kwargs):
     """
-    Run battery fault with specific GUI parameters - matches the pattern in powerlimit_fault.py
-    
-    Enhanced to accept simulation_time_min parameter
+    GUI-compatible wrapper that tolerates extra kwargs (e.g., battery_capacity_percentage)
+    and calls run() with our standard parameters. Returns (scenario, viz, figureList).
     """
-    print(f"\n===== BATTERY FAULT with GUI Parameters =====")
-    print(f"PARAMS - Power: {fault_magnitude}W, Wheel: {fault_wheel}, Time: {fault_time_min}min")
-    print(f"Simulation Duration: {simulation_time_min} minutes")
-    
     try:
         scenario, viz, figureList = run(
-            show_plots=showPlots,
-            liveStream=False,
-            timeStep=1.0,
-            orbitCase='LEO',
-            useSphericalHarmonics=False,
-            planetCase='Earth',
+            show_plots=showPlots,        # accept both spellings
+            showPlots=showPlots,
+            saveBinary=saveBinary,
             fault_magnitude=fault_magnitude,
             fault_time_min=fault_time_min,
             simulation_time_min=simulation_time_min
         )
-        
         print(f"SUCCESS: Generated {len(figureList)} battery plots with GUI parameters")
         return scenario, viz, figureList
-        
     except Exception as e:
         print(f"ERROR with battery parameters: {e}")
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         return None, None, {}
 
 

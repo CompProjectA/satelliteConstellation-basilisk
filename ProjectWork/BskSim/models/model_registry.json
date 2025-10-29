@@ -1,0 +1,16 @@
+{
+  "anomaly_detection": {
+    "path": "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\core\\anomaly_detection_model.keras",
+    "type": "keras",
+    "purpose": "Fault detection",
+    "exists": true,
+    "loaded": false
+  },
+  "task_reassignment": {
+    "path": "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\core\\drl_task_reassignment.h5",
+    "type": "h5",
+    "purpose": "Task reassignment DRL",
+    "exists": true,
+    "loaded": false
+  }
+}

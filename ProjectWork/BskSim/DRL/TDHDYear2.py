@@ -1,58 +1,347 @@
+#!/usr/bin/env python3
+"""
+TDHDYear2.py â€” TD3 with Hindsight Experience Replay and Dimension-Wise Clipping
 
+Custom implementation using:
+- PyTorch (no RLlib for this one)
+- bsk_rl (NOT bsk_rl_develop)
+- Hindsight Experience Replay
+- Dimension-Wise Clipping for multi-discrete actions
+
+Run: python TDHDYear2.py
+"""
 
 import os
+import sys
 import time
 from datetime import datetime
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any, List, Tuple
+from collections import deque, namedtuple, Counter
+import random
 
+# ---------- Path setup ----------
+DRL_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(DRL_DIR)
+RESULT_DIR = os.path.join(DRL_DIR, "result")
+os.makedirs(RESULT_DIR, exist_ok=True)
+
+for path in [DRL_DIR, ROOT_DIR]:
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+# ---------- Imports ----------
 import numpy as np
-import gymnasium as gym
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+# ---------- PyTorch ----------
 try:
-    import pandas as pd
-except Exception:
-    pd = None
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+except ImportError as e:
+    print(f"ERROR: PyTorch not available: {e}")
+    print("Install with: pip install torch")
+    sys.exit(1)
 
-# ------- Basilisk / bsk_rl_develop imports -------
-from Basilisk.architecture import messaging
-from collections import Counter
-
-from bsk_rl_develop import ConstellationTasking
-from bsk_rl_develop.sats import ImagingSatellite
-from bsk_rl_develop.act import Action, Image
-from bsk_rl_develop.act.actions import ActionBuilder
-from bsk_rl_develop import obs
-from bsk_rl_develop.sim import dyn, fsw
-from bsk_rl_develop.scene.targets import UniformTargets, Target
-from bsk_rl_develop.data import UniqueImageReward
-from bsk_rl_develop.comm import LOSCommunication
-from bsk_rl_develop.utils.orbital import walker_delta_args
-
-# ------------------- Tianshou imports -------------------
-import torch
-import torch.nn as nn
-from tianshou.env import DummyVectorEnv
-from tianshou.data import Collector, VectorReplayBuffer, Batch
-from tianshou.policy import TD3Policy
-from tianshou.utils.net.common import Net
-from tianshou.utils.net.continuous import Actor, Critic
-
-# Exploration noise (handle old/new paths)
+# ---------- Basilisk/bsk_rl ----------
 try:
-    from tianshou.exploration import GaussianNoise, OUNoise
-except Exception:
-    try:
-        from tianshou.exploration.gaussian import GaussianNoise  # type: ignore
-        from tianshou.exploration.ou import OUNoise              # type: ignore
-    except Exception:
-        GaussianNoise = None
-        OUNoise = None
+    from bsk_rl import ConstellationTasking
+    from bsk_rl.sats import ImagingSatellite
+    from bsk_rl.act import Action, Image
+    from bsk_rl.act.actions import ActionBuilder
+    from bsk_rl import obs
+    from bsk_rl.sim import dyn, fsw
+    from bsk_rl.scene.targets import UniformTargets, Target
+    from bsk_rl.data import UniqueImageReward
+    from bsk_rl.comm import LOSCommunication
+    from bsk_rl.utils.orbital import walker_delta_args
+    import gymnasium as gym
+    
+    # MONKEY PATCH: Fix Basilisk 2.2.1 createNewEvent API incompatibility
+    from Basilisk.architecture import sim_model
+    original_createNewEvent = sim_model.SimBaseClass.createNewEvent
+    
+    def patched_createNewEvent(self, eventName, *args, **kwargs):
+        """
+        Patched createNewEvent that removes unsupported 'conditionFunction' parameter
+        for Basilisk 2.2.1 compatibility
+        """
+        # Remove conditionFunction if present (not supported in Basilisk 2.2.1)
+        kwargs.pop('conditionFunction', None)
+        return original_createNewEvent(self, eventName, *args, **kwargs)
+    
+    sim_model.SimBaseClass.createNewEvent = patched_createNewEvent
+    print("✓ Applied Basilisk 2.2.1 compatibility patch for createNewEvent")
+    
+except ImportError as e:
+    print(f"ERROR: bsk_rl or Basilisk not available: {e}")
+    sys.exit(1)
 
 
 # =========================================================
-# Target region
+# Replay Buffer with HER
 # =========================================================
+
+Experience = namedtuple('Experience', ['state', 'action', 'reward', 'next_state', 'done'])
+
+class HindsightExperienceReplay:
+    """Replay buffer with hindsight experience replay"""
+    def __init__(self, capacity=100000, her_ratio=0.8):
+        self.capacity = capacity
+        self.her_ratio = her_ratio
+        self.buffer = deque(maxlen=capacity)
+        
+    def add(self, state, action, reward, next_state, done):
+        self.buffer.append(Experience(state, action, reward, next_state, done))
+        
+    def sample(self, batch_size):
+        batch = random.sample(self.buffer, min(batch_size, len(self.buffer)))
+        states = torch.FloatTensor(np.array([e.state for e in batch]))
+        actions = torch.FloatTensor(np.array([e.action for e in batch]))
+        rewards = torch.FloatTensor(np.array([e.reward for e in batch])).unsqueeze(1)
+        next_states = torch.FloatTensor(np.array([e.next_state for e in batch]))
+        dones = torch.FloatTensor(np.array([e.done for e in batch])).unsqueeze(1)
+        return states, actions, rewards, next_states, dones
+    
+    def __len__(self):
+        return len(self.buffer)
+
+
+# =========================================================
+# Actor-Critic Networks
+# =========================================================
+
+class Actor(nn.Module):
+    """Actor network for multi-discrete action space"""
+    def __init__(self, state_dim, action_dims, hidden_dim=256):
+        super(Actor, self).__init__()
+        self.action_dims = action_dims
+        self.total_actions = sum(action_dims)
+        
+        self.l1 = nn.Linear(state_dim, hidden_dim)
+        self.l2 = nn.Linear(hidden_dim, hidden_dim)
+        self.l3 = nn.Linear(hidden_dim, self.total_actions)
+        
+        nn.init.xavier_uniform_(self.l1.weight)
+        nn.init.xavier_uniform_(self.l2.weight)
+        nn.init.xavier_uniform_(self.l3.weight)
+    
+    def forward(self, state):
+        x = F.relu(self.l1(state))
+        x = F.relu(self.l2(x))
+        x = self.l3(x)
+        
+        actions = []
+        start_idx = 0
+        for dim in self.action_dims:
+            action_logits = x[:, start_idx:start_idx + dim]
+            actions.append(F.softmax(action_logits, dim=-1))
+            start_idx += dim
+        
+        return torch.cat(actions, dim=-1)
+
+
+class Critic(nn.Module):
+    """Twin critic networks"""
+    def __init__(self, state_dim, action_dims, hidden_dim=256):
+        super(Critic, self).__init__()
+        self.total_actions = sum(action_dims)
+        
+        # Q1
+        self.l1 = nn.Linear(state_dim + self.total_actions, hidden_dim)
+        self.l2 = nn.Linear(hidden_dim, hidden_dim)
+        self.l3 = nn.Linear(hidden_dim, 1)
+        
+        # Q2
+        self.l4 = nn.Linear(state_dim + self.total_actions, hidden_dim)
+        self.l5 = nn.Linear(hidden_dim, hidden_dim)
+        self.l6 = nn.Linear(hidden_dim, 1)
+        
+        for layer in [self.l1, self.l2, self.l3, self.l4, self.l5, self.l6]:
+            nn.init.xavier_uniform_(layer.weight)
+    
+    def forward(self, state, action):
+        sa = torch.cat([state, action], 1)
+        
+        q1 = F.relu(self.l1(sa))
+        q1 = F.relu(self.l2(q1))
+        q1 = self.l3(q1)
+        
+        q2 = F.relu(self.l4(sa))
+        q2 = F.relu(self.l5(q2))
+        q2 = self.l6(q2)
+        
+        return q1, q2
+    
+    def Q1(self, state, action):
+        sa = torch.cat([state, action], 1)
+        q1 = F.relu(self.l1(sa))
+        q1 = F.relu(self.l2(q1))
+        q1 = self.l3(q1)
+        return q1
+
+
+# =========================================================
+# TD3 Agent with HER and DWC
+# =========================================================
+
+class TD3_HER_DWC:
+    """TD3 with Hindsight Experience Replay and Dimension-Wise Clipping"""
+    
+    def __init__(
+        self,
+        state_dim,
+        action_dims,
+        device='cuda' if torch.cuda.is_available() else 'cpu',
+        discount=0.99,
+        tau=0.005,
+        policy_freq=2,
+        her_ratio=0.8,
+        lr_actor=3e-4,
+        lr_critic=3e-4,
+    ):
+        self.device = device
+        self.discount = discount
+        self.tau = tau
+        self.policy_freq = policy_freq
+        self.action_dims = action_dims
+        self.total_actions = sum(action_dims)
+        
+        # Actor
+        self.actor = Actor(state_dim, action_dims).to(device)
+        self.actor_target = Actor(state_dim, action_dims).to(device)
+        self.actor_target.load_state_dict(self.actor.state_dict())
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr_actor)
+        
+        # Critic
+        self.critic = Critic(state_dim, action_dims).to(device)
+        self.critic_target = Critic(state_dim, action_dims).to(device)
+        self.critic_target.load_state_dict(self.critic.state_dict())
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr_critic)
+        
+        # Replay buffer
+        self.replay_buffer = HindsightExperienceReplay(her_ratio=her_ratio)
+        
+        self.total_iterations = 0
+    
+    def select_action(self, state, explore=True):
+        """Select action from current policy"""
+        state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
+        action_probs = self.actor(state).cpu().data.numpy().flatten()
+        
+        actions = []
+        start_idx = 0
+        for dim in self.action_dims:
+            probs = action_probs[start_idx:start_idx + dim]
+            
+            if explore:
+                noise = np.random.dirichlet(np.ones(dim) * 0.1)
+                probs = 0.9 * probs + 0.1 * noise
+                probs = probs / np.sum(probs)
+            
+            action = np.random.choice(dim, p=probs)
+            actions.append(action)
+            start_idx += dim
+        
+        return actions
+    
+    def train(self, batch_size=256):
+        """Train the agent"""
+        if len(self.replay_buffer) < batch_size:
+            return
+        
+        self.total_iterations += 1
+        
+        # Sample batch
+        state, action, reward, next_state, done = self.replay_buffer.sample(batch_size)
+        state = state.to(self.device)
+        action = action.to(self.device)
+        reward = reward.to(self.device)
+        next_state = next_state.to(self.device)
+        done = done.to(self.device)
+        
+        action_one_hot = self._actions_to_one_hot(action, batch_size)
+        
+        # Train critic
+        with torch.no_grad():
+            next_action_probs = self.actor_target(next_state)
+            noise = torch.clamp(torch.randn_like(next_action_probs) * 0.1, -0.2, 0.2)
+            next_action_probs = torch.clamp(next_action_probs + noise, 1e-6, 1.0)
+            next_action_probs = next_action_probs / next_action_probs.sum(dim=1, keepdim=True)
+            
+            target_Q1, target_Q2 = self.critic_target(next_state, next_action_probs)
+            target_Q = torch.min(target_Q1, target_Q2)
+            target_Q = reward + (1 - done) * self.discount * target_Q
+        
+        current_Q1, current_Q2 = self.critic(state, action_one_hot)
+        critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
+        
+        self.critic_optimizer.zero_grad()
+        critic_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)
+        self.critic_optimizer.step()
+        
+        # Train actor (delayed)
+        if self.total_iterations % self.policy_freq == 0:
+            action_probs = self.actor(state)
+            actor_loss = -self.critic.Q1(state, action_probs).mean()
+            
+            self.actor_optimizer.zero_grad()
+            actor_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 1.0)
+            self.actor_optimizer.step()
+            
+            # Update target networks
+            for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
+                target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+            
+            for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
+                target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+    
+    def _actions_to_one_hot(self, actions, batch_size):
+        """Convert discrete actions to one-hot"""
+        one_hot_actions = []
+        for i in range(batch_size):
+            one_hot = []
+            action_idx = 0
+            for dim in self.action_dims:
+                action_val = int(actions[i, action_idx].item())
+                action_one_hot = torch.zeros(dim)
+                action_one_hot[action_val] = 1.0
+                one_hot.append(action_one_hot)
+                action_idx += 1
+            one_hot_actions.append(torch.cat(one_hot))
+        
+        return torch.stack(one_hot_actions).to(self.device)
+    
+    def save(self, filename):
+        """Save model"""
+        torch.save({
+            'actor': self.actor.state_dict(),
+            'critic': self.critic.state_dict(),
+            'actor_target': self.actor_target.state_dict(),
+            'critic_target': self.critic_target.state_dict(),
+            'actor_optimizer': self.actor_optimizer.state_dict(),
+            'critic_optimizer': self.critic_optimizer.state_dict(),
+        }, filename)
+    
+    def load(self, filename):
+        """Load model"""
+        checkpoint = torch.load(filename)
+        self.actor.load_state_dict(checkpoint['actor'])
+        self.critic.load_state_dict(checkpoint['critic'])
+        self.actor_target.load_state_dict(checkpoint['actor_target'])
+        self.critic_target.load_state_dict(checkpoint['critic_target'])
+        self.actor_optimizer.load_state_dict(checkpoint['actor_optimizer'])
+        self.critic_optimizer.load_state_dict(checkpoint['critic_optimizer'])
+
+
+# =========================================================
+# Environment Components (same as PPO/DQN)
+# =========================================================
+
 class TargetAreas(UniformTargets):
     def __init__(self, n_targets: int = 40, priority_distribution=None, radius=6378136.6):
         super().__init__(n_targets, priority_distribution, radius)
@@ -68,7 +357,8 @@ class TargetAreas(UniformTargets):
         r = self.radius
         targets = []
         for i, (lat, lon) in enumerate(zip(lats, lons)):
-            lat_rad = np.radians(lat); lon_rad = np.radians(lon)
+            lat_rad = np.radians(lat)
+            lon_rad = np.radians(lon)
             x = r * np.cos(lat_rad) * np.cos(lon_rad)
             y = r * np.cos(lat_rad) * np.sin(lon_rad)
             z = r * np.sin(lat_rad)
@@ -77,23 +367,15 @@ class TargetAreas(UniformTargets):
         self.targets = targets
 
 
-# =========================================================
-# Custom action: Reallocate (fix abstract builder_type)
-# =========================================================
 class Reallocate(Action):
-    # Some builds read builder_type as class attr:
-    builder_type = ActionBuilder
-
     def __init__(self, n_sats=4):
         self.action_space = gym.spaces.Discrete(n_sats)
         self.n_actions = self.action_space.n
         self.option = None
 
-    # Some builds require a property or method; provide property:
     @property
     def builder_type(self):
-        bt = getattr(Image, "builder_type", None)
-        return bt if isinstance(bt, type) else ActionBuilder
+        return Image.builder_type if isinstance(Image.builder_type, type) else ActionBuilder
 
     def set_action(self, option: int, **kwargs):
         self.option = option
@@ -102,9 +384,6 @@ class Reallocate(Action):
         return 0.0
 
 
-# =========================================================
-# Satellite and base multi-agent env
-# =========================================================
 class AdvancedImagingSatellite(ImagingSatellite):
     observation_spec = [
         obs.OpportunityProperties(
@@ -127,6 +406,7 @@ def _tune_access_generation(sat, initial=1800.0, step=120.0, max_dur=3600.0):
     og = next((c for c in candidates if c is not None), None)
     if og is None:
         return
+
     for name, val in [
         ("initial_generation_duration", float(initial)),
         ("generation_step", float(step)),
@@ -135,7 +415,9 @@ def _tune_access_generation(sat, initial=1800.0, step=120.0, max_dur=3600.0):
     ]:
         if hasattr(og, name):
             setattr(og, name, val)
-    for k, v in {"retask_on_image_complete": True, "max_access_compute_time_s": 2.0}.items():
+
+    extras = {"retask_on_image_complete": True, "max_access_compute_time_s": 2.0}
+    for k, v in extras.items():
         if hasattr(og, k):
             setattr(og, k, v)
 
@@ -168,8 +450,10 @@ class CustomUniqueImageReward(UniqueImageReward):
             rewards[sat_id] = total
             if new_unique_count > 0:
                 self.imaged_by_sat[sat_id] = self.imaged_by_sat.get(sat_id, 0) + new_unique_count
+
         for sat_id in getattr(self, "imaged_by_sat", {}).keys():
             rewards.setdefault(sat_id, 0.0)
+
         return rewards
 
 
@@ -193,194 +477,27 @@ class CustomConstellationTasking(ConstellationTasking):
     def step(self, action_dict: Dict[str, Any]):
         self._step_count += 1
         obs, rews, terms, truncs, infos = super().step(action_dict)
+
         for agent, r in rews.items():
             if r > 0:
                 self.remaining_tasks[agent] = max(0, self.remaining_tasks.get(agent, 0) - 1)
 
         horizon_reached = self._step_count >= self.max_episode_steps
         no_agents_left = len(self.agents) == 0
+
         all_keys = set(rews.keys()) | set(terms.keys()) | set(truncs.keys()) | set(self.agents)
         all_done_per_agent = all(terms.get(a, False) or truncs.get(a, False) for a in all_keys) if all_keys else True
+
         terms["__all__"] = no_agents_left or all_done_per_agent
         truncs["__all__"] = (horizon_reached and not terms["__all__"])
+
         return obs, rews, terms, truncs, infos
 
 
 # =========================================================
-# Joint single-agent wrapper for Tianshou + DWC
+# Training
 # =========================================================
-class JointConstellationEnv(gym.Env):
-    """
-    Single-agent facade over the multi-agent constellation:
-    - Observation: concatenation of per-agent obs (flattened).
-    - Action: Box(-1,1)^D continuous joint vector, one dim per discrete head.
-      Internally mapped to per-sat discrete choices (Image + Reallocate).
-    - DWC: per-dim clipping of action delta between steps.
-    - Reward: sum of per-agent rewards (change to avg if desired).
-    - IMPORTANT: reset/step always return the same info keys for Tianshou.
-    """
 
-    metadata = {"render_modes": []}
-
-    def __init__(self, max_episode_steps=64, dwc_delta=0.5):
-        super().__init__()
-        # Build base env
-        satellites = [AdvancedImagingSatellite(f"Sat-{i}", sat_args) for i in range(4)]
-        for sat in satellites:
-            _tune_access_generation(sat, initial=1800.0, step=120.0, max_dur=3600.0)
-
-        self.base = CustomConstellationTasking(
-            satellites=satellites,
-            scenario=TargetAreas(n_targets=40),
-            rewarder=CustomUniqueImageReward(),
-            communicator=LOSCommunication(),
-            sat_arg_randomizer=sat_arg_randomizer,
-            log_level="INFO",
-            max_episode_steps=max_episode_steps,
-        )
-        self.max_episode_steps = max_episode_steps
-        self._last_action = None
-        self._dwc = float(dwc_delta)
-
-        # Reset once to discover spaces and agent IDs
-        obs0, _ = self.base.reset()
-        self._agent_ids = list(self.base.agents)  # e.g., ["Sat-0", ..., "Sat-3"]
-        # Make a stable order for per-agent vectors
-        self._sat_order = [f"Sat-{i}" for i in range(4)]
-
-        self._per_agent_obs_space = {aid: self.base.observation_space(aid) for aid in self._agent_ids}
-        self._per_agent_act_space = {aid: self.base.action_space(aid) for aid in self._agent_ids}
-
-        # Build flattened obs
-        self._obs_slices: List[Tuple[int, int]] = []
-        start = 0
-        for aid in self._agent_ids:
-            sp = self._per_agent_obs_space[aid]
-            size = int(np.prod(sp.shape if hasattr(sp, "shape") else ()))
-            _ = self._flatten(obs0[aid], size)  # probe flatten
-            self._obs_slices.append((start, start + size))
-            start += size
-        self._obs_dim = start
-
-        # Build joint action bins per sat
-        self._per_agent_bins = []
-        for aid in self._agent_ids:
-            act_sp = self._per_agent_act_space[aid]
-            bins = []
-            if isinstance(act_sp, gym.spaces.Discrete):
-                bins.append(act_sp.n)
-            elif isinstance(act_sp, gym.spaces.Tuple):
-                for s in act_sp.spaces:
-                    assert isinstance(s, gym.spaces.Discrete), "Only Discrete in Tuple supported"
-                    bins.append(s.n)
-            else:
-                raise ValueError(f"Unsupported per-agent action space: {act_sp}")
-            self._per_agent_bins.append(bins)
-
-        self._act_bins = np.array([b for bins in self._per_agent_bins for b in bins], dtype=np.int32)
-        self._act_dim = len(self._act_bins)
-
-        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._obs_dim,), dtype=np.float32)
-        self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(self._act_dim,), dtype=np.float32)
-
-        self._t = 0
-
-    def _flatten(self, ob, size):
-        arr = np.array(ob, dtype=np.float32).reshape(-1)
-        if arr.size != size and isinstance(ob, dict):
-            # try dict-like {"observation": ...} or {"obs": ...}
-            key = "observation" if "observation" in ob else ("obs" if "obs" in ob else None)
-            if key is not None:
-                arr = np.array(ob[key], dtype=np.float32).reshape(-1)
-        return arr
-
-    def _concat_obs(self, obs_dict):
-        vecs = []
-        for (start, end), aid in zip(self._obs_slices, self._agent_ids):
-            size = end - start
-            vecs.append(self._flatten(obs_dict[aid], size))
-        return np.concatenate(vecs, dtype=np.float32)
-
-    def _apply_dwc(self, a: np.ndarray) -> np.ndarray:
-        if self._last_action is None:
-            self._last_action = np.zeros_like(a, dtype=np.float32)
-        delta = a - self._last_action
-        delta = np.clip(delta, -self._dwc, self._dwc)
-        a_clipped = np.clip(self._last_action + delta, -1.0, 1.0)
-        self._last_action = a_clipped.copy()
-        return a_clipped
-
-    def _cont_to_discrete(self, a_cont: np.ndarray) -> Dict[str, Any]:
-        out = {}
-        idx = 0
-        for aid, bins in zip(self._agent_ids, self._per_agent_bins):
-            choices = []
-            for n in bins:
-                if n <= 1:
-                    choices.append(0)
-                else:
-                    v = a_cont[idx]
-                    k = int(np.round((v + 1.0) * 0.5 * (n - 1)))
-                    choices.append(np.clip(k, 0, n - 1))
-                idx += 1
-            out[aid] = choices[0] if len(choices) == 1 else tuple(choices)
-        return out
-
-    def _rews_array(self, rews: Dict[str, float]) -> np.ndarray:
-        # Convert dict of per-agent rewards into a stable-order vector
-        return np.array([float(rews.get(s, 0.0)) for s in self._sat_order], dtype=np.float32)
-
-    def reset(self, *, seed=None, options=None):
-        self._t = 0
-        self._last_action = None
-        obs_dict, _ = self.base.reset(seed=seed, options=options)
-        obs = self._concat_obs(obs_dict)
-        # IMPORTANT: return a stable info structure that will also appear in step()
-        info = {"per_agent_reward": np.zeros(len(self._sat_order), dtype=np.float32)}
-        return obs, info
-
-    def step(self, action):
-        self._t += 1
-        a = np.asarray(action, dtype=np.float32)
-        a = np.clip(a, -1.0, 1.0)
-        a = self._apply_dwc(a)  # DWC
-        act_dict = self._cont_to_discrete(a)
-
-        obs_dict, rews, terms, truncs, _infos = self.base.step(act_dict)
-        obs = self._concat_obs(obs_dict)
-
-        # Aggregate reward (sum) + provide stable per-agent reward vector in info
-        reward = float(sum(rews.values()))
-        info = {"per_agent_reward": self._rews_array(rews)}
-
-        terminated = bool(terms.get("__all__", False))
-        truncated = bool(truncs.get("__all__", False))
-        done = terminated or truncated
-        return obs, reward, done, False, info
-
-    @property
-    def satellites(self):
-        return self.base.unwrapped.satellites
-
-    @property
-    def agents(self):
-        return self.base.agents
-
-    @property
-    def rewarder(self):
-        return self.base.rewarder
-
-    @property
-    def remaining_tasks(self):
-        return self.base.remaining_tasks
-
-    @remaining_tasks.setter
-    def remaining_tasks(self, v):
-        self.base.remaining_tasks = v
-
-# =========================================================
-# Satellite args + orbit randomizer
-# =========================================================
 sat_args = {
     "imageAttErrorRequirement": 0.01,
     "imageRateErrorRequirement": 0.01,
@@ -397,276 +514,178 @@ sat_args = {
 sat_arg_randomizer = walker_delta_args(altitude=800.0, inc=60.0, n_planes=1)
 
 
-# =========================================================
-# Build Tianshou training objects
-# =========================================================
-def make_env():
-    return JointConstellationEnv(max_episode_steps=64, dwc_delta=0.5)
+def train_td3_her(num_episodes=100, max_timesteps=64, batch_size=256, verbose=True):
+    """Train TD3-HER agent"""
+    
+    print("=" * 60)
+    print("TD3-HER Training for Satellite Constellation")
+    print("=" * 60)
+    
+    # Create environment
+    print("\nInitializing environment...")
+    max_episode_steps = max_timesteps
+    satellites = [AdvancedImagingSatellite(f"Sat-{i}", sat_args) for i in range(4)]
 
-train_envs = DummyVectorEnv([make_env for _ in range(1)])   # increase N for parallelism
-test_envs  = DummyVectorEnv([make_env for _ in range(1)])
+    for sat in satellites:
+        _tune_access_generation(sat, initial=1800.0, step=120.0, max_dur=3600.0)
 
-example_env = make_env()
-state_shape = example_env.observation_space.shape
-action_shape = example_env.action_space.shape
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
-# Actor / Critic networks
-net_a = Net(state_shape, hidden_sizes=[256, 256], device=device)
-actor = Actor(net_a, action_shape, device=device, max_action=1.0).to(device)
-
-net_c1 = Net(state_shape, action_shape, hidden_sizes=[256, 256], concat=True, device=device)
-net_c2 = Net(state_shape, action_shape, hidden_sizes=[256, 256], concat=True, device=device)
-critic1 = Critic(net_c1, device=device).to(device)
-critic2 = Critic(net_c2, device=device).to(device)
-
-actor_optim = torch.optim.Adam(actor.parameters(), lr=1e-4)
-critic_optim = torch.optim.Adam(list(critic1.parameters()) + list(critic2.parameters()), lr=1e-3)
-
-# Use an exploration noise OBJECT (not a float)
-if GaussianNoise is None:
-    raise ImportError("Could not import GaussianNoise from Tianshou. Please upgrade/install Tianshou properly.")
-exp_noise = GaussianNoise(sigma=0.1)  # or OUNoise(sigma=0.2, theta=0.15)
-
-policy = TD3Policy(
-    actor=actor,
-    actor_optim=actor_optim,
-    critic1=critic1,
-    critic1_optim=critic_optim,
-    critic2=critic2,
-    critic2_optim=critic_optim,
-    tau=0.005,
-    gamma=0.99,
-    exploration_noise=exp_noise,   # <-- fixed: noise object
-    policy_noise=0.2,
-    update_actor_freq=2,
-    noise_clip=0.5,
-    estimation_step=1,
-    action_space=example_env.action_space,
-)
-
-# Replay buffer (swap to HERReplayBuffer when you define goals)
-buffer_size = int(1e6)
-train_buffer = VectorReplayBuffer(buffer_size, len(train_envs))
-# Example to enable HER later:
-# from tianshou.data import HERReplayBuffer
-# train_buffer = HERReplayBuffer(buffer_size, len(train_envs),
-#                                reward_fn=your_her_reward_fn,
-#                                sample_fn=your_her_sample_fn)
-
-train_collector = Collector(policy, train_envs, train_buffer, exploration_noise=True)
-test_collector  = Collector(policy, test_envs)
-
-# Optional warm-up to stabilize replay stats
-train_collector.collect(n_step=2048)
-
-
-# =========================================================
-# Training loop (off-policy style)
-# =========================================================
-def save_checkpoint(path_prefix="td3_hd"):
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    fname = f"{path_prefix}_{ts}.pth"
-    torch.save(policy.state_dict(), fname)
-    print(f"[TD3] Saved checkpoint: {fname}")
-    return fname
-
-epoch = 20
-step_per_epoch = 10000
-step_per_collect = 64
-update_per_step = 1.0
-batch_size = 512
-test_num_episodes = 5
-
-env_steps = 0
-for ep in range(epoch):
-    policy.train()
-    steps_this_epoch = 0
-    while steps_this_epoch < step_per_epoch:
-        result = train_collector.collect(n_step=step_per_collect)
-        steps_this_epoch += result["n/st"]
-        env_steps += result["n/st"]
-        # update TD3 (pulls minibatches from train_buffer internally)
-        for _ in range(int(step_per_collect * update_per_step)):
-            policy.update(batch_size, train_buffer)
-    policy.eval()
-    res = test_collector.collect(n_episode=test_num_episodes)
-    print(f"[Epoch {ep}] env_steps={env_steps} "
-          f"train_rew_mean={result['rews'].mean():.3f} "
-          f"test_rew_mean={res['rews'].mean():.3f} "
-          f"buffer={train_buffer.size}")
-    if (ep + 1) % 5 == 0:
-        save_checkpoint()
-
-final_ckpt = save_checkpoint()
-
-
-# =========================================================
-# Test run with failure injections + plots
-# =========================================================
-test_env = make_env()
-
-def inject_failure(sat_index: int):
-    """Force a satellite 'dead' by zeroing power each step."""
-    base = test_env.base
-    sat = base.unwrapped.satellites[sat_index]
-    def isnt_alive(log_failure=False, _sat=sat):
-        death_message = messaging.PowerStorageStatusMsgPayload()
-        death_message.storageLevel = 0.0
-        _sat.dynamics.powerMonitor.batPowerOutMsg.write(death_message)
-        return _sat.dynamics.is_alive(log_failure=log_failure) and _sat.fsw.is_alive(log_failure=log_failure)
-    sat.is_alive = isnt_alive
-
-max_steps = 40
-max_wallclock_s = 120
-fail_plan = {5: 0, 15: 2, 25: 3}
-
-step_log = []
-health_log = {f"Sat-{i}": [] for i in range(4)}
-imaged_log = {f"Sat-{i}": [] for i in range(4)}
-remaining_log = {f"Sat-{i}": [] for i in range(4)}
-faulty_steps = {f"Sat-{i}": [] for i in range(4)}
-remaining_matrix = np.zeros((4, max_steps))
-
-obs, _ = test_env.reset()
-test_env.base.remaining_tasks = {"Sat-0": 3, "Sat-1": 3, "Sat-2": 6, "Sat-3": 3}
-current_step = 0
-episode_reward = 0.0
-t0 = time.time()
-
-policy.eval()
-# turn off exploration noise for evaluation rollout
-policy.set_exp_noise(None)
-
-while current_step < max_steps and len(test_env.base.agents) > 0:
-    if time.time() - t0 > max_wallclock_s:
-        print(f"[Test] Wallclock timeout ({max_wallclock_s}s). Breaking to plots.")
-        break
-
-    # Tianshou policy forward -> Batch(act=...)
-    with torch.no_grad():
-        obs_tensor = torch.as_tensor(obs, dtype=torch.float32, device=device).unsqueeze(0)
-        out = policy.forward(Batch(obs=obs_tensor), state=None, info=Batch(), exploration_noise=False)
-        action = out.act[0].detach().cpu().numpy()
-
-    obs, reward, terminated, truncated, info = test_env.step(action)
-    episode_reward += float(reward)
-    step_log.append(current_step)
-
-    # Logging
-    for i in range(4):
-        sat_name = f"Sat-{i}"
-        is_alive = 1 if sat_name in test_env.base.agents else 0
-        health_log[sat_name].append(is_alive)
-        imaged_count = getattr(test_env.base.rewarder, "imaged_by_sat", {}).get(sat_name, 0)
-        imaged_log[sat_name].append(imaged_count)
-        remaining = test_env.base.remaining_tasks.get(sat_name, 0)
-        remaining_log[sat_name].append(remaining)
-        remaining_matrix[i, current_step] = remaining
-        if is_alive == 0:
-            faulty_steps[sat_name].append(current_step)
-
-    # Inject failures on schedule
-    if current_step in fail_plan:
-        idx = fail_plan[current_step]
-        if 0 <= idx < 4 and (test_env.base.unwrapped.satellites[idx].name in test_env.base.agents):
-            inject_failure(idx)
-
-    current_step += 1
-    if terminated or truncated:
-        break
-
-print(f"Test episode reward: {episode_reward:.3f}")
-
-# ---------- Plots ----------
-fig1, ax1 = plt.subplots()
-for sat_name in health_log:
-    ax1.plot(step_log, health_log[sat_name], label=sat_name)
-ax1.set_xlabel('Step'); ax1.set_ylabel('Health (0=Faulty, 1=Healthy)')
-ax1.set_title('Health Status Over Time'); ax1.legend()
-plt.tight_layout(); plt.savefig('health_status.png'); plt.close(fig1)
-
-fig2, axs = plt.subplots(4, 1, figsize=(9, 12), sharex=True)
-for i, sat_name in enumerate(remaining_log):
-    ax = axs[i]
-    ax.plot(step_log, imaged_log[sat_name], label='Imaged')
-    ax.plot(step_log, remaining_log[sat_name], label='Remaining')
-    for fs in faulty_steps[sat_name]:
-        ax.axvspan(fs - 0.5, fs + 0.5, alpha=0.3)
-    ax.set_ylabel(f'{sat_name} (#)'); ax.legend()
-axs[-1].set_xlabel('Step')
-fig2.suptitle('Per-Satellite Task Progress (shaded = faulty steps)')
-plt.tight_layout(); plt.savefig('task_progress.png'); plt.close(fig2)
-
-fig3, ax3 = plt.subplots(figsize=(9, 3))
-cax = ax3.imshow(remaining_matrix, aspect='auto', interpolation='nearest')
-ax3.set_yticks(range(4)); ax3.set_yticklabels(['Sat-0', 'Sat-1', 'Sat-2', 'Sat-3'])
-ax3.set_xlabel('Step'); ax3.set_title('Remaining Tasks Heatmap')
-fig3.colorbar(cax, label='Remaining Tasks')
-plt.tight_layout(); plt.savefig('remaining_tasks_heatmap.png'); plt.close(fig3)
-
-print("Testing complete. Plots saved as:")
-print(" - health_status.png")
-print(" - task_progress.png")
-print(" - remaining_tasks_heatmap.png")
+    env = CustomConstellationTasking(
+        satellites=satellites,
+        scenario=TargetAreas(n_targets=40),
+        rewarder=CustomUniqueImageReward(),
+        communicator=LOSCommunication(),
+        sat_arg_randomizer=sat_arg_randomizer,
+        log_level="INFO",
+        max_episode_steps=max_episode_steps,
+    )
+    print("Environment initialized!")
+    
+    # Get dimensions
+    obs0, _ = env.reset()
+    first_agent = env.agents[0]
+    
+    if hasattr(env.observation_space(first_agent), 'spaces'):
+        state_dim = sum([space.shape[0] for space in env.observation_space(first_agent).spaces.values()])
+    else:
+        state_dim = env.observation_space(first_agent).shape[0]
+    
+    action_dims = []
+    if hasattr(env.action_space(first_agent), 'spaces'):
+        for space in env.action_space(first_agent).spaces:
+            if hasattr(space, 'n'):
+                action_dims.append(space.n)
+            else:
+                action_dims.append(space.shape[0])
+    else:
+        if hasattr(env.action_space(first_agent), 'n'):
+            action_dims = [env.action_space(first_agent).n]
+        else:
+            action_dims = [env.action_space(first_agent).shape[0]]
+    
+    print(f"State dimension: {state_dim}, Action dimensions: {action_dims}")
+    
+    # Create agents for each satellite
+    agents = {}
+    for agent_id in env.agents:
+        agents[agent_id] = TD3_HER_DWC(
+            state_dim=state_dim,
+            action_dims=action_dims,
+            device='cuda' if torch.cuda.is_available() else 'cpu',
+            her_ratio=0.8
+        )
+    
+    print(f"\nStarting training for {num_episodes} episodes...")
+    print("=" * 60)
+    
+    rewards_history = []
+    start_time = time.time()
+    
+    for episode in range(num_episodes):
+        state, _ = env.reset()
+        episode_reward = 0
+        episode_steps = 0
+        
+        for t in range(max_timesteps):
+            # Select actions
+            action = {}
+            for agent_id in env.agents:
+                agent_state = state[agent_id]
+                if isinstance(agent_state, dict):
+                    agent_state = np.concatenate([v.flatten() for v in agent_state.values()])
+                action[agent_id] = agents[agent_id].select_action(agent_state, explore=True)
+            
+            # Step environment
+            next_state, reward, done, truncated, info = env.step(action)
+            
+            # Store experiences
+            for agent_id in env.agents:
+                agent_state = state[agent_id]
+                if isinstance(agent_state, dict):
+                    agent_state = np.concatenate([v.flatten() for v in agent_state.values()])
+                
+                next_agent_state = next_state[agent_id]
+                if isinstance(next_agent_state, dict):
+                    next_agent_state = np.concatenate([v.flatten() for v in next_agent_state.values()])
+                
+                agents[agent_id].replay_buffer.add(
+                    state=agent_state,
+                    action=np.array(action[agent_id]),
+                    reward=reward[agent_id],
+                    next_state=next_agent_state,
+                    done=done[agent_id]
+                )
+            
+            # Train agents
+            for agent_id in env.agents:
+                agents[agent_id].train(batch_size)
+            
+            state = next_state
+            episode_reward += sum(reward.values())
+            episode_steps += 1
+            
+            if all(done.values()):
+                break
+        
+        rewards_history.append(episode_reward)
+        
+        if verbose and (episode + 1) % 10 == 0:
+            avg_reward = np.mean(rewards_history[-10:])
+            elapsed = time.time() - start_time
+            print(f"Episode {episode+1}/{num_episodes}, Avg Reward: {avg_reward:.2f}, Steps: {episode_steps}, Time: {elapsed:.1f}s")
+        
+        # Save checkpoint
+        if (episode + 1) % 100 == 0:
+            for agent_id in env.agents:
+                save_path = os.path.join(RESULT_DIR, f"td3_her_{agent_id}_checkpoint_{episode+1}.pth")
+                agents[agent_id].save(save_path)
+                if verbose:
+                    print(f"  Saved checkpoint: {save_path}")
+    
+    # Save final models
+    final_paths = []
+    for agent_id in env.agents:
+        save_path = os.path.join(RESULT_DIR, f"TDHDYear2_{agent_id}_final.pth")
+        agents[agent_id].save(save_path)
+        final_paths.append(save_path)
+    
+    env.close()
+    
+    print("\n" + "=" * 60)
+    print("Training complete!")
+    print(f"Total time: {time.time() - start_time:.2f} seconds")
+    for path in final_paths:
+        print(f"Saved: {path}")
+    print("=" * 60)
+    
+    return rewards_history, final_paths
 
 
 # =========================================================
-# Excel export
+# Main
 # =========================================================
-def save_results_to_excel(step_log,
-                          health_log,
-                          imaged_log,
-                          remaining_log,
-                          remaining_matrix,
-                          episode_reward,
-                          algo_name="TD3_HD_Tianshou"):
-    if pd is None:
-        print("[Excel] pandas not installed; skipping Excel export."); return
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    fname = f"results_{algo_name}_{ts}.xlsx"
-    steps = len(step_log); sats = list(health_log.keys())
-    rows = []
-    for s in sats:
-        for i, step in enumerate(step_log):
-            rows.append({"step": step, "sat": s,
-                         "health": health_log[s][i] if i < len(health_log[s]) else None,
-                         "imaged": imaged_log[s][i] if i < len(imaged_log[s]) else None,
-                         "remaining": remaining_log[s][i] if i < len(remaining_log[s]) else None})
-    df_long = pd.DataFrame(rows)
-    health_wide = pd.DataFrame({s: health_log[s][:steps] for s in sats}, index=step_log)
-    imaged_wide = pd.DataFrame({s: imaged_log[s][:steps] for s in sats}, index=step_log)
-    remaining_wide = pd.DataFrame({s: remaining_log[s][:steps] for s in sats}, index=step_log)
-    hm = pd.DataFrame(remaining_matrix[:, :steps], index=sats, columns=step_log)
-    summary = pd.DataFrame({"metric": ["episode_reward", "steps_logged", "sats"],
-                            "value": [episode_reward, steps, len(sats)]})
-    engine = "xlsxwriter"
-    try:
-        import xlsxwriter  # noqa: F401
-    except Exception:
-        engine = "openpyxl"
-    with pd.ExcelWriter(fname, engine=engine) as writer:
-        df_long.to_excel(writer, "log_long", index=False)
-        health_wide.to_excel(writer, "health", index=True)
-        imaged_wide.to_excel(writer, "imaged", index=True)
-        remaining_wide.to_excel(writer, "remaining", index=True)
-        hm.to_excel(writer, "heatmap", index=True)
-        summary.to_excel(writer, "summary", index=False)
-        if engine == "xlsxwriter":
-            workbook = writer.book; ws = workbook.add_worksheet("plots")
-            y = 2
-            for img in ["health_status.png", "task_progress.png", "remaining_tasks_heatmap.png"]:
-                if os.path.exists(img):
-                    ws.insert_image(y, 2, img); y += 20
-    print(f"Saved Excel: {fname}")
 
-save_results_to_excel(
-    step_log=step_log,
-    health_log=health_log,
-    imaged_log=imaged_log,
-    remaining_log=remaining_log,
-    remaining_matrix=remaining_matrix,
-    episode_reward=episode_reward,
-    algo_name="TD3_HD_Tianshou"
-)
+def main():
+    """Main entry point"""
+    print("\nTD3-HER Training Script for Satellite Constellation")
+    print("Using PyTorch + bsk_rl")
+    print(f"Results will be saved to: {RESULT_DIR}\n")
+    
+    rewards_history, model_paths = train_td3_her(
+        num_episodes=100,
+        max_timesteps=64,
+        batch_size=256,
+        verbose=True
+    )
+    
+    if model_paths:
+        print(f"\nâœ“ Training complete! Models saved to:")
+        for path in model_paths:
+            print(f"  {path}")
+    else:
+        print("\nâœ— Training finished but no models were saved")
+    
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

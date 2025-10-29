@@ -1,0 +1,119 @@
+COMPREHENSIVE FAULT DETECTION + DRL ANALYSIS REPORT
+=================================================================
+
+Analysis Date: 2025-10-28T10:28:40.440041
+Duration: 0.3 seconds
+Components Used:
+  AVAILABLE: Fault Detection
+  AVAILABLE: Drl Available
+  AVAILABLE: Ml Model
+
+FAULT DETECTION SUMMARY:
+------------------------------
+Spacecraft Analyzed: 19
+Faults Detected: 3
+Success Rate: 75.0%
+Average Confidence: 1.000
+Max Confidence: 1.000
+
+DRL DECISION MAKING SUMMARY:
+------------------------------
+Strategy Selected: load_balanced
+Action Taken: 2
+Decision Confidence: 0.908
+DRL Model Used: True
+Model Type: Neural Network (Expert-Supervised)
+
+TASK REASSIGNMENT SUMMARY:
+------------------------------
+Assignments Created: 16
+Execution Success: True
+Healthy Spacecraft: 16
+Faulty Spacecraft: 3
+
+SYSTEM HEALTH ASSESSMENT:
+------------------------------
+Overall Status: EXCELLENT
+Healthy Spacecraft: 16
+Faulty Spacecraft: 3
+Tasks Reassigned: 16
+
+DETAILED FAULT ANALYSIS:
+------------------------------
+
+saqib soomr_Leader:
+  No faults detected
+
+Satellite2:
+  No faults detected
+
+Satellite3:
+  No faults detected
+
+Satellite4:
+  No faults detected
+
+asds_Leader:
+  No faults detected
+
+Satellite6:
+  No faults detected
+
+Satellite7:
+  Fault 1:
+    Type: telemetry_attitude_error_change
+    Time: 15.00 min
+    Confidence: 1.000
+    Anomaly Score: 111.63
+
+Satellite8:
+  No faults detected
+
+asdsas_Leader:
+  No faults detected
+
+Satellite10:
+  No faults detected
+
+Satellite11:
+  Fault 1:
+    Type: telemetry_rw_speed_change
+    Time: 15.00 min
+    Confidence: 1.000
+    Anomaly Score: 19.45
+
+Satellite12:
+  Fault 1:
+    Type: telemetry_ml_input_change
+    Time: 15.00 min
+    Confidence: 1.000
+    Anomaly Score: 18.37
+
+assa_Leader:
+  No faults detected
+
+Satellite14:
+  No faults detected
+
+Satellite15:
+  No faults detected
+
+Satellite16:
+  No faults detected
+
+Satellite17:
+  No faults detected
+
+Satellite18:
+  No faults detected
+
+Satellite1:
+  No faults detected
+
+RECOMMENDATIONS:
+------------------------------
+1. Continue normal operations
+2. Maintain routine monitoring
+4. Investigate root causes of 3 detected faults
+5. Update fault detection thresholds if needed
+8. Archive analysis results for future reference
