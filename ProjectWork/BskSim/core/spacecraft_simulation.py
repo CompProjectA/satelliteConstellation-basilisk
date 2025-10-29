@@ -33,6 +33,34 @@ import traceback
 import matplotlib
 matplotlib.use('Agg')  # Headless plotting OK (GUI embeds set backend in their own modules)
 import matplotlib.pyplot as plt
+import logging
+
+# --- Compact logging / spam control ---
+# Quiet common noisy libs
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
+
+# Simulation logger with duplicate filter
+sim_logger = logging.getLogger('simulation')
+sim_logger.setLevel(logging.INFO)
+
+class DuplicateFilter(logging.Filter):
+    """Filter out duplicate log messages (only every 10th repeat)."""
+    def __init__(self):
+        super().__init__()
+        self.last = None
+        self.count = 0
+    def filter(self, record):
+        key = (record.module, record.levelno, record.msg)
+        if key == self.last:
+            self.count += 1
+            return (self.count % 10) == 0
+        self.last = key
+        self.count = 0
+        return True
+
+sim_logger.addFilter(DuplicateFilter())
+
 
 # ----- Path setup -----
 filename = inspect.getframeinfo(inspect.currentframe()).filename
@@ -128,13 +156,11 @@ FAILED_FAULTS = []
 FAULT_LOADER_AVAILABLE = False
 
 
-def check_fault_modules(verbose=True):
-    """Check and report status of all fault modules (non-fatal if missing)."""
+def check_fault_modules(verbose=False):
+    """Check and report status of all fault modules (quiet by default)."""
     global FAULT_IMPORT_STATUS, AVAILABLE_FAULTS, FAILED_FAULTS, FAULT_LOADER_AVAILABLE
 
-    FAULT_IMPORT_STATUS = {}
-    AVAILABLE_FAULTS = []
-    FAILED_FAULTS = []
+    FAULT_IMPORT_STATUS, AVAILABLE_FAULTS, FAILED_FAULTS = {}, [], []
 
     if verbose:
         print("\n" + "="*60)
@@ -143,64 +169,48 @@ def check_fault_modules(verbose=True):
 
     try:
         from fault_loader import (
-            get_fault_scenario_class,
-            create_scenario,
-            run_scenario,
-            apply_fault_to_spacecraft,
-            extract_fault_data_from_scenario,
+            get_fault_scenario_class, create_scenario, run_scenario,
+            apply_fault_to_spacecraft, extract_fault_data_from_scenario,
             get_available_fault_types
         )
+        FAULT_LOADER_AVAILABLE = True
         if verbose:
             print("Fault loader imported successfully")
-        FAULT_LOADER_AVAILABLE = True
-
         try:
-            available_types = get_available_fault_types()
+            AVAILABLE_FAULTS = get_available_fault_types()
             if verbose:
-                print(f"Available fault types: {available_types}")
-            AVAILABLE_FAULTS = available_types
+                print(f"Available fault types: {AVAILABLE_FAULTS}")
         except Exception as e:
             if verbose:
                 print(f"Could not get available fault types: {e}")
-
     except ImportError as e:
+        FAULT_LOADER_AVAILABLE = False
         if verbose:
             print(f"Fault loader import failed: {e}")
-            print("WARNING: Real fault simulation will not be available.")
-        FAULT_LOADER_AVAILABLE = False
 
+    # Check individual modules silently unless verbose
     fault_modules_to_check = [
         ("friction_fault", "FrictionFaultScenario"),
         ("powerlimit_fault", "PowerLimitFaultScenario"),
         ("encoder_fault", "EncoderFaultScenario"),
         ("battery_fault", "BatteryFaultScenario")
     ]
-
-    if verbose:
-        print("\nIndividual fault module status:")
-
     for module_name, class_name in fault_modules_to_check:
         try:
             module = __import__(f"faults.{module_name}", fromlist=[class_name])
-            if hasattr(module, class_name):
-                FAULT_IMPORT_STATUS[module_name] = True
-                if verbose:
-                    print(f"  {module_name}: {class_name} loaded")
-            else:
-                FAULT_IMPORT_STATUS[module_name] = False
+            ok = hasattr(module, class_name)
+            FAULT_IMPORT_STATUS[module_name] = ok
+            if not ok:
                 FAILED_FAULTS.append(module_name)
-                if verbose:
-                    print(f"  {module_name}: {class_name} not found in module")
-        except Exception as e:
+        except Exception:
             FAULT_IMPORT_STATUS[module_name] = False
             FAILED_FAULTS.append(module_name)
-            if verbose:
-                print(f"  {module_name}: Import failed - {e}")
 
     if verbose:
         print("="*60 + "\n")
 
     return FAULT_LOADER_AVAILABLE, AVAILABLE_FAULTS, FAILED_FAULTS
+
 
 
 def check_plots_module(verbose=True):
@@ -1015,10 +1025,10 @@ def run_custom_simulation(config):
     Returns:
         tuple: (scenario, viz, figureList, output_dir)
     """
-    # Check modules
+    # Check modules (quiet)
     print("\nChecking module availability...")
-    check_fault_modules(verbose=True)
-    check_plots_module(verbose=True)
+    check_fault_modules(verbose=False)
+    check_plots_module(verbose=False)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = os.path.join(LOGS_DIR, f"sim_results_{timestamp}")
@@ -1093,10 +1103,10 @@ def run_custom_simulation(config):
             sc = spacecraft.Spacecraft()
             sc.ModelTag = sc_config["name"]
 
-            # Orbit (km/deg to m/rad)
+            # Orbit (km/deg -> m/rad)
             oe = orbitalMotion.ClassicElements()
             orbit = sc_config["orbit"]
-            oe.a = orbit["a"] * 1000  # km -> m
+            oe.a = orbit["a"] * 1000
             oe.e = orbit["e"]
             oe.i = orbit["i"] * macros.D2R
             oe.Omega = orbit["Omega"] * macros.D2R
@@ -1104,39 +1114,27 @@ def run_custom_simulation(config):
             oe.f = orbit["f"] * macros.D2R
 
             rN, vN = orbitalMotion.elem2rv(mu, oe)
-
             sc.hub.r_CN_NInit = rN
             sc.hub.v_CN_NInit = vN
             sc.hub.sigma_BNInit = [[0.01], [0.02], [-0.01]]
             sc.hub.omega_BN_BInit = [[0.0001], [-0.0002], [0.0001]]
 
-            gravFactory.addBodiesTo(sc)  # ensure gravity linked
+            gravFactory.addBodiesTo(sc)
             scSim.AddModelToTask(simTaskName, sc)
             sc_objects.append(sc)
 
-            altitude_km = (oe.a / 1000) - 6371
-            period_min = (2*np.pi*np.sqrt(oe.a**3/mu))/60.0
-            print(f"Spacecraft '{sc.ModelTag}' - Orbit: {sc_config.get('orbit_name','N/A')}, Alt: {altitude_km:.1f} km, Period: {period_min:.1f} min")
-
-            # Fault scaling/report
+            # Fault setup (no per-sat chatter)
             if sc_config["fault"]["enabled"]:
-                fault_type = sc_config["fault"]["type"]
-                fault_magnitude = sc_config["fault"]["magnitude"]
-
-                if fault_type in config.DEFAULT_FAULT_MAGNITUDES and abs(fault_magnitude - 0.0005) < 1e-12:
-                    scaled_magnitude = config.DEFAULT_FAULT_MAGNITUDES[fault_type]
-                    print(f"  Scaling fault magnitude from {fault_magnitude} to {scaled_magnitude} for {fault_type}")
-                    sc_config["fault"]["magnitude"] = scaled_magnitude
-                    fault_magnitude = scaled_magnitude
-
-                print(f"\nFault Configuration for '{sc.ModelTag}':")
-                print(f"  Type: {fault_type} | Magnitude: {fault_magnitude} | Wheel: {sc_config['fault']['wheel']} | Time: {sc_config['fault']['time']} min")
-
+                ft = sc_config["fault"]["type"]
+                fm = sc_config["fault"]["magnitude"]
+                if ft in config.DEFAULT_FAULT_MAGNITUDES and abs(fm - 0.0005) < 1e-12:
+                    sc_config["fault"]["magnitude"] = config.DEFAULT_FAULT_MAGNITUDES[ft]
                 sc.faultConfig = sc_config["fault"].copy()
                 sc.faultInjected = False
                 fault_spacecraft_count += 1
 
-        print(f"\nTotal spacecraft with faults configured: {fault_spacecraft_count}")
+        print(f"Created {len(sc_objects)} spacecraft"
+              + (f" | faults configured on {fault_spacecraft_count}" if fault_spacecraft_count else ""))
 
     # Normalize rich clusters & validate
     rich_clusters = _normalize_rich_clusters(config, sc_objects)
@@ -1318,7 +1316,7 @@ def run_custom_simulation(config):
                 enable_satellite_to_target_lines(viz, verbose=True)
             except Exception as e:
                 print(f"Enhanced target injection failed; falling back to simple add: {e}")
-                # Fallback simple markers (kept from your original)
+                # Fallback simple markers
                 targets_added = 0
                 for target in config.targets:
                     if target.assigned_to:
@@ -1363,7 +1361,7 @@ def run_custom_simulation(config):
     print("RUNNING SIMULATION")
     print("-"*50)
 
-    print("Initializing simulation...")
+    sim_logger.info("Initializing simulation...")
     scSim.InitializeSimulation()
 
     print(f"Setting stop time to {simulationTime} ns...")
@@ -1384,206 +1382,112 @@ def run_custom_simulation(config):
     if abs(actual_sim_minutes - config.simulation_time) > 0.1:
         print("WARNING: Simulation time mismatch!")
 
-    # ---------------- PLOTS ----------------
+    # ---------------- PLOTS (condensed logging) ----------------
     figureList = {}
     if (config.show_plots or config.save_plots) and PLOTS_AVAILABLE:
         print("\n" + "-"*50)
-        print("GENERATING PLOTS WITH REAL FAULT SIMULATION ONLY")
+        print("GENERATING PLOTS")
         print("-"*50)
 
+        time_data = np.linspace(0, config.simulation_time, max(100, int(config.simulation_time * 2)))
+        plot_counts = {'constellation': 0, 'cluster': 0, 'distance': 0, 'fault': 0}
+
+        # Constellation
         try:
-            time_data = np.linspace(0, config.simulation_time, max(100, int(config.simulation_time * 2)))
-            print(f"Time data: 0 to {config.simulation_time} minutes ({len(time_data)} points)")
+            constellation_plots = generate_constellation_overview_plots(sc_objects, time_data, mu)
+            figureList.update(constellation_plots)
+            plot_counts['constellation'] = len(constellation_plots)
+        except Exception as e:
+            print(f"Constellation plots failed: {e}")
 
-            # 1. Constellation plots
-            try:
-                print(f"\nGenerating constellation plots for ALL {len(sc_objects)} satellites...")
-                constellation_plots = generate_constellation_overview_plots(sc_objects, time_data, mu)
-                figureList.update(constellation_plots)
-                print(f"Generated {len(constellation_plots)} constellation overview plots")
-            except Exception as e:
-                print(f"Constellation plots failed: {e}")
-
-            # 2. Cluster communication plots
+        # Cluster
+        try:
             has_clusters = any(sc.get('cluster') for sc in config.spacecraft_list) or \
                            any(sc.get('type') == 'cluster_member' for sc in config.spacecraft_list)
             if has_clusters:
-                try:
-                    cluster_data = _cluster_data_from_manager(cluster_manager, sc_objects) if cluster_manager else {}
-                    if not cluster_data:
-                        cluster_data = _cluster_data_from_config(config, sc_objects)
-
-                    if cluster_data:
-                        print(f"\nGenerating cluster communication plots for {len(cluster_data)} clusters...")
-                        cluster_plots = generate_cluster_communication_plots(
-                            cluster_data,
-                            sc_objects,
-                            time_data
-                        )
-                        figureList.update(cluster_plots)
-                        print(f"Generated {len(cluster_plots)} cluster communication plots")
-                    else:
-                        print("WARNING: No valid cluster data found for plotting!")
-                except Exception as e:
-                    print(f"Cluster plots failed: {e}")
-                    traceback.print_exc()
-
-            # 3. Inter-satellite distance plots
-            try:
-                print(f"\nGenerating distance plots for ALL {len(sc_objects)} satellites...")
-                distance_plots = generate_inter_satellite_distance_plots(sc_objects, time_data, mu)
-                figureList.update(distance_plots)
-                print(f"Generated {len(distance_plots)} distance plots")
-            except Exception as e:
-                print(f"Distance plots failed: {e}")
-
-            # 4. REAL fault plots per spacecraft w/ faults
-            real_plots_count = 0
-            failed_plots_count = 0
-
-            print("\n" + "="*60)
-            print("REAL FAULT SIMULATION PLOT GENERATION")
-            print("="*60)
-            print(f"Fault loader available: {FAULT_LOADER_AVAILABLE}")
-            print(f"Available fault types: {AVAILABLE_FAULTS}")
-
-            if not FAULT_LOADER_AVAILABLE:
-                print("ERROR: Fault loader not available - cannot generate real fault plots!")
-                print("Please ensure fault modules are properly installed in the faults/ directory")
-            else:
-                for i, sc_config in enumerate(config.spacecraft_list):
-                    if sc_config["fault"]["enabled"]:
-                        fault_type = sc_config["fault"]["type"]
-
-                        print("\n" + "="*50)
-                        print(f"GENERATING REAL PLOTS FOR {sc_config['name']}")
-                        print("="*50)
-                        print(f"Fault Type: {fault_type}")
-                        print(f"Magnitude: {sc_config['fault']['magnitude']}")
-                        print(f"Wheel: RW{sc_config['fault']['wheel'] + 1}")
-                        print(f"Time: {sc_config['fault']['time']} minutes")
-
-                        if fault_type not in AVAILABLE_FAULTS:
-                            print(f"ERROR: Fault type '{fault_type}' not available!")
-                            print(f"Available types: {AVAILABLE_FAULTS}")
-                            failed_plots_count += 1
-                            continue
-
-                        try:
-                            fault_params = {
-                                'fault_magnitude': sc_config["fault"]["magnitude"],
-                                'fault_wheel': sc_config["fault"]["wheel"],
-                                'fault_time_min': sc_config["fault"]["time"],
-                                'simulation_time_min': config.simulation_time
-                            }
-
-                            real_fault_config = create_fault_config_for_real_simulation(fault_type, fault_params)
-
-                            print(f"Running REAL {fault_type} simulation...")
-
-                            fault_plots = generate_fault_plots(
-                                fault_type=fault_type,
-                                fault_data=real_fault_config,  # forces real simulation
-                                time_data=time_data,
-                                fault_time_min=sc_config["fault"]["time"],
-                                spacecraft_name=sc_config["name"]
-                            )
-
-                            if fault_plots and len(fault_plots) > 0:
-                                figureList.update(fault_plots)
-
-                                real_plots = [name for name in fault_plots.keys() if "REAL" in name]
-                                if real_plots:
-                                    real_plots_count += len(real_plots)
-                                    print(f"SUCCESS: Generated {len(real_plots)} REAL simulation plots")
-                                    for plot_name in real_plots:
-                                        print(f"  - {plot_name}")
-                                else:
-                                    print(f"ERROR: No REAL plots label found (got {len(fault_plots)} plots)")
-                                    failed_plots_count += 1
-                            else:
-                                print(f"ERROR: No plots generated from real simulation")
-                                failed_plots_count += 1
-
-                        except Exception as e:
-                            print(f"ERROR: Real simulation failed for {sc_config['name']}: {e}")
-                            traceback.print_exc()
-                            failed_plots_count += 1
-
-            # Optional enhanced PNG plots (no Figure objects)
-            if CONSTELLATION_PLOTTER_AVAILABLE and rich_clusters:
-                try:
-                    print("\nGenerating enhanced plots (ConstellationPlotter)...")
-                    os.makedirs(PLOTTING_DIR, exist_ok=True)
-                    plotter = ConstellationPlotter()
-
-                    satellites_data = []
-                    for c in rich_clusters.values():
-                        satellites_data.extend(c.get("satellites", []))
-
-                    overview_path = plotter.plot_constellation_overview(rich_clusters, satellites_data)
-                    print(f"  ✓ Constellation Overview -> {os.path.basename(overview_path)}")
-
-                    for cname, cdata in rich_clusters.items():
-                        formation_path = plotter.plot_formation_check(cname, cdata)
-                        print(f"  ✓ Formation Check ({cname}) -> {os.path.basename(formation_path)}")
-
-                    comm_path = plotter.plot_cluster_communication(
-                        rich_clusters, int(round(config.simulation_time))
-                    )
-                    print(f"  ✓ Cluster Communication -> {os.path.basename(comm_path)}")
-
-                    distance_path = plotter.plot_distance_analysis(rich_clusters, satellites_data)
-                    print(f"  ✓ Distance Analysis -> {os.path.basename(distance_path)}")
-
-                except Exception as e:
-                    print(f"Enhanced plotter failed (non-fatal): {e}")
-
-            # Save Figures (Figure-based)
-            if config.save_plots and figureList:
-                print(f"\nSaving plots to disk...")
-                os.makedirs(PLOTTING_DIR, exist_ok=True)
-                ts = datetime.now().strftime("%Y%m%d%H%M%S")
-
-                saved_count = 0
-                for name, fig in list(figureList.items()):
-                    try:
-                        clean_name = name.replace(" ", "_").replace("/", "_")
-                        plot_filename = f"{ts}_{clean_name}.png"
-                        plot_path = os.path.join(PLOTTING_DIR, plot_filename)
-
-                        fig.savefig(plot_path, dpi=300, bbox_inches='tight')
-                        saved_count += 1
-
-                        if "REAL" in name:
-                            print(f"  ✓ Saved REAL plot: {plot_filename}")
-                        elif "Constellation" in name:
-                            print(f"  ✓ Saved constellation plot: {plot_filename}")
-                        elif "Cluster" in name:
-                            print(f"  ✓ Saved cluster plot: {plot_filename}")
-
-                        plt.close(fig)
-                        del figureList[name]
-                    except Exception as e:
-                        print(f"  ✗ Error saving plot {name}: {e}")
-
-                print(f"Saved {saved_count} plots to {PLOTTING_DIR}")
-            else:
-                # Close figures if not saving, to free memory
-                for _, fig in figureList.items():
-                    try:
-                        plt.close(fig)
-                    except Exception:
-                        pass
-                figureList.clear()
-
+                cluster_data = _cluster_data_from_manager(cluster_manager, sc_objects) if cluster_manager else {}
+                if not cluster_data:
+                    cluster_data = _cluster_data_from_config(config, sc_objects)
+                if cluster_data:
+                    cluster_plots = generate_cluster_communication_plots(cluster_data, sc_objects, time_data)
+                    figureList.update(cluster_plots)
+                    plot_counts['cluster'] = len(cluster_plots)
         except Exception as e:
-            print(f"Critical error in plot generation: {e}")
-            traceback.print_exc()
-            try:
-                plt.close('all')
-            except Exception:
-                pass
+            print(f"Cluster plots failed: {e}")
+
+        # Distances
+        try:
+            distance_plots = generate_inter_satellite_distance_plots(sc_objects, time_data, mu)
+            figureList.update(distance_plots)
+            plot_counts['distance'] = len(distance_plots)
+        except Exception as e:
+            print(f"Distance plots failed: {e}")
+
+        # Faults (REAL sim per sat with faults)
+        try:
+            if FAULT_LOADER_AVAILABLE:
+                fault_sats = [sc for sc in config.spacecraft_list if sc["fault"]["enabled"]]
+                if fault_sats:
+                    print(f"Generating fault plots for {len(fault_sats)} spacecraft...")
+                for sc_config in fault_sats:
+                    ft = sc_config["fault"]["type"]
+                    if ft not in AVAILABLE_FAULTS:
+                        continue
+                    params = {
+                        'fault_magnitude': sc_config["fault"]["magnitude"],
+                        'fault_wheel': sc_config["fault"]["wheel"],
+                        'fault_time_min': sc_config["fault"]["time"],
+                        'simulation_time_min': config.simulation_time
+                    }
+                    real_fault_cfg = create_fault_config_for_real_simulation(ft, params)
+                    fps = generate_fault_plots(
+                        fault_type=ft,
+                        fault_data=real_fault_cfg,
+                        time_data=time_data,
+                        fault_time_min=sc_config["fault"]["time"],
+                        spacecraft_name=sc_config["name"]
+                    )
+                    if fps:
+                        figureList.update(fps)
+                        plot_counts['fault'] += len(fps)
+        except Exception as e:
+            print(f"Fault plots failed: {e}")
+
+        print("\nPlot generation complete:")
+        print(f"  Constellation: {plot_counts['constellation']}")
+        print(f"  Cluster:       {plot_counts['cluster']}")
+        print(f"  Distance:      {plot_counts['distance']}")
+        print(f"  Fault:         {plot_counts['fault']}")
+        print(f"  Total:         {sum(plot_counts.values())} plots")
+
+        # Save Figures
+        if config.save_plots and figureList:
+            print(f"\nSaving plots to disk...")
+            os.makedirs(PLOTTING_DIR, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d%H%M%S")
+
+            saved_count = 0
+            for name, fig in list(figureList.items()):
+                try:
+                    clean_name = name.replace(" ", "_").replace("/", "_")
+                    plot_filename = f"{ts}_{clean_name}.png"
+                    plot_path = os.path.join(PLOTTING_DIR, plot_filename)
+                    fig.savefig(plot_path, dpi=300, bbox_inches='tight')
+                    saved_count += 1
+                    plt.close(fig)
+                    del figureList[name]
+                except Exception as e:
+                    print(f"  ✗ Error saving plot {name}: {e}")
+
+            print(f"Saved {saved_count} plots to {PLOTTING_DIR}")
+        else:
+            # Close figures if not saving, to free memory
+            for _, fig in figureList.items():
+                try:
+                    plt.close(fig)
+                except Exception:
+                    pass
+            figureList.clear()
 
     # Scenario object (as your GUI expects)
     class ConstellationScenario:
@@ -1741,6 +1645,7 @@ def run_custom_simulation(config):
     print(f"Real Fault Simulations: {'Available' if FAULT_LOADER_AVAILABLE else 'Not available'}")
 
     return scenario, viz, figureList, output_dir
+
 
 
 # ============= MODULE TEST =============
