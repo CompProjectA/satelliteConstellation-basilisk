@@ -680,7 +680,7 @@ class SatelliteSimulatorApp:
         # Title
         ttk.Label(
             title_frame, 
-            text="Spacecraft Constellation Fault Simulator with DRL",
+            text="Spacecraft Constellation Fault Simulator",
             font=('Segoe UI', 16, 'bold'),
             anchor="center"
         ).grid(row=0, column=1)
