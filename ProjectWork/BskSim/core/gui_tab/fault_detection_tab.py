@@ -511,7 +511,16 @@ class FaultDetectionTab:
             
             # Import XAI integration module
             from satellite_xai import add_xai_to_basilisk_detection
-            
+            real_telemetry = self.fault_detection_results.get("real_telemetry")
+            if real_telemetry is None:
+                self.parent_app.add_log("XAI aborted: real_telemetry is None (mock results).")
+                messagebox.showwarning(
+                    "No Telemetry for XAI",
+                    "XAI needs real telemetry, but this run used mock results.\n"
+                    "Run a simulation with the Fault Detection tab attached to the pipeline, then try again."
+                )
+                self.generate_xai_btn.config(state="normal", text="Generate XAI")
+                return
             # Generate explanations
             xai_results = add_xai_to_basilisk_detection(
                 ml_detector=self.fault_detection_results.get("ml_detector"),
@@ -584,9 +593,11 @@ class FaultDetectionTab:
             from PIL import Image
             
             # Check what to display
-            show_lime = "LIME" in xai_type
-            show_shap = "SHAP" in xai_type
-            
+            # Check what to display
+            xai_type_upper = (xai_type or "").upper()
+            show_lime = ("LIME" in xai_type_upper) or (xai_type_upper == "BOTH")
+            show_shap = ("SHAP" in xai_type_upper) or (xai_type_upper == "BOTH")
+
             displayed = False
             
             # Display LIME if requested
@@ -1255,163 +1266,186 @@ class FaultDetectionTab:
         """Display ML detection results (LSTM or Isolation Forest) and enable XAI button"""
         if not ml_results:
             return
-        
-        # Ensure this runs on the main GUI thread
+
         def _update_gui():
             try:
                 self.fault_detection_results = ml_results
-                
-                # Detect which detector was used
+
+                # Which detector?
                 detector_type = "Unknown"
                 if 'detector' in ml_results:
                     detector_type = "Isolation Forest"
                 elif 'ml_detector' in ml_results:
                     detector_type = "LSTM/Autoencoder"
-                
-                # Update detection status
-                self.detection_status_label.config(text=f"Detection Complete ({detector_type})", foreground='green')
-                
-                # Clear existing results
+
+                # Status
+                self.detection_status_label.config(
+                    text=f"Detection Complete ({detector_type})", foreground='green'
+                )
+
+                # Clear tables/lists
                 for item in self.results_tree.get_children():
                     self.results_tree.delete(item)
-                
-                # Clear recent detections list
                 self.recent_detections_listbox.delete(0, tk.END)
-                
-                # Process and display results
-                summary = ml_results.get('summary', {})
-                detections = ml_results.get('detections', {})
-                
+
+                # Pull data
+                summary = ml_results.get('summary', {}) or {}
+                detections = ml_results.get('detections', {}) or {}
+
                 total_detections = 0
                 recent_detections = []
-                
-                # Add detections to table and recent list
+
+                # Rows for table + recent list
                 for spacecraft_name, spacecraft_detections in detections.items():
                     for detection in spacecraft_detections:
-                        # Get detection method
+                        # Build method label per-detector safely
                         if detector_type == "Isolation Forest":
-                            method_used = f"Isolation Forest ({detection.fault_type})"
+                            method_used = f"Isolation Forest ({getattr(detection, 'fault_type', 'unknown')})"
                         else:
-                            method_used = detection.details.get('primary_method', 'ML Detection')
-                        
-                        self.results_tree.insert('', 'end', values=(
-                            f"{detection.detection_time_minutes:.1f} min",
-                            spacecraft_name,
-                            detection.fault_type,
-                            f"{detection.confidence:.3f}",
-                            detection.affected_component,
-                            method_used,
-                            "Active" if detection.fault_detected else "Inactive"
-                        ))
-                        
-                        # Add to recent detections
-                        recent_detections.append({
-                            'time': f"{detection.detection_time_minutes:.1f} min",
-                            'spacecraft': spacecraft_name,
-                            'type': detection.fault_type,
-                            'confidence': detection.confidence,
-                            'method': method_used,
-                            'status': 'Active' if detection.fault_detected else 'Inactive'
-                        })
-                        
+                            details = getattr(detection, 'details', {}) or {}
+                            safe_method = details.get('primary_method', 'ML') if isinstance(details, dict) else 'ML'
+                            method_used = f"{safe_method}"
+
+                        # Insert into table
+                        self.results_tree.insert(
+                            '',
+                            'end',
+                            values=(
+                                f"{getattr(detection, 'detection_time_minutes', 0.0):.1f} min",
+                                spacecraft_name,
+                                getattr(detection, 'fault_type', 'unknown'),
+                                f"{getattr(detection, 'confidence', 0.0):.3f}",
+                                getattr(detection, 'affected_component', '—'),
+                                method_used,
+                                "Active" if getattr(detection, 'fault_detected', False) else "Inactive",
+                            ),
+                        )
+
+                        # Track for "Recent Detections"
+                        recent_detections.append(
+                            {
+                                'time': f"{getattr(detection, 'detection_time_minutes', 0.0):.1f} min",
+                                'spacecraft': spacecraft_name,
+                                'type': getattr(detection, 'fault_type', 'unknown'),
+                                'confidence': getattr(detection, 'confidence', 0.0),
+                                'method': method_used,
+                                'status': 'Active' if getattr(detection, 'fault_detected', False) else 'Inactive',
+                            }
+                        )
                         total_detections += 1
-                
-                # Update recent detections list
+
+                # Recent list UI
                 if recent_detections:
-                    for detection in recent_detections[-10:]:  # Show last 10
-                        detection_text = (f"{detection['time']} - {detection['spacecraft']}: "
-                                        f"{detection['method']} (conf: {detection['confidence']:.3f})")
-                        self.recent_detections_listbox.insert(0, detection_text)
+                    for d in recent_detections[-10:]:
+                        txt = f"{d['time']} - {d['spacecraft']}: {d['method']} (conf: {d['confidence']:.3f})"
+                        self.recent_detections_listbox.insert(0, txt)
                 else:
                     self.recent_detections_listbox.insert(0, "No detections found")
-                
-                # Update detection history
+
+                # History + stats
                 self.detection_history.extend(recent_detections)
-                
-                # Update statistics
                 self.update_statistics()
-                
-                # Update results summary
+
+                # Build summary AFTER we've done the table, so summary_text exists before use
                 self.results_summary_text.delete(1.0, tk.END)
-                summary_text = f"""FAULT DETECTION RESULTS ({detector_type}):
-========================================
-Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-Detection Method: {detector_type}
+                summary_text = (
+                    f"FAULT DETECTION RESULTS ({detector_type}):\n"
+                    f"========================================\n"
+                    f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"Detection Method: {detector_type}\n\n"
+                    f"SUMMARY:\n"
+                    f"  Spacecraft Analyzed: {summary.get('total_spacecraft', 0)}\n"
+                    f"  Total Detections: {summary.get('total_detections', 0)}\n"
+                    f"  Success Rate: {summary.get('success_rate', 1.0):.1%}\n\n"
+                )
 
-SUMMARY:
-  Spacecraft Analyzed: {summary.get('total_spacecraft', 0)}
-  Total Detections: {summary.get('total_detections', 0)}
-  Success Rate: {summary.get('success_rate', 1.0):.1%}
-
-"""
-                
                 if detector_type == "Isolation Forest":
-                    summary_text += f"ALGORITHM DETAILS:\n"
-                    summary_text += f"  Method: Unsupervised Anomaly Detection\n"
-                    summary_text += f"  Features: 22 telemetry parameters\n"
+                    summary_text += "ALGORITHM DETAILS:\n"
+                    summary_text += "  Method: Unsupervised Anomaly Detection\n"
+                    summary_text += "  Features: 22 telemetry parameters\n"
                     if 'confidence_scores' in summary:
-                        summary_text += f"  Avg Confidence: {np.mean(summary['confidence_scores']):.3f}\n"
+                        try:
+                            import numpy as _np
+                            summary_text += f"  Avg Confidence: {_np.mean(summary['confidence_scores']):.3f}\n"
+                        except Exception:
+                            pass
                     if 'isolation_scores' in summary:
-                        summary_text += f"  Avg Isolation Score: {np.mean(summary['isolation_scores']):.3f}\n"
-                    summary_text += f"\n"
-                
-                summary_text += f"DETECTIONS BY SPACECRAFT:\n"
-                
+                        try:
+                            import numpy as _np
+                            summary_text += f"  Avg Isolation Score: {_np.mean(summary['isolation_scores']):.3f}\n"
+                        except Exception:
+                            pass
+                    summary_text += "\n"
+
+                summary_text += "DETECTIONS BY SPACECRAFT:\n"
+
                 for spacecraft, spacecraft_detections in detections.items():
                     summary_text += f"\n{spacecraft}: {len(spacecraft_detections)} detections"
-                    for detection in spacecraft_detections[:3]:  # Show first 3
+                    for detection in spacecraft_detections[:3]:
                         if detector_type == "Isolation Forest":
-                            summary_text += f"\n  - {detection.detection_time_minutes:.1f}min: {detection.fault_type} (conf: {detection.confidence:.3f}, iso: {detection.isolation_score:.3f})"
-                            if hasattr(detection, 'feature_importance'):
-                                top_features = list(detection.feature_importance.items())[:3]
-                                summary_text += f"\n    Top features: {', '.join([f[0] for f in top_features])}"
+                            iso = getattr(detection, 'isolation_score', 0.0)
+                            summary_text += (
+                                f"\n  - {getattr(detection, 'detection_time_minutes', 0.0):.1f}min: "
+                                f"{getattr(detection, 'fault_type', 'unknown')} "
+                                f"(conf: {getattr(detection, 'confidence', 0.0):.3f}, iso: {iso:.3f})"
+                            )
+                            # Optional per-feature importance if provided
+                            feat_imp = getattr(detection, 'feature_importance', None)
+                            if isinstance(feat_imp, dict) and feat_imp:
+                                top_features = list(feat_imp.items())[:3]
+                                summary_text += f"\n    Top features: {', '.join([k for k, _ in top_features])}"
                         else:
-                            method = detection.details.get('primary_method', 'ML')
-                            summary_text += f"\n  - {detection.detection_time_minutes:.1f}min via {method} (conf: {detection.confidence:.3f})"
-                            
-                            # Add detection details
-                            if 'detection_criteria' in detection.details:
-                                criteria = detection.details['detection_criteria']
-                                if criteria.get('rw_speed_change', False):
+                            details = getattr(detection, 'details', {}) or {}
+                            safe_method = details.get('primary_method', 'ML') if isinstance(details, dict) else 'ML'
+                            summary_text += (
+                                f"\n  - {getattr(detection, 'detection_time_minutes', 0.0):.1f}min via {safe_method} "
+                                f"(conf: {getattr(detection, 'confidence', 0.0):.3f})"
+                            )
+                            # Optional criteria lines
+                            if isinstance(details, dict):
+                                criteria = details.get('detection_criteria', {}) or {}
+                                if criteria.get('rw_speed_change'):
                                     summary_text += f"\n    * RW speed change: {criteria.get('max_speed_change_percent', 0):.1f}%"
-                                if criteria.get('attitude_change', False):
+                                if criteria.get('attitude_change'):
                                     summary_text += f"\n    * Attitude error increase: {criteria.get('attitude_change_percent', 0):.1f}%"
-                
+
                 if total_detections == 0:
                     summary_text += "\n\nNOTE: No faults were detected."
                 else:
                     summary_text += f"\n\nSUCCESS: Detected {total_detections} faults using {detector_type}!"
-                    
-                    # Enable XAI button if we have detections
+                    # Enable XAI only if we have detections
                     if hasattr(self, 'generate_xai_btn'):
                         self.generate_xai_btn.config(state="normal")
-                        summary_text += "\n\nXAI explanations available - click 'Generate XAI' button"
-                
+                        summary_text += "\n\nXAI explanations available — click 'Generate XAI'"
+
                 self.results_summary_text.insert(tk.END, summary_text)
-                
-                # Switch to results tab to show the new results
+
+                # Show results tab
                 self.detection_notebook.select(2)
-                
-                # Log the results
-                self.parent_app.add_log(f"{detector_type} Detection Results: {total_detections} detections from {len(detections)} spacecraft")
-                    
+
+                # Log
+                self.parent_app.add_log(
+                    f"{detector_type} Detection Results: {total_detections} detections from {len(detections)} spacecraft"
+                )
+
             except Exception as e:
                 self.parent_app.add_log(f"Error displaying results: {e}")
                 import traceback
                 traceback.print_exc()
-        
-        # Check if we're on the main thread
+
+        # Ensure main thread
         try:
             import threading
             if threading.current_thread() is threading.main_thread():
                 _update_gui()
             else:
                 self.parent_app.root.after(0, _update_gui)
-        except:
+        except Exception:
             try:
                 self.parent_app.root.after(0, _update_gui)
-            except:
+            except Exception:
                 _update_gui()
+
     
     def train_gnn_model(self):
         """Train the GNN Autoencoder model"""

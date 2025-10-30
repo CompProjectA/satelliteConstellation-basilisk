@@ -9,10 +9,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import os  # Added for file operations
+try:
+    import shap
+    from lime import lime_tabular
+except ImportError as e:
+    raise ImportError("Install XAI libs first: pip install shap lime") from e
 
-# XAI Libraries
-import shap
-from lime import lime_tabular
+
 
 class SatelliteXAIExplainer:
     """
@@ -96,8 +99,8 @@ class SatelliteXAIExplainer:
         self.lime_explainer = lime_tabular.LimeTabularExplainer(
             training_data=training_flat,
             feature_names=flat_feature_names,
-            mode='regression',  # Predicting continuous anomaly score
-            verbose=False
+            mode='regression',
+            discretize_continuous=True
         )
         
         print(f"  LIME explainer ready with {len(flat_feature_names)} features")
@@ -198,6 +201,7 @@ class SatelliteXAIExplainer:
         instances_flat = instances_subset.reshape(instances_subset.shape[0], -1)
         print(f"  Flattened shape for SHAP: {instances_flat.shape}")
         
+        self._last_shap_instances_flat = instances_flat 
         # Calculate SHAP values
         shap_values = self.shap_explainer.shap_values(instances_flat)
         
@@ -239,42 +243,62 @@ class SatelliteXAIExplainer:
         plt.close()
     
     def visualize_shap_waterfall(self, shap_values, instance_idx=0, save_path=None):
-        """Visualize SHAP waterfall plot for a single instance"""
-        instance_shap = shap_values[instance_idx]
-        
-        plt.figure(figsize=(10, 8))
-        
-        # Create SHAP Explanation object for waterfall plot
+        """Visualize SHAP waterfall plot for a single instance (KernelExplainer-safe)"""
         try:
-            shap.waterfall_plot(
-                shap.Explanation(
-                    values=instance_shap.flatten(),
-                    base_values=np.mean(shap_values),
-                    feature_names=self._get_flat_feature_names()
-                ),
-                show=False
+            # When using KernelExplainer for a scalar output:
+            # shap_values: (n_samples, n_features)
+            instance_vals = shap_values[instance_idx].flatten()
+
+            # Base value
+            base_val = getattr(self.shap_explainer, "expected_value", None)
+            if isinstance(base_val, (list, tuple, np.ndarray)):
+                base_val = np.array(base_val).flatten()[0]
+            if base_val is None:
+                # Fallback: 0 (not ideal, but avoids crash)
+                base_val = 0.0
+
+            # Matching feature vector for this instance
+            # Use the same flattening rule as summary
+            flat_names = self._get_flat_feature_names()
+            # We need the original instance flattened (n_features,)
+            # Pull from the last prepared background if not passed explicitly
+            # Preferably, caller supplies 'instances'; but we reconstruct from explainer data if available.
+            # Safer approach: cache last explained batch in self during explain_with_shap()
+            instance_data = getattr(self, "_last_shap_instances_flat", None)
+            if instance_data is None:
+                # Can't reliably recover -> make a neutral placeholder of correct length
+                # Waterfall will still render with names and values.
+                instance_data = np.zeros_like(instance_vals)
+            instance_flat = instance_data[instance_idx] if instance_data.ndim == 2 else instance_data
+
+            exp = shap.Explanation(
+                values=instance_vals,
+                base_values=base_val,
+                data=instance_flat,
+                feature_names=flat_names
             )
+
+            shap.plots.waterfall(exp, show=False)
+            plt.title(f"SHAP Feature Importance: Instance {instance_idx}")
+            plt.tight_layout()
+            if save_path:
+                plt.savefig(save_path, dpi=150, bbox_inches='tight')
+                print(f"  SHAP waterfall saved: {save_path}")
+            plt.close()
         except Exception as e:
             print(f"  Warning: Could not create waterfall plot: {e}")
-            print(f"  Creating bar plot instead")
-            # Fallback to bar plot
-            feature_importance = instance_shap.flatten()
-            top_indices = np.argsort(np.abs(feature_importance))[-10:]  # Top 10
-            
+            # Fallback bar chart
+            feature_importance = shap_values[instance_idx].flatten()
+            top_indices = np.argsort(np.abs(feature_importance))[-10:]
             plt.barh(range(len(top_indices)), feature_importance[top_indices])
             plt.yticks(range(len(top_indices)), [self._get_flat_feature_names()[i] for i in top_indices])
             plt.xlabel('SHAP Value')
             plt.title(f'Top 10 Feature Importance (Instance {instance_idx})')
-        
-        plt.title(f"SHAP Feature Importance: Instance {instance_idx}")
-        plt.tight_layout()
-        
-        if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"  SHAP waterfall saved: {save_path}")
-        
-        # Close to avoid warnings
-        plt.close()
+            plt.tight_layout()
+            if save_path:
+                plt.savefig(save_path, dpi=150, bbox_inches='tight')
+            plt.close()
+
     
     def _get_flat_feature_names(self):
         """Get flattened feature names for all time steps"""
