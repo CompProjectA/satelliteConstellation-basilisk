@@ -1,1004 +1,257 @@
 Spacecraft Constellation Fault Simulator
-A comprehensive GUI-based spacecraft constellation simulator built on the Basilisk astrodynamics framework. This simulator enables the modeling of multi-satellite constellations with advanced cluster management, machine learning-based fault detection, deep reinforcement learning task reassignment, and 3D visualization via Vizard.
 
-Table of Contents
+A GUI-based simulator built on the Basilisk astrodynamics framework. It models multi-satellite constellations with cluster management, realistic fault injection, ML-based fault detection, DRL-based task reassignment, and 3D playback via Vizard.
 
-Overview
-Key Features
-System Requirements
-Installation
-Directory Structure
-Quick Start Guide
-GUI User Guide
-Simulation Workflow
-Fault Types
-Advanced Features
-Output Files
-Troubleshooting
-Technical Architecture
+Project path in repository: ProjectWork/BskSim/ (repo: CompProjectA/satelliteConstellation-basilisk). 
+GitHub
 
+Version: 1.0
+Updated: 31 Oct 2025
+Basilisk: 1.18.x
+Python: 3.10+
 
 Overview
-This simulator provides a comprehensive platform for researching autonomous satellite constellation operations with fault tolerance capabilities:
 
-Multi-Satellite Constellation Management: Configure and manage satellite clusters with leader-follower architectures
-Realistic Fault Injection: Simulate hardware failures including encoder drift, mechanical friction, power limitations, and battery degradation
-ML-Based Fault Detection: Real-time anomaly detection using trained autoencoder models
-DRL Task Reassignment: Intelligent task redistribution using Proximal Policy Optimization (PPO)
-Advanced Visualization: Generate Unity-compatible binary files for 3D visualization in Vizard
-Data Analysis: Comprehensive plotting and telemetry logging for performance evaluation
-Mission Planning: Test fault tolerance and recovery strategies for satellite constellations
+This simulator is designed for research and teaching on autonomous constellation operations and fault tolerance. It lets you:
 
+Configure clusters and formations (line, triangle, diamond, leader–follower).
+
+Inject realistic faults (friction, power limit, encoder, battery).
+
+Detect anomalies using an autoencoder model; explain detections with SHAP/LIME.
+
+Reassign tasks intelligently with PPO (primary), plus DQN and TDHD options.
+
+Export 3D playback binaries for Vizard.
 
 Key Features
-Constellation Management
 
-Support for multiple orbital configurations (LEO, MEO, GEO)
-Up to 4 clusters with 2-6 satellites each
-Leader-follower hierarchical structure
-Formation patterns: Line, Triangle, Diamond, Leader-Follower
-Quick-setup presets for common constellation patterns
-Individual satellite parameter customization
-Real-time orbital propagation using Basilisk dynamics
+Constellation
 
-Fault Simulation
+LEO/MEO/GEO support, up to 4 clusters, 2–6 satellites each.
 
-Friction Fault: Simulates bearing degradation and mechanical wear
-Power Limit Fault: Models power system constraints and failures
-Encoder Fault: Introduces measurement errors in reaction wheel feedback
-Battery Fault: Simulates battery degradation and increased power consumption
-Cluster-wide fault injection capabilities
-Periodic fault patterns
-Real-time fault injection during simulation
+Leader–follower hierarchy and quick-setup presets.
 
-Fault Detection & Recovery
+Formation geometry and inter-satellite spacing controls.
 
-ML-based real-time fault detection using autoencoder models
-XAI model explanations (LIME, SHAP)
-Multi-algorithm detection (ML, Statistical, Trend-based)
-Automatic fault flagging with confidence scores
-DRL-powered task reassignment system
-Safe mode fallback mechanism
+Faults
 
-Analysis Tools
+Friction, Power-Limit, Encoder, Battery.
 
-Real-time plotting of spacecraft dynamics
-Attitude error analysis
-Reaction wheel performance monitoring
-Power consumption tracking
-Inter-satellite distance calculations
-Cluster communication analysis
-Formation quality metrics
-Fault detection performance plots
-DRL decision visualization and analysis
+One-shot and periodic injection; per-satellite or cluster-wide.
 
-Visualization
+Detection & Recovery
 
-Vizard-compatible binary file generation
-Configurable camera views for each satellite
-Ground target tracking visualization
-Orbit trajectory display
-Cluster-specific color coding
-Formation geometry visualization
-Target coverage cone visualization
-Time-compressed playback (30-minute simulation in 30-second playback)
+ML autoencoder anomaly detection with confidence scores.
 
+XAI explanations (optional).
+
+PPO-driven task reassignment; safe-mode fallback.
+
+Analysis & Viz
+
+Attitude/power/RW telemetry plots; formation and link metrics.
+
+Vizard .bin export for fast 3D review.
 
 System Requirements
-Prerequisites
 
-Python: 3.10 or higher
-Basilisk: Latest version properly installed
-Operating System: Windows 10/11, macOS, or Linux
-RAM: Minimum 8GB (16GB recommended for large constellations)
-Storage: At least 5GB free space for simulation outputs and ML models
+OS: Windows 10/11 (macOS/Linux possible with Basilisk installed).
 
-Python Dependencies
-txtnumpy>=1.19.0
+Python: 3.10+
+
+RAM: 8 GB minimum (16 GB recommended)
+
+Disk: ≥ 5 GB free (logs/models/plots)
+
+Python packages
+
+numpy>=1.19.0
 matplotlib>=3.3.0
-tkinter (usually included with Python)
 Pillow>=8.0.0
-tensorflow>=2.8.0       # For ML fault detection
-scikit-learn>=0.24.0    # For data preprocessing
-pandas>=1.3.0           # For data analysis
-stable-baselines3>=1.5.0 # For DRL training (optional)
-shap>=0.40.0           # For XAI explanations (optional)
-lime>=0.2.0            # For XAI explanations (optional)
+tensorflow>=2.8.0
+scikit-learn>=0.24.0
+pandas>=1.3.0
+stable-baselines3>=1.5.0   # optional (DRL training)
+shap>=0.40.0               # optional (XAI)
+lime>=0.2.0                # optional (XAI)
 
 Installation
-1. Clone the Repository
-bashgit clone https://github.com/yourusername/satelliteConstellation-basilisk.git
+# clone repository (top-level)
+git clone https://github.com/CompProjectA/satelliteConstellation-basilisk.git
 cd satelliteConstellation-basilisk/ProjectWork/BskSim
-2. Verify Basilisk Installation
-bashpython -c "from Basilisk import __path__; print('Basilisk found at:', __path__[0])"
-3. Install Dependencies
-bash# Create virtual environment (recommended)
+
+# virtual environment
 python -m venv bskrl-env
-
-# Activate environment
-# Windows:
+# Windows
 bskrl-env\Scripts\activate
-# Linux/Mac:
-source bskrl-env/bin/activate
+# macOS/Linux
+# source bskrl-env/bin/activate
 
-# Install dependencies
+# dependencies
 pip install numpy matplotlib Pillow tensorflow scikit-learn pandas
+# optional:
+pip install stable-baselines3 shap lime
 
-# Optional: Install DRL training libraries
-pip install stable-baselines3
+# check Basilisk import (must be installed per Basilisk docs)
+python -c "import Basilisk, sys; print('Basilisk OK:', Basilisk.__path__[0])"
 
-# Optional: Install XAI libraries
-pip install shap lime
-4. Verify ML Models
-Ensure the ML models are present:
 
-core/anomaly_detection_model.keras - Fault detection model
-core/drl_task_reassignment.h5 - DRL task reassignment model
+Model files expected
 
-5. Test Installation
-bashcd core
+core/anomaly_detection_model.keras
+core/drl_task_reassignment.h5
+
+Directory Structure (this project area)
+ProjectWork/
+└── BskSim/
+    ├── core/                         # Engine, GUI, integration
+    │   ├── spacecraft_simulation.py  # Basilisk bridge + run loop
+    │   ├── spacecraft_simulator_gui.py
+    │   ├── formation_geometry.py
+    │   ├── cluster_integration.py
+    │   ├── fault_loader.py
+    │   ├── plots.py
+    │   ├── real_ml_fault_detection.py
+    │   ├── isolation_forest_fault_detection.py
+    │   ├── satellite_xai.py
+    │   ├── drl_integration_bridge.py
+    │   ├── drl_integration_helper.py
+    │   ├── drl_model_manager.py
+    │   ├── drl_config.py
+    │   ├── simple_task_drl.py
+    │   ├── run_fault_simulator.py     # entry point
+    │   ├── rw_fault_help.py
+    │   ├── style.py
+    │   ├── gui_tab/
+    │   │   ├── base_tab.py
+    │   │   ├── constellation_tab.py
+    │   │   ├── target_tab.py
+    │   │   ├── fault_tab.py
+    │   │   ├── fault_detection_tab.py
+    │   │   ├── communication_tab.py
+    │   │   ├── task_reassignment_tab.py
+    │   │   ├── drl_tab.py
+    │   │   ├── visualization_tab.py
+    │   │   ├── output_tab.py
+    │   │   └── results_tab.py
+    │   ├── anomaly_detection_model.keras
+    │   └── drl_task_reassignment.h5
+    │
+    ├── faults/
+    │   ├── friction_fault.py
+    │   ├── powerlimit_fault.py
+    │   ├── encoder_fault.py
+    │   ├── battery_fault.py
+    │   └── rw_fault.py
+    │
+    ├── DRL/
+    │   ├── PPO.py
+    │   ├── DQNYear2.py
+    │   ├── TDHDYear2.py
+    │   ├── Envs.py
+    │   ├── Tools.py
+    │   ├── integration.py
+    │   ├── integration_faults.py
+    │   └── results/
+    │
+    ├── models/
+    │   ├── BSK_Dynamics.py
+    │   ├── BSK_Fsw.py
+    │   ├── BSK_MultiSatDynamics.py
+    │   ├── BSK_MultiSatFsw.py
+    │   ├── BSK_FormationDynamics.py
+    │   ├── BSK_FormationFsw.py
+    │   └── model_registry.json
+    │
+    ├── plotting/                      # Basilisk plotting helpers
+    │   └── BSK_Plotting.py
+    │
+    ├── logs/                          # run logs and telemetry
+    ├── plots/                         # generated figures
+    └── Vizfile/
+        └── _VizFiles/                 # Vizard .bin exports
+
+Quick Start
+cd ProjectWork/BskSim/core
 python run_fault_simulator.py
-```
-
----
-
-## Directory Structure
-```
-BskSim/
-├── BSK_masters.py                  # Master simulation orchestrator
-├── README.md                       # This documentation file
-│
-├── core/                           # Core simulation modules
-│   ├── __pycache__/               # Python bytecode cache
-│   │
-│   ├── gui_tab/                   # GUI tab implementations
-│   │   ├── __init__.py            # Package initialization
-│   │   ├── base_tab.py            # Base class for GUI tabs
-│   │   ├── constellation_tab.py   # Cluster management
-│   │   ├── fault_tab.py           # Fault configuration interface
-│   │   ├── fault_detection_tab.py # ML detection UI
-│   │   ├── drl_tab.py             # DRL management UI (NEW)
-│   │   ├── task_reassignment_tab.py # DRL reassignment UI
-│   │   ├── output_tab.py          # Output settings and logging
-│   │   ├── results_tab.py         # Results viewing and analysis
-│   │   ├── target_tab.py          # Ground target management
-│   │   ├── visualization_tab.py   # 3D visualization settings
-│   │   └── communication_tab.py   # Cluster communication UI
-│   │
-│   ├── anomaly_detection_model.keras # ML detection model
-│   ├── drl_task_reassignment.h5   # DRL task reassignment model
-│   ├── battery.png                # Battery status visualization
-│   ├── task_progress.png          # Task progress visualization
-│   ├── remaining_tasks_heatmap.png # Task heatmap visualization
-│   ├── cluster_integration.py     # Cluster management system
-│   ├── drl_config.py              # DRL configuration
-│   ├── drl_integration_bridge.py  # DRL system bridge
-│   ├── drl_integration_helper.py  # DRL helper functions (NEW)
-│   ├── fault_loader.py            # Dynamic fault module loader
-│   ├── formation_geometry.py      # Formation pattern definitions
-│   ├── main_integration.py        # ML+DRL integration
-│   ├── plots.py                   # Centralized plotting engine
-│   ├── PPO2 5.py                  # PPO training script (NEW)
-│   ├── real_ml_fault_detection.py # ML detection implementation
-│   ├── run_fault_simulator.py     # Application entry point
-│   ├── rw_fault_help.py          # Help documentation system
-│   ├── satellite_xai.py          # XAI explanations
-│   ├── simple_task_drl.py        # DRL agent implementation
-│   ├── spacecraft_simulation.py   # Core simulation engine
-│   ├── spacecraft_simulator_gui.py # Main GUI application
-│   ├── style.py                   # GUI theme and styling
-│   ├── test_drl_tab.py           # DRL tab testing script (NEW)
-│   └── swinburne.png             # University logo
-│
-├── faults/                        # Fault implementation modules
-│   ├── __pycache__/              # Python bytecode cache
-│   ├── battery_fault.py          # Battery degradation simulation
-│   ├── encoder_fault.py          # Encoder error simulation
-│   ├── friction_fault.py         # Mechanical friction simulation
-│   ├── powerlimit_fault.py       # Power constraint simulation
-│   ├── Envs.py                   # DRL environments
-│   ├── PPO.py                    # PPO algorithm implementation
-│   ├── integration.py            # Fault integration module
-│   └── rw_fault.py              # Legacy compatibility layer
-│
-├── DRL/                          # DRL training files
-│   ├── anomaly_detection_model.keras
-│   ├── Envs.py                  # Training environments
-│   ├── PPO_Year2.py             # PPO training script
-│   ├── integration_faults.py    # Fault scenarios
-│   └── simulation_log.xlsx      # Training logs
-│
-├── logs/                         # Simulation output logs
-│   └── sim_results_*/           # Timestamped result directories
-│
-├── models/                       # Basilisk model configurations
-│   ├── __pycache__/             # Python bytecode cache
-│   ├── BSK_Dynamics.py          # Spacecraft dynamics models
-│   ├── BSK_FormationDynamics.py # Formation flying dynamics
-│   ├── BSK_FormationFsw.py      # Formation control algorithms
-│   └── BSK_Fsw.py              # Spacecraft control software
-│
-├── plots/                        # Generated visualization plots
-│   └── *.png                    # Timestamped plot images
-│
-├── plotting/                     # Plotting utility modules
-│   ├── __pycache__/             # Python bytecode cache
-│   └── BSK_Plotting.py          # Basilisk plotting utilities
-│
-├── scenarios/                    # Pre-configured scenarios
-│   └── (scenario files)         # Example mission scenarios
-│
-└── Vizfile/                     # Vizard visualization data
-    └── _VizFiles/               # Binary visualization files
-        └── *_UnityViz.bin       # Vizard-compatible binaries
-
-Quick Start Guide
-Launch the Simulator
-bashcd core
-python run_fault_simulator.py
-```
-
-### Basic Workflow
-
-1. **Configure Constellation**: 
-   - Click "Create Cluster" 
-   - Set formation (Line/Triangle/Diamond)
-   - Add 4 satellites to cluster
-   
-2. **Add Faults**: 
-   - Enable friction fault on Satellite1 at 15 minutes
-   - Enable power limit on Satellite3 at 20 minutes
-   
-3. **Enable ML Detection**:
-   - Go to Fault Detection tab
-   - Load `anomaly_detection_model.keras`
-   - Enable ML detection
-   
-4. **Configure DRL System**:
-   - Go to DRL tab
-   - Load DRL model
-   - Enable DRL-based task reassignment
-   - Select PPO strategy (Even Distribution/Capability-Based/Load-Balanced)
-   
-5. **Assign Targets**: 
-   - Add ground targets
-   - Auto-assign to cluster
-   
-6. **Run Simulation**: 
-   - Click green "Run Simulation" button
-   - Monitor fault detection in real-time
-   
-7. **View Results**: 
-   - Check Results tab for plots
-   - Review ML detection summary
-   - Analyze DRL task reassignment decisions in DRL tab
-
----
-
-## GUI User Guide
-
-The simulator features **9 specialized tabs** for comprehensive mission control:
-
-### Constellation Tab
-
-Manage your satellite constellation with cluster support:
-
-**Cluster Management**:
-- **Create Cluster**: Up to 4 clusters with customizable names
-- **Formation Selection**: Choose from Line, Triangle, Diamond, Leader-Follower
-- **Leader Assignment**: Automatic leader selection for each cluster
-- **Satellites per Cluster**: 2-6 satellites per cluster
-- **Separation Distance**: Control inter-satellite spacing (default 10 km)
-
-**Quick Setup Buttons**:
-- `4-Sat Default`: 4 satellites at 600km altitude
-- `6-Sat MEO`: 6 satellites at 1200km altitude  
-- `2-Sat High`: 2 satellites at 2000km altitude
-
-**Individual Satellite Management**:
-- Edit satellite name
-- Change orbit assignment
-- Adjust true anomaly (position in orbit)
-- View orbital parameters
-
-### Fault Configuration Tab
-
-Configure reaction wheel faults:
-
-- **Fault Type Selection**: Friction, Power Limit, Encoder, or Battery
-- **Cluster Support**: Apply faults to entire clusters
-- **Target Selection**: Specify satellite and reaction wheel (RW1-RW4)
-- **Timing Control**: Set injection time during simulation
-- **Magnitude Setting**: Control fault severity
-- **Periodic Faults**: Enable recurring fault patterns
-- **Fault Summary**: View all active faults across constellation
-
-### Fault Detection Tab
-
-ML-based fault detection interface:
-
-**Model Configuration**:
-- **Load ML Model**: Browse for `.keras` or `.h5` files
-- **Detection Algorithms**: Enable ML, Statistical, or Trend-based
-- **Threshold Adjustment**: Set detection sensitivity (0.01 - 1.0)
-- **Real-Time Monitoring**: Live detection during simulation
-
-**XAI Explanations** (Optional):
-- **LIME**: Local Interpretable Model-agnostic Explanations
-- **SHAP**: SHapley Additive exPlanations
-- **Feature Importance**: Visualize which features triggered detection
-
-**Detection Results**:
-- Confidence scores for each detection
-- Affected spacecraft identification
-- Detection timing information
-- Performance metrics (precision, recall)
-
-### DRL Tab (NEW)
-
-Dedicated interface for Deep Reinforcement Learning management:
-
-**Model Management**:
-- **Load DRL Model**: Browse and load trained PPO models (`.h5` files)
-- **Model Information**: View model architecture and training details
-- **Training Status**: Check model readiness and compatibility
-
-**DRL Configuration**:
-- **Enable/Disable DRL**: Toggle DRL-based decision making
-- **Strategy Selection**: 
-  - Even Distribution: Equal task split among healthy spacecraft
-  - Capability-Based: Prioritize capable spacecraft
-  - Load-Balanced: Distribute based on current workload
-- **Threshold Settings**: Configure decision-making sensitivity
-- **Real-Time Updates**: Monitor DRL decisions during simulation
-
-**Performance Monitoring**:
-- **Task Progress Visualization**: Real-time task completion heatmap
-- **Battery Status**: Monitor power consumption across constellation
-- **Remaining Tasks**: Track unassigned and reassigned tasks
-- **Decision Confidence**: View DRL agent confidence scores
-- **Action History**: Review past reassignment decisions
-
-**Training Interface** (Optional):
-- **Train New Model**: Start PPO training session
-- **Training Episodes**: Configure number of episodes
-- **Learning Rate**: Adjust agent learning parameters
-- **Save Checkpoints**: Export trained models
-
-**Results Analysis**:
-- **Decision Timeline**: Visualize when reassignments occurred
-- **Success Rate**: Track successful vs failed reassignments
-- **Strategy Comparison**: Compare performance of different strategies
-- **Export Results**: Save DRL decisions to JSON/CSV
-
-### Task Reassignment Tab
-
-Legacy DRL-powered task reassignment interface (complementary to DRL Tab):
-
-**DRL Configuration**:
-- **Enable DRL**: Toggle PPO-based reassignment
-- **Strategy Selection**: Choose reassignment approach
-- **Fallback Options**: Configure safe mode behavior
-
-**System Status**:
-- Healthy spacecraft count
-- Faulty spacecraft identification
-- Tasks requiring reassignment
-- Reassignment success rate
-
-**Decision Visualization**:
-- DRL state vector display
-- Action probabilities
-- Strategy selection reasoning
-- Task redistribution summary
-
-### Targets Tab
-
-Manage ground observation targets:
-
-- **Target List**: Add/remove observation locations
-- **Geographic Coordinates**: Set latitude/longitude for each target
-- **Priority Assignment**: Rank targets by importance (1-5)
-- **Satellite Assignment**: Link targets to specific satellites or clusters
-- **Coverage Analysis**: Check target visibility from assigned satellites
-
-### Visualization Tab
-
-Configure 3D visualization settings:
-
-**Camera Configuration**:
-- Set camera position and field of view
-- Quick presets (Earth View, Target View, Side View)
-- Per-satellite camera assignment
-
-**Display Options**:
-- **Orbit Lines**: Control visibility and styling
-- **Cluster Colors**: Distinguish clusters visually
-- **Formation Lines**: Show leader-child connections
-- **Satellite Labels**: Toggle name display
-- **Target Markers**: Customize size and colors
-
-**Preview Panel**:
-- Real-time 3D preview
-- Interactive rotation and zoom
-- Formation geometry verification
-
-### Communication Tab
-
-Cluster communication monitoring:
-
-- **Link Status**: View active/inactive communication links
-- **Data Throughput**: Monitor communication bandwidth
-- **Link Quality**: Check signal strength and latency
-- **Network Topology**: Visualize communication architecture
-
-### Output Settings Tab
-
-Control simulation parameters and outputs:
-
-- **Simulation Duration**: Set total runtime (10-90 minutes)
-- **Output Options**: Enable/disable plots and binary files
-- **Directory Configuration**: Set output paths for logs and plots
-- **Real-time Logging**: Monitor simulation progress
-- **Binary Filename**: Name your Vizard visualization file
-- **ML Detection Export**: Save detection results to JSON
-- **DRL Decision Log**: Export task reassignment decisions
-
-### Results Tab
-
-Analyze simulation outputs:
-
-**Plot Categories**:
-- Constellation orbit visualizations
-- Cluster formation plots
-- Inter-satellite distances
-- Cluster communication dashboards
-- Fault impact analysis
-- Reaction wheel performance
-- Power consumption tracking
-- ML detection summary
-- DRL decision analysis
-- Task progress heatmaps
-
-**Interactive Features**:
-- Zoom, pan, and export plots
-- Plot filtering by category
-- Time-series animation (for supported plots)
-- Export to PNG, PDF, SVG formats
-
----
-
-## Simulation Workflow
-
-### 1. Pre-Simulation Setup
-```
-Configure Clusters → Define Formations → Add Satellites
-                  ↓
-          Set Fault Parameters
-                  ↓
-       Enable ML Fault Detection
-                  ↓
-    Configure DRL in DRL Tab
-                  ↓
-       Load DRL Model & Set Strategy
-                  ↓
-         Assign Ground Targets
-                  ↓
-     Configure Visualization Settings
-```
-
-### 2. Simulation Execution
-```
-Initialize Dynamics → Inject Faults → Propagate Orbits
-                   ↓
-          ML Fault Detection (Real-Time)
-                   ↓
-         DRL Decision Making (Real-Time)
-                   ↓
-           Task Reassignment
-                   ↓
-            Record Telemetry
-                   ↓
-      Generate Visualization Data
-```
-
-### 3. Post-Simulation Analysis
-```
-Generate Plots → Export Data → Create Vizard Binary
-             ↓
-    ML Detection Summary
-             ↓
-    DRL Decision Analysis (DRL Tab)
-             ↓
- Cluster Formation Metrics
-             ↓
-  Analyze Fault Impact
-```
-
----
-
-## Fault Types
-
-### Friction Fault
-- **Physical Model**: Increases Coulomb friction coefficient
-- **Effect**: Reduced reaction wheel efficiency, increased power consumption
-- **Parameters**: 
-  - Magnitude: Additional friction torque (N·m)
-  - Typical values: 0.0001 - 0.001 N·m
-  - Default: 0.0005 N·m
-- **Detection**: ML model identifies power/speed anomalies
-
-### Power Limit Fault
-- **Physical Model**: Constrains maximum motor torque
-- **Effect**: Reduced control authority, slower maneuvers
-- **Parameters**: 
-  - Magnitude: Maximum power limit (W)
-  - Typical values: 0.1 - 10.0 W
-  - Default: 0.5 W
-- **Detection**: ML model flags power constraint violations
-
-### Encoder Fault
-- **Physical Model**: Introduces measurement noise/bias
-- **Effect**: Control oscillations, pointing errors
-- **Parameters**: 
-  - Magnitude: Error percentage (%)
-  - Typical values: 5 - 50%
-  - Default: 20%
-  - Types: Stuck encoder or zero readings
-- **Detection**: ML model detects speed measurement inconsistencies
-
-### Battery Fault
-- **Physical Model**: Increases power consumption rate
-- **Effect**: Reduced mission duration, potential safe mode
-- **Parameters**: 
-  - Magnitude: Additional power drain (W)
-  - Typical values: 10 - 100 W
-  - Default: 50 W
-- **Detection**: ML model identifies battery storage anomalies
-
----
-
-## Advanced Features
-
-### Machine Learning Fault Detection
-
-The ML fault detection system uses a trained autoencoder model to identify anomalies in spacecraft telemetry:
-
-**How It Works**:
-1. **Data Collection**: Real-time telemetry from Basilisk simulation
-2. **Feature Extraction**: 16-feature vector (torques, attitude, power, etc.)
-3. **Anomaly Scoring**: Reconstruction error from autoencoder
-4. **Threshold Comparison**: Flag anomalies exceeding threshold
-5. **Fault Classification**: Rule-based classification into fault types
-
-**Supported Fault Types**:
-- Friction (bearing degradation)
-- Power Limit (power system constraints)
-- Encoder (sensor measurement errors)
-- Battery (power drain issues)
-
-**Model Architecture**:
-```
-Input (16 features) → Encoder (128→64→32) → Latent (16) 
-→ Decoder (32→64→128) → Output (16 features)
-```
-
-**Usage**:
-1. Train model using `DRL/PPO_Year2.py` (or use provided model)
-2. Load model in Fault Detection tab
-3. Set threshold (recommended: 0.15-0.20)
-4. Enable real-time detection
-5. Review results in Results tab
-
-### Deep Reinforcement Learning System
-
-The DRL system uses Proximal Policy Optimization (PPO) to intelligently redistribute tasks when faults occur:
-
-**PPO Agent Configuration**:
-- **State Space**: 10-dimensional (health ratios, fault severity, etc.)
-- **Action Space**: 3 discrete actions (Even, Capability, Load-Balanced)
-- **Policy Network**: 2 layers × 512 neurons
-- **Value Network**: 2 layers × 512 neurons
-- **Training**: 20M steps on fault scenarios
-
-**Reassignment Workflow**:
-```
-Fault Detected → Health Assessment → DRL Decision → Task Redistribution
-                                          ↓
-                                    Safe Mode (if DRL fails)
-```
-
-**Strategies**:
-
-1. **Even Distribution** (Action 0):
-   - Divides tasks equally among healthy spacecraft
-   - Best for homogeneous constellations
-   - Low computational overhead
-
-2. **Capability-Based** (Action 1):
-   - Assigns more tasks to capable spacecraft
-   - Considers power, fuel, sensor quality
-   - Optimal for heterogeneous fleets
-
-3. **Load-Balanced** (Action 2):
-   - Distributes based on current workload
-   - Prevents overloading individual spacecraft
-   - Best for long-duration missions
-
-**Using the DRL Tab**:
-
-1. **Model Loading**:
-```
-   DRL Tab → Browse → Select drl_task_reassignment.h5 → Load
-```
-
-2. **Configure Strategy**:
-```
-   Enable DRL → Select Strategy → Set Thresholds → Apply
-
-Monitor During Simulation:
-
-View real-time task progress heatmap
-Check battery status across constellation
-Track reassignment decisions
-Monitor confidence scores
-
-
-Analyze Results:
-
-Review decision timeline
-Compare strategy performance
-Export data for further analysis
-
-
-
-Training Your Own Model:
-bash# Using PPO2 5.py in core directory
-cd core
-python "PPO2 5.py" --episodes 5000 --env SatelliteConstellationEnv
-
-# Or using DRL training script
-cd DRL
-python PPO_Year2.py --episodes 5000 --env SatelliteConstellationEnv
-```
-
-### Cluster Formation Control
-
-The simulator implements four formation patterns:
-
-**1. Line Formation**:
-```
-Leader → Child1 → Child2 → Child3
-   ↓      ↓        ↓        ↓
-  Orbit  Orbit    Orbit    Orbit
-```
-- Satellites aligned along-track
-- Separation: 1-50 km
-- Use case: Ground swath imaging
-
-**2. Triangle Formation**:
-```
-      Leader
-      /    \
-  Child1  Child2
-```
-- Equilateral triangle
-- Use case: Interferometry, multi-angle imaging
-
-**3. Diamond Formation**:
-```
-      Leader
-     /    \
-  Child1  Child2
-     \    /
-     Child3
-```
-- Four-point diamond shape
-- Use case: 3D terrain mapping
-
-**4. Leader-Follower**:
-```
-Leader
-  ↓
-Child1 → Child2 → Child3
-```
-- Hierarchical structure
-- Use case: General-purpose coordination
-
-**Formation Metrics**:
-- **RMS Error**: Deviation from ideal geometry
-- **Communication Links**: Active/inactive counts
-- **Coverage Overlap**: Target visibility redundancy
-
----
-
-## Output Files
-
-### Log Files
-
-**Location**: `logs/sim_results_YYYYMMDD_HHMMSS/`
-
-- `simulation_summary.txt`: Configuration and results overview
-- `telemetry_*.csv`: Time-series spacecraft data
-- `fault_log.txt`: Fault injection timeline
-- `ml_detection_results.json`: ML detection summary
-- `drl_decisions.json`: Task reassignment log
-- `cluster_status.json`: Formation health metrics
-- `drl_performance.json`: DRL agent performance metrics
-
-### Plot Files
-
-**Location**: `plots/`
-
-- `*_ConstellationAnalysis.png`: Orbital configuration
-- `*_ClusterFormation.png`: Formation geometry
-- `*_ClusterCommunication.png`: Communication dashboard
-- `*_FaultAnalysis.png`: Fault impact visualization
-- `*_InterSatelliteDistances.png`: Formation geometry
-- `*_PowerAnalysis.png`: Power system performance
-- `*_MLDetectionSummary.png`: Detection results
-- `*_DRLDecisionAnalysis.png`: Reassignment visualization
-- `task_progress.png`: Task completion heatmap
-- `battery.png`: Battery status visualization
-- `remaining_tasks_heatmap.png`: Remaining task distribution
-
-### Vizard Files
-
-**Location**: `Vizfile/_VizFiles/`
-
-- `*_UnityViz.bin`: 3D visualization binary (compressed 30-min → 30-sec playback)
-- Compatible with Basilisk Vizard application
-- Enhanced cluster visualization with color coding
-
-### ML/DRL Model Files
-
-**Location**: `core/`
-
-- `anomaly_detection_model.keras`: Fault detection model
-- `drl_task_reassignment.h5`: Task reassignment model
-- `scaler_data.pkl`: Feature normalization parameters
-
----
-
-## Troubleshooting – Common Issues and Solutions
-
-### DRL Tab Specific Issues
-
-**DRL tab not appearing**
-```
-Error: "DRL tab not found in GUI"
-→ Solution: Verify drl_tab.py exists in core/gui_tab/
-→ Check __init__.py imports DRLTab class
-→ Restart application
-```
-
-**DRL model not loading in DRL tab**
-```
-Error: "Could not load DRL model"
-→ Solution: Verify drl_task_reassignment.h5 exists in core/
-→ Check file permissions
-→ Try loading from File → Browse dialog
-```
-
-**Task progress visualization not updating**
-```
-Issue: Heatmap shows no data
-→ Solution: Ensure simulation is running
-→ Check DRL is enabled in DRL tab
-→ Verify tasks are assigned to constellation
-```
-
-**DRL decision confidence always zero**
-```
-Issue: Confidence scores show 0.0
-→ Solution: Model may not be properly loaded
-→ Re-train model or use provided model
-→ Check model compatibility with current version
-```
-
-### ML and DRL Issues
-
-**ML model not loading**
-```
-Error: "TensorFlow not found"
-→ Solution: pip install tensorflow>=2.8.0
-```
-
-**DRL agent failing**
-```
-Error: "Could not load DRL model"
-→ Solution: Verify drl_task_reassignment.h5 exists in core/
-→ Fallback: System will use rule-based reassignment
-```
-
-**Cluster formation not visible**
-```
-Issue: Satellites not forming pattern
-→ Solution: Check constellation_tab.py for cluster assignments
-→ Verify leader is designated for each cluster
-```
-
-**XAI explanations not working**
-```
-Error: "SHAP/LIME not available"
-→ Solution: pip install shap lime
-→ Note: XAI is optional, detection still works
-```
-
-### General Issues
-
-**GUI does not launch**
-```
-→ Verify tkinter: python -m tkinter
-```
-
-**Basilisk import error**
-```
-→ Check PYTHONPATH includes Basilisk directory
-→ Verify: python -c "import Basilisk; print(Basilisk.__path__)"
-```
-
-**Visualization not working**
-```
-→ Ensure binary path is correct in Vizfile/_VizFiles/
-→ Verify Vizard application is installed
-```
-
-**Memory error with large constellations**
-```
-→ Reduce simulation duration
-→ Limit clusters to 3 (instead of 4)
-→ Disable real-time ML detection
-```
-
-**Plots not generating**
-```
-→ Check matplotlib backend: use 'Agg' for headless
-→ Verify plots/ directory exists and is writable
-```
-
-**Fault not appearing in simulation**
-```
-→ Verify fault injection time < simulation duration
-→ Check fault is enabled in Fault Tab
-→ Review fault_log.txt for injection confirmation
-```
-
----
-
-## Technical Architecture
-
-### Core Components
-
-1. **Simulation Engine** (`spacecraft_simulation.py`)
-   - Integrates Basilisk dynamics
-   - Manages time propagation
-   - Handles fault injection events
-   - Cluster management integration
-   - ML detection hooks
-
-2. **GUI Framework** (`spacecraft_simulator_gui.py`)
-   - Tkinter-based interface
-   - Model-View pattern
-   - Event-driven architecture
-   - 9 specialized tabs (including new DRL tab)
-   - Real-time status monitoring
-
-3. **Fault System** (`fault_loader.py`)
-   - Dynamic module loading
-   - Plugin architecture for new fault types
-   - Real-time fault injection
-   - Cluster-wide fault propagation
-
-4. **ML Detection System** (`real_ml_fault_detection.py`)
-   - TensorFlow/Keras backend
-   - Feature extraction pipeline
-   - Real-time anomaly scoring
-   - Fault type classification
-
-5. **DRL System** (`drl_integration_bridge.py`, `drl_tab.py`)
-   - PPO agent interface
-   - Dedicated GUI tab for DRL management
-   - State/action space management
-   - Task redistribution logic
-   - Safe mode fallback
-   - Real-time performance monitoring
-
-6. **Cluster Manager** (`cluster_integration.py`)
-   - Formation geometry control
-   - Leader-follower hierarchy
-   - Inter-satellite communication
-   - Formation quality metrics
-
-7. **Visualization Pipeline**
-   - Matplotlib for 2D plots
-   - Vizard binary generation for 3D
-   - Cluster-specific visualization
-   - Formation geometry plots
-   - DRL performance visualization
-
-### Data Flow
-```
-User Input → GUI (9 Tabs) → Configuration → Simulation Engine
-                                                 ↓
-                                       Basilisk Dynamics
-                                                 ↓
-                                       Fault Injection
-                                                 ↓
-                                  ML Fault Detection (Real-Time)
-                                                 ↓
-                                  DRL Decision (via DRL Tab)
-                                                 ↓
-                                   Task Reassignment
-                                                 ↓
-Results ← Plotting Engine ← Data Recording ← Cluster Manager
-       ← DRL Tab (Analysis)
-```
-
-### Integration Architecture
-```
-┌─────────────────────────────────────────────┐
-│           GUI Layer (Tkinter)               │
-│  Constellation | Fault | Detection | DRL   │
-│  DRL Tab | Tasks | Target | Viz | Output   │
-└──────────────────┬──────────────────────────┘
-                   │
-┌──────────────────┴──────────────────────────┐
-│         Simulation Orchestrator             │
-│      spacecraft_simulation.py               │
-└──────────────┬─────────────┬────────────────┘
-               │             │
-    ┌──────────┴─────┐   ┌──┴──────────┐
-    │  Basilisk Core │   │ Cluster Mgr │
-    │   Dynamics     │   │  Formation  │
-    └────────┬───────┘   └──┬──────────┘
-             │              │
-    ┌────────┴──────────────┴────────┐
-    │      Fault Injection Layer     │
-    │  friction | power | encoder |  │
-    │         battery                │
-    └────────┬─────────────┬─────────┘
-             │             │
-    ┌────────┴─────┐   ┌──┴───────────┐
-    │ ML Detection │   │ DRL Agent    │
-    │  TensorFlow  │   │   PPO        │
-    │              │   │  (DRL Tab)   │
-    └──────┬───────┘   └──┬───────────┘
-           │              │
-    ┌──────┴──────────────┴─────┐
-    │    Results & Plots         │
-    │  Vizard | Matplotlib       │
-    │     DRL Visualizations     │
-    └────────────────────────────┘
-
-Simulation Timing Note
-The simulation is configured to run for 30 minutes of mission time. However, when the binary file is played back in the Vizard visualization tool, this 30-minute duration is compressed for faster playback.
-In Vizard, the entire 30-minute simulation is typically displayed in about 30 seconds of real time. This time compression is intentional and allows for quick yet complete visual review of:
-
-Reaction wheel faults
-Attitude changes
-Target tracking
-Cluster formation dynamics
-Task reassignment visualization (via DRL)
-Fault detection events
-Battery status changes
-
-This compressed playback enables efficient mission analysis without waiting for full real-time duration.
-
-License
-This simulator is developed as part of an academic project at Swinburne University of Technology. The Basilisk Astrodynamics Framework is used under its separate license terms.
-
-Acknowledgments
-
-Basilisk Development Team: For the excellent astrodynamics framework
-Swinburne University: For project support and resources
-Contributors: All team members who developed and enhanced the system
-
-
-Contact & Support
-For issues, questions, or contributions:
-
-Project Repository: [GitHub Repository URL]
-Documentation: See docs/ folder for detailed technical documentation
-Issue Tracker: Report bugs via GitHub Issues
-Email: Contact project supervisor at Swinburne University
+
+
+Basic workflow:
+
+Constellation tab: create clusters, choose formation, set spacing.
+
+Fault tab: choose fault type(s), magnitudes, timing.
+
+Fault Detection tab: load anomaly_detection_model.keras, set threshold.
+
+DRL tab: load drl_task_reassignment.h5, choose strategy (Even / Capability / Load-Balanced).
+
+Targets tab: add ground targets (optional).
+
+Output tab: set duration; enable plots and Vizard export.
+
+Run Simulation; view plots in Results tab, open .bin from Vizfile/_VizFiles/ in Vizard.
+
+GUI Tabs (summary)
+
+Constellation – clusters, formations, orbit params.
+
+Target – target list, priorities, visibility analysis.
+
+Fault – configure friction, power-limit, encoder, battery faults.
+
+Fault Detection – autoencoder/Isolation Forest; XAI export.
+
+Communication – link status and topology.
+
+Task Reassignment – legacy DRL controls and summaries.
+
+DRL – main PPO/DQN/TDHD model loading and live metrics.
+
+Visualization – orbit lines, labels, cluster colours, export options.
+
+Output – duration, logs, file destinations.
+
+Results – plot browser, export tools.
+
+Outputs
+
+Logs: logs/sim_results_* – configuration, fault_log, telemetry CSV/JSON.
+Plots: plots/ – attitude, RW, power, formation, detection, DRL.
+Vizard: Vizfile/_VizFiles/*.bin – compressed playback (≈30 min → 30 s).
+
+Troubleshooting
+
+GUI won’t start: confirm tkinter is present; activate venv.
+
+Basilisk import error: verify Basilisk install and PYTHONPATH.
+
+No plots: ensure plots/ exists; set matplotlib backend to Agg in plots.py.
+
+DRL model not loading: confirm core/drl_task_reassignment.h5 path; file permissions.
+
+XAI missing: install shap and lime (optional).
+
+No Vizard binary: enable “Save Binary” in Output tab; check Vizfile/_VizFiles/ write access.
+
+Architecture (short)
+
+Engine: spacecraft_simulation.py orchestrates Basilisk, faults, logging, plotting, and Vizard export.
+
+GUI: spacecraft_simulator_gui.py with modular tabs in core/gui_tab/.
+
+Faults: plugin modules in faults/ via fault_loader.py.
+
+Detection: real_ml_fault_detection.py (autoencoder) and isolation_forest_fault_detection.py; XAI via satellite_xai.py.
+
+DRL: drl_integration_bridge.py + drl_tab.py, using DRL/PPO.py (primary), DQNYear2.py, TDHDYear2.py.
+
+Cluster: cluster_integration.py + formation_geometry.py.
+
+Plots: plots.py + plotting/BSK_Plotting.py.
+
+License and Acknowledgments
+
+Developed for academic purposes at Swinburne University of Technology.
+Uses the Basilisk Astrodynamics Framework (separate license).

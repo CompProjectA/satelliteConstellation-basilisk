@@ -1764,9 +1764,13 @@ class SatelliteSimulatorApp:
                 ("Overview", get_general_help("overview")),
                 ("Constellation", get_general_help("constellation")),
                 ("Faults", get_general_help("fault")),
+                ("Fault Detection", get_general_help("fault_detection")),      
+                ("Task Reassignment", get_general_help("task_reassignment")),  
                 ("Targets", get_general_help("target")),
                 ("Visualization", get_general_help("visualization")),
                 ("Output", get_general_help("output")),
+                ("Results", get_general_help("results")),                      
+                ("DRL", get_general_help("drl")),                              
                 ("Simulation", get_general_help("simulation"))
             ]
         else:

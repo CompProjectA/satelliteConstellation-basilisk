@@ -1,3 +1,5 @@
+
+
 import time
 import os
 from datetime import datetime
@@ -7,14 +9,15 @@ from bsk_rl.act.actions import ActionBuilder
 import numpy as np
 import matplotlib.pyplot as plt
 import gymnasium as gym
-import os, sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # ---- Excel export deps (optional but recommended) ----
 try:
     import pandas as pd
 except Exception:
     pd = None
+
+RESULTS_DIR = "results"
+os.makedirs(RESULTS_DIR, exist_ok=True)
 
 from ray.tune.registry import register_env
 from ray.rllib.policy.policy import PolicySpec
@@ -429,9 +432,7 @@ config = (
         train_batch_size=128,
         vf_clip_param=10.0,
         clip_param=0.2,
-        # num_epochs removed in Ray RLlib 2.31.0 - now controlled by num_sgd_iter
-        num_sgd_iter=1,  # Equivalent to num_epochs=1
-        sgd_minibatch_size=128,  # Should divide train_batch_size evenly
+        num_epochs=1,
         lambda_=0.95,
     )
 )
@@ -609,7 +610,7 @@ while current_step < max_steps and test_env.agents:
         if 0 <= idx < len(test_env.unwrapped.satellites):
             sn = test_env.unwrapped.satellites[idx].name
             if sn in test_env.agents:
-                inject_power_limit_fault(idx, start_step=current_step)   # â† add start_step
+                inject_power_limit_fault(idx, start_step=current_step)   # ← add start_step
                 if pl_trigger_at[sn] is None:
                     pl_trigger_at[sn] = current_step
 
@@ -618,7 +619,7 @@ while current_step < max_steps and test_env.agents:
         if 0 <= idx < len(test_env.unwrapped.satellites):
             sn = test_env.unwrapped.satellites[idx].name
             if sn in test_env.agents:
-                inject_friction_fault(idx, start_step=current_step)      # â† add start_step
+                inject_friction_fault(idx, start_step=current_step)      # ← add start_step
                 if fr_trigger_at[sn] is None:
                     fr_trigger_at[sn] = current_step
 
@@ -627,7 +628,7 @@ while current_step < max_steps and test_env.agents:
         if 0 <= idx < len(test_env.unwrapped.satellites):
             sn = test_env.unwrapped.satellites[idx].name
             if sn in test_env.agents:
-                inject_encoder_fault(idx, start_step=current_step)       # â† add start_step
+                inject_encoder_fault(idx, start_step=current_step)       # ← add start_step
                 if enc_trigger_at[sn] is None:
                     enc_trigger_at[sn] = current_step
 
@@ -696,6 +697,15 @@ while current_step < max_steps and test_env.agents:
 
 print(f"Test episode reward: {episode_reward}")
 
+
+battery_png           = os.path.join(RESULTS_DIR, "battery.png")
+task_progress_png     = os.path.join(RESULTS_DIR, "task_progress.png")
+remaining_heatmap_png = os.path.join(RESULTS_DIR, "remaining_tasks_heatmap.png")
+power_limit_png       = os.path.join(RESULTS_DIR, "power_limit.png")
+friction_png          = os.path.join(RESULTS_DIR, "friction.png")
+encoder_png           = os.path.join(RESULTS_DIR, "encoder.png")
+
+
 # =========================================================
 # Plots
 # =========================================================
@@ -709,7 +719,7 @@ ax_bat.set_xlabel('Step'); ax_bat.set_ylabel('Availability (1=on, 0=off)')
 ax_bat.set_title('Battery Fault Availability')
 ax_bat.legend()
 plt.tight_layout()
-plt.savefig('battery.png')
+plt.savefig(battery_png)
 plt.close(fig_bat)
 
 
@@ -727,7 +737,7 @@ for i, sat_name in enumerate(remaining_log):
 axs[-1].set_xlabel('Step')
 fig2.suptitle('Per-Satellite Task Progress (shaded = faulty steps)')
 plt.tight_layout()
-plt.savefig('task_progress.png')
+plt.savefig(task_progress_png)
 plt.close(fig2)
 
 # 3) Remaining tasks heatmap
@@ -739,7 +749,7 @@ ax3.set_xlabel('Step')
 ax3.set_title('Remaining Tasks Heatmap')
 fig3.colorbar(cax, label='Remaining Tasks')
 plt.tight_layout()
-plt.savefig('remaining_tasks_heatmap.png')
+plt.savefig(remaining_heatmap_png )
 plt.close(fig3)
 
 print("Testing complete. Plots saved as:")
@@ -758,7 +768,7 @@ ax_pl.set_ylabel('Availability (1=on, 0=limited off)')
 ax_pl.set_title('Power-Limit Availability Pattern')
 ax_pl.legend()
 plt.tight_layout()
-plt.savefig('power_limit.png')
+plt.savefig(remaining_heatmap_png)
 plt.close(fig_pl)
 
 # FRICTION stalls
@@ -771,7 +781,7 @@ ax_fr.set_ylabel('Availability (1=ok, 0=stall)')
 ax_fr.set_title('Wheel Friction Stall ')
 ax_fr.legend()
 plt.tight_layout()
-plt.savefig('friction.png')
+plt.savefig(friction_png)
 plt.close(fig_fr)
 
 # ENCODER on/off dropouts
@@ -784,7 +794,7 @@ ax_en.set_ylabel('Availability (1=on, 0=dropout)')
 ax_en.set_title('Encoder Signal')
 ax_en.legend()
 plt.tight_layout()
-plt.savefig('encoder.png')
+plt.savefig(encoder_png)
 plt.close(fig_en)
 
 print(" - power_limit.png")
@@ -884,3 +894,4 @@ save_results_to_excel(
     episode_reward=episode_reward,
     algo_name="PPO"
 )
+

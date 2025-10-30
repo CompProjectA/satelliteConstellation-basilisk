@@ -1,344 +1,415 @@
 File Documentation
 
+Project: Satellite Constellation Fault Simulator (Basilisk)
+Version: 1.0
+Last Updated: 31 October 2025
+Basilisk Version: 1.18.0
+Platform: Windows 10 or later
+Python Version: 3.10 or later
 
 Core Module Files
-
 BSK_masters.py
-Purpose: Master orchestrator for Basilisk simulations
-•	Functionality: 
-o	Initializes Basilisk simulation environment
-o	Provides base classes BSKSim and BSKScenario
-o	Manages simulation execution flow
 
-•	Key Components: 
-o	BSKSim: Base simulation class with Basilisk integration
-o	BSKScenario: Scenario management with configuration support
-•	Connections: Used by all fault modules as parent class
+Purpose:
+This module was originally designed as a master orchestrator for early Basilisk simulations. It defines the base classes that initialize and run a Basilisk environment and manage scenario execution.
+
+Details:
+
+Provides two core base classes: BSKSim and BSKScenario.
+
+BSKSim sets up the Basilisk simulation base class and initializes system components.
+
+BSKScenario manages the simulation configuration, time steps, and data recording.
+
+Although the current project uses spacecraft_simulation.py as the main engine, several legacy fault modules still reference this file for backward compatibility.
 
 spacecraft_simulation.py
-Purpose: Core simulation engine that bridges GUI with Basilisk
-•	Functionality: 
-o	Creates and configures spacecraft objects
-o	Sets up orbital dynamics and gravity
-o	Manages fault injection timing
-o	Generates visualization data
 
-•	Key Components: 
-o	SimulationConfig: Configuration data structure
-o	run_custom_simulation(): Main simulation execution
-o	inject_fault_into_spacecraft(): Fault injection handler
-•	Implementation Details: 
-o	Dynamic fault loading with fallback mechanisms
-o	Real-time telemetry recording
-o	Battery visualization for power faults
-o	Multi-satellite support 
+Purpose:
+This is the main simulation engine that connects the graphical user interface (GUI) with the Basilisk simulation framework. It is responsible for creating satellites, managing faults, running the simulation, and generating outputs.
+
+Details:
+
+Builds and configures spacecraft objects, clusters, and orbital environments.
+
+Sets up orbital dynamics, gravity models, attitude control, and communication links.
+
+Manages the timing and injection of faults across satellites.
+
+Collects telemetry data such as power, reaction wheel speeds, and attitude control errors.
+
+Generates plots and exports visualization data for 3D playback in Vizard.
+
+Uses a modular configuration structure called SimulationConfig that contains duration, logging, and output settings.
+
+Supports multiple satellites and formations such as line, triangle, and diamond configurations.
+
+Coordinates with the fault_loader.py, plots.py, and cluster_integration.py modules to ensure simulation accuracy and synchronization.
 
 spacecraft_simulator_gui.py
-Purpose: Main GUI application using Tkinter
-•	Functionality: 
-o	Provides user interface for all simulation features
-o	Manages application state and data
-o	Coordinates between different GUI tabs
-o	Handles simulation execution in separate thread
 
-•	Key Components: 
-o	SatelliteSimulatorApp: Main application class
-o	Tab management system
-o	Event handling and callbacks
-•	Implementation Details: 
-o	Non-blocking simulation execution
-o	Real-time status updates
-o	Configuration import/export
-o	Integrated help system
+Purpose:
+This module is the main Tkinter-based graphical interface for the simulator. It serves as the central control hub that allows users to configure constellations, inject faults, run simulations, and view results.
+
+Details:
+
+Manages all GUI tabs through a notebook interface.
+
+Handles user inputs, event callbacks, and status updates.
+
+Executes simulations in a separate background thread to avoid freezing the interface.
+
+Provides options to open folders, save configurations, and launch external tools such as Vizard.
+
+Uses rw_fault_help.py for context-sensitive help messages.
+
+Coordinates data sharing among all GUI tabs through a shared data dictionary.
+
+Automatically manages directories for logs, plots, and visualization exports.
+
+Provides error handling and dependency checks for Basilisk and TensorFlow modules.
 
 fault_loader.py
-Purpose: Dynamic fault module loading system
-•	Functionality: 
-o	Discovers available fault modules at runtime
-o	Provides unified interface for fault execution
-o	Handles fault data extraction for plotting
-o	Manages fault scenario execution
 
-•	Key Components: 
-o	get_fault_scenario_class(): Dynamic class loading
-o	run_scenario(): Unified execution interface
-o	extract_fault_data_from_scenario(): Data extraction
-•	Implementation Details: 
-o	Plugin architecture for extensibility
-o	Graceful fallback for missing modules
-o	Parameter passing to fault scenarios
-o	Support for both legacy and new interfaces
+Purpose:
+This module dynamically loads and executes fault definitions from the faults/ directory. It allows faults to be added or modified without changing the main codebase.
+
+Details:
+
+Scans the faults/ directory at runtime and identifies all available fault modules.
+
+Provides a consistent interface for running faults and retrieving their data.
+
+Contains functions such as get_fault_scenario_class() and run_scenario() to simplify module access.
+
+Automatically extracts simulation data for post-processing and visualization.
+
+Supports legacy modules for backward compatibility and uses a plugin-style architecture.
+
+Handles missing modules gracefully and provides warnings rather than errors.
 
 plots.py
-Purpose: Centralized plotting engine for all visualizations
-•	Functionality: 
-o	Generates fault-specific plots
-o	Creates constellation visualizations
-o	Produces inter-satellite distance analysis
-o	Interfaces with real fault simulations
 
-•	Key Components: 
-o	generate_fault_plots(): Fault visualization dispatcher
-o	generate_constellation_plots(): Orbital visualization
-o	generate_inter_satellite_distance_plots(): Formation analysis
-•	Implementation Details: 
-o	Attempts real simulation data when available
-o	Falls back to synthetic data if needed
-o	Matplotlib-based rendering
-o	Automatic plot categorization
+Purpose:
+The plots.py file is the centralized plotting module that handles all visual outputs of the simulator. It produces both scientific and operational plots related to system performance.
 
+Details:
 
-GUI Tab Modules
+Creates plots for attitude control, power systems, fault progression, and cluster communication.
 
-base_tab.py
-Purpose: Base class for all GUI tabs
-•	Functionality: 
-o	Common UI helper methods
-o	Help system integration
-o	Message passing to main app
-o	Error handling framework
-•	Implementation: Abstract base class pattern
+Uses telemetry data collected during the simulation to produce high-quality figures.
 
-constellation_tab.py
-Purpose: Satellite constellation configuration interface
-•	Functionality: 
-o	Multiple orbit management
-o	Satellite CRUD operations
-o	Quick constellation presets
-o	Orbital parameter editing
-•	Key Features: 
-o	Support for LEO, MEO, GEO orbits
-o	Even satellite distribution
-o	Real-time parameter validation
-o	Coverage calculation
+Supports both single-satellite and multi-satellite visualization.
 
-fault_tab.py
-Purpose: Fault configuration and management
-•	Functionality: 
-o	Fault type selection and configuration
-o	Per-satellite fault assignment
-o	Fault timing control
-o	Magnitude scaling for different fault types
-•	Key Features: 
-o	Dynamic UI based on fault type
-o	Fault summary view
-o	Batch fault application
-o	Real-time fault status
+Uses Matplotlib’s “Agg” backend for reliable non-interactive rendering.
 
-target_tab.py
-Purpose: Ground target management and assignment
-•	Functionality: 
-o	Target location definition
-o	Satellite-target assignment
-o	Coverage analysis
-o	Visibility calculations
-•	Key Features: 
-o	Interactive world map
-o	Auto-assignment algorithms
-o	Coverage reporting
-o	Priority-based assignment
+Organizes and saves plots into specific subdirectories under plots/.
 
-visualization_tab.py
-Purpose: 3D visualization configuration
-•	Functionality: 
-o	Camera setup for each satellite
-o	Orbit display controls
-o	Color scheme selection
-o	Preview rendering
-•	Key Features: 
-o	Multiple camera presets
-o	Real-time 3D preview
-o	Per-satellite visualization
-o	Export settings for Vizard
+Provides fallback options that generate synthetic plots if real data are unavailable.
 
-output_tab.py
-Purpose: Simulation output configuration
-•	Functionality: 
-o	Simulation time control
-o	Output directory management
-o	Real-time log display
-o	Binary file configuration
-•	Key Features: 
-o	Time presets for quick setup
-o	Auto-scrolling log
-o	Directory validation
-o	Progress monitoring
+Integration and Utility Modules
+formation_geometry.py
 
-results_tab.py
-Purpose: Post-simulation analysis interface
-•	Functionality: 
-o	Plot browsing and viewing
-o	Interactive plot manipulation
-o	Plot export functionality
-o	Result categorization
-•	Key Features: 
-o	Embedded matplotlib canvas
-o	Navigation toolbar
-o	Multiple export formats
-o	Automatic plot discovery
+Defines orbital geometries and relative positioning patterns for satellite formations. It supports line, triangle, diamond, and circular configurations. The module evenly distributes satellites in orbit and calculates position vectors based on altitude, inclination, and right ascension.
 
-Fault Module Files
+cluster_integration.py
 
-friction_fault.py
-Purpose: Simulates mechanical friction in reaction wheels
-•	Physical Model: 
-o	Increases Coulomb friction coefficient
-o	Temperature rise calculation
-o	Power loss estimation
-•	Implementation: 
-o	Uses BSK_Dynamics wheel friction model
-o	Calculates cumulative energy loss
-o	Tracks temperature evolution
-•	Outputs: 
-o	Wheel speed degradation plots
-o	Temperature evolution graphs
-o	Power consumption analysis
+Handles multi-satellite cluster creation and leader–follower management. It assigns leader and follower satellites, synchronizes their orbits, and enables coordinated fault injection and recovery. The module also supports integration with communication visualization tools.
 
-powerlimit_fault.py
-Purpose: Simulates power system constraints
-•	Physical Model: 
-o	Limits maximum motor torque
-o	Models power saturation effects
-o	Implements backup wheel activation
-•	Implementation: 
-o	Modifies maxMotorTorque parameter
-o	Phased simulation approach
-o	RW4 activation after delay
-•	Outputs: 
-o	Power consumption plots
-o	Control effectiveness analysis
-o	Energy conservation metrics
+communication_visualization.py
 
-encoder_fault.py
-Purpose: Simulates sensor measurement errors
-•	Physical Model: 
-o	Introduces measurement bias/noise
-o	Creates control loop instability
-o	Models feedback corruption
-•	Implementation: 
-o	Modifies wheel speed feedback
-o	Increases effective friction
-o	Generates control oscillations
-•	Outputs: 
-o	Control torque oscillations
-o	Attitude error growth
-o	RMS control effort analysis
+Visualizes inter-satellite communication links and network activity. It displays leader–follower communication lines, data throughput, latency, and link status. The module provides options to save communication data for later analysis or visual playback.
 
-battery_fault.py
-Purpose: Simulates battery degradation and power system failures
-•	Physical Model: 
-o	Increased power consumption
-o	Battery state-of-charge tracking
-o	Safe mode triggering
-•	Implementation: 
-o	SimpleBattery module integration
-o	Power sink fault injection
-o	Solar panel modeling
-•	Outputs: 
-o	Battery discharge curves
-o	Power balance analysis
-o	Safe mode activation timing
+message_data.py and satellite_definition.py
 
-Support Module Files
+Contain data structures and helper functions used to store satellite properties, message logs, and simulation parameters. These files define how satellites and communication messages are represented internally during the simulation.
 
 run_fault_simulator.py
-Purpose: Application entry point and environment setup
-•	Functionality: 
-o	Path configuration
-o	Dependency checking
-o	GUI launch
-o	Error handling
-•	Key Features: 
-o	Automatic directory creation
-o	Basilisk verification
-o	Clean startup sequence
+
+The entry point of the application. It initializes environment variables, checks dependencies, and starts the GUI application. It ensures that Basilisk is correctly installed and that required directories such as logs/, plots/, and Vizfile/_VizFiles/ exist.
 
 rw_fault_help.py
-Purpose: Comprehensive help documentation system
-•	Content Structure: 
-o	Overview documentation
-o	Tab-specific help
-o	Troubleshooting guides
-o	Technical details
-•	Implementation: 
-o	Dictionary-based content
-o	Context-sensitive help
-o	Markdown-compatible formatting
+
+Stores textual help content for each GUI tab and fault type. It serves as a local, offline help reference system that can display context-specific explanations, troubleshooting information, and usage instructions directly within the GUI.
 
 style.py
-Purpose: GUI theme and visual styling
-•	Functionality: 
-o	Tkinter theme configuration
-o	Color scheme definitions
-o	Font specifications
-o	Widget styling
-•	Key Features: 
-o	Modern flat design
-o	Consistent color palette
-o	Responsive layouts
-o	Platform adaptation
+
+Defines the visual appearance of the GUI. It sets up fonts, colors, and widget styles to maintain a consistent interface design. It also adapts the GUI layout to different screen resolutions and ensures that the application follows a simple, readable theme.
+
+Fault Module Files (faults/)
+
+Each module in the faults/ directory defines a different type of system failure that can be injected into a satellite during simulation.
+
+friction_fault.py
+
+Simulates the effects of increased friction in reaction wheel bearings.
+
+Models additional torque loss and heat generation.
+
+Tracks cumulative energy losses and performance degradation.
+
+Produces wheel speed, temperature, and power consumption plots.
+
+powerlimit_fault.py
+
+Models electrical or mechanical power limitations.
+
+Reduces maximum torque output and simulates power brownouts.
+
+Enables secondary wheel activation to compensate for lost performance.
+
+Outputs power consumption and efficiency analysis plots.
+
+encoder_fault.py
+
+Simulates sensor bias and noise in encoder readings.
+
+Adds bias to angular velocity measurements and random noise to simulate faulty sensors.
+
+Results in attitude control instability and increased control effort.
+
+Produces attitude error and control torque plots.
+
+battery_fault.py
+
+Represents battery degradation or power system failure.
+
+Models reduced capacity, increased discharge rate, and safe mode transitions.
+
+Integrates with the SimpleBattery model in Basilisk.
+
+Outputs battery discharge, power balance, and safe-mode timing plots.
 
 rw_fault.py
-Purpose: Legacy compatibility layer
-•	Functionality: 
-o	Backward compatibility for old code
-o	Fault type switching
-o	Module dispatching
-•	Implementation: 
-o	Wrapper for new fault modules
-o	Command-line interface
-o	Legacy API preservation
 
-Model Files
+Provides backward compatibility for older reaction wheel fault models.
 
-BSK_Dynamics.py
-Purpose: Spacecraft dynamics configuration
-•	Functionality: 
-o	Reaction wheel setup
-o	Mass properties definition
-o	Disturbance torque configuration
-o	Sensor suite initialization
-•	Key Components: 
-o	4 reaction wheels in pyramid configuration
-o	External torque module
-o	Simple navigation sensor
+Acts as a wrapper for updated modules.
 
-BSK_Fsw.py
-Purpose: Flight software implementation
-•	Functionality: 
-o	Attitude control algorithms
-o	Hill pointing guidance
-o	Reaction wheel control logic
-o	MRP feedback control
-•	Key Components: 
-o	MRP feedback controller
-o	Attitude tracking error
-o	Control allocation to wheels
+Maintains compatibility with legacy scripts and external automation.
+
+Fault Detection and XAI Modules
+fault_detection_router.py
+
+Acts as a dispatcher for the different fault detection methods available in the simulator. It receives data from the simulation and passes it to either the Isolation Forest or Neural Network-based model depending on the selected method.
+
+isolation_forest_fault_detection.py
+
+Implements an Isolation Forest algorithm from scikit-learn to detect anomalies in satellite telemetry. It works on real-time data and provides anomaly scores and confidence levels.
+
+real_ml_fault_detection.py
+
+Implements a deep learning-based autoencoder that identifies anomalies by reconstructing input telemetry and measuring reconstruction errors. The pre-trained model is stored in anomaly_detection_model.keras.
+
+satellite_xai.py
+
+Provides Explainable AI support using SHAP and LIME libraries. It explains why specific anomalies were detected and highlights which telemetry features contributed most to the decision. All generated explanations are saved as visual reports in core/xai_plots/.
+
+DRL Integration Modules
+drl_integration_bridge.py
+
+Connects the Basilisk simulation engine with Deep Reinforcement Learning models. It prepares the simulation state for input to the DRL model, executes the chosen policy, and applies the resulting actions to the simulation.
+
+drl_integration_helper.py
+
+Contains utility functions that normalize data, manage training states, and process feedback from the DRL environment.
+
+drl_model_manager.py
+
+Handles the loading, saving, and selection of DRL models. It manages models for PPO, DQN, and TDHD algorithms and provides versioning and checkpoint capabilities.
+
+drl_config.py
+
+Stores configuration settings for DRL runs, including learning rates, exploration parameters, and episode lengths. It provides a structured configuration interface for the GUI.
+
+simple_task_drl.py
+
+Implements a lightweight DRL test environment that can be used for isolated debugging or simplified experiments separate from the full Basilisk simulation.
+
+GUI Tab Modules (core/gui_tab/)
+base_tab.py
+
+Defines shared methods and templates for all GUI tabs. It provides utility functions for message handling, logging, and help access. Every other tab inherits from this base class to maintain consistent functionality and design.
+
+constellation_tab.py
+
+Allows users to design satellite constellations.
+
+Supports adding, removing, and editing satellites and clusters.
+
+Provides predefined formations such as line, triangle, and diamond.
+
+Allows users to configure orbit parameters such as altitude and inclination.
+
+Performs validation on input values and shows a preview of satellite positions.
+
+target_tab.py
+
+Enables users to define ground targets and assign satellites for observation.
+
+Displays a map view for visual reference.
+
+Calculates coverage periods and target visibility windows.
+
+Supports automatic assignment of satellites to targets.
+
+fault_tab.py
+
+Provides an interface for injecting faults.
+
+Lists all available fault types from the faults/ directory.
+
+Allows configuration of fault magnitude, start time, and duration.
+
+Displays a summary of all active and scheduled faults.
+
+fault_detection_tab.py
+
+Configures fault detection algorithms and thresholds.
+
+Allows switching between Isolation Forest and Neural Autoencoder detectors.
+
+Displays anomaly scores and detected faults.
+
+Provides options to generate XAI explanations for detected anomalies.
+
+communication_tab.py
+
+Displays real-time or post-simulation communication between satellites.
+
+Shows leader–follower network links and latency information.
+
+Visualizes communication health through color-coded lines.
+
+task_reassignment_tab.py
+
+Integrates Deep Reinforcement Learning-based fault recovery.
+
+Runs trained DRL policies (PPO, DQN, TDHD).
+
+Reassigns tasks to healthy satellites after a fault.
+
+Displays DRL performance metrics such as reward curves and reassignment summaries.
+
+drl_tab.py
+
+Provides controls for DRL model management and configuration.
+
+Allows training, testing, and loading of pre-trained models.
+
+Displays loss, reward, and performance metrics.
+
+Connects directly to the DRL modules and bridges with the simulation engine.
+
+visualization_tab.py
+
+Allows configuration of orbit and camera visualization options.
+
+Provides camera presets, orbit colors, and label controls.
+
+Generates live previews using Matplotlib.
+
+Exports visualization settings for Vizard playback.
+
+Note: The GUI does not render live 3D; 3D visualization is handled externally through Vizard.
+
+output_tab.py
+
+Manages output settings for the simulation.
+
+Sets simulation duration (in minutes).
+
+Allows users to enable or disable specific outputs such as plots, logs, or binary files.
+
+Provides progress monitoring and real-time log updates.
+
+results_tab.py
+
+Displays simulation results after execution.
+
+Automatically detects generated plots and displays them in an embedded viewer.
+
+Allows users to export plots and logs to external directories.
+
+Provides shortcuts to open folders for quick access to outputs.
+
+DRL Package (DRL/)
+
+The DRL folder contains algorithms and training utilities used for intelligent fault recovery and task reassignment.
+
+PPO.py
+
+Implements the Proximal Policy Optimization algorithm, which is the primary DRL method used in this project. It is suited for continuous control and has been trained for task reassignment.
+
+DQNYear2.py
+
+Implements a Deep Q-Network approach for discrete decision-making. It is an alternative to PPO and used in simpler fault recovery scenarios.
+
+TDHDYear2.py
+
+Implements a Twin Delayed Deep Deterministic Policy Gradient (TD3) algorithm with hindsight replay. It is an experimental model used for complex control problems.
+
+Envs.py and Tools.py
+
+Define the reinforcement learning environment and provide utility functions such as experience replay buffers, normalization, and plotting tools.
+
+integration.py and integration_faults.py
+
+Handle communication between the Basilisk environment and the DRL algorithms. These modules manage the data flow from simulation to DRL agent and back.
+
+drl_training_wrapper.py
+
+Provides a high-level interface for running DRL training sessions directly from the GUI.
+
+patch_bsk_rl.py
+
+Contains compatibility fixes that allow Basilisk to communicate with the DRL modules smoothly.
+
+Model Files (models/)
+
+The models/ directory includes Basilisk-specific models for spacecraft dynamics and flight software.
+
+BSK_Dynamics.py: Defines spacecraft physical parameters, mass properties, and sensor configurations.
+
+BSK_Fsw.py: Implements flight software logic including attitude control and reaction wheel management.
+
+BSK_MultiSatDynamics.py / BSK_MultiSatFsw.py: Extend the single-satellite models to multiple satellites operating as a cluster.
+
+BSK_FormationDynamics.py / BSK_FormationFsw.py: Implement control algorithms and dynamics specific to formation flying.
+
+model_registry.json: Contains metadata used to identify available model configurations.
 
 Contributing
 Adding New Fault Types
-1.	Create new module in faults/ directory
-2.	Inherit from BSKScenario class
-3.	Implement required methods: 
-o	__init__(): Initialize parameters
-o	inject_fault(): Apply fault to dynamics
-o	pull_outputs(): Generate plots
-4.	Register in fault_loader.py
 
-Extending GUI Features
-1.	Create new tab class inheriting from BaseTab
-2.	Implement UI creation in create_tab_ui()
-3.	Add to main GUI in spacecraft_simulator_gui.py
-4.	Update help documentation
+Create a new file in the faults/ directory.
 
-License
-This simulator is developed as part of an academic project at Swinburne University of Technology. The Basilisk Astrodynamics Framework is used under its separate license terms.
+Inherit from the appropriate base class (e.g., BSKScenario).
 
-Acknowledgments
-•	Basilisk Development Team: For the excellent astrodynamics framework
-•	Swinburne University: For project support and resources
-•	Contributors: All students of Team
+Implement methods for initialization, fault injection, and output generation.
 
-________________________________________
-Last Updated: December 2024
+Ensure that the new fault is automatically recognized by fault_loader.py.
 
+Extending the GUI
+
+Create a new tab class that inherits from BaseTab.
+
+Define its interface and controls in create_tab_ui().
+
+Add the new tab to the GUI manager in spacecraft_simulator_gui.py.
+
+Update rw_fault_help.py to include help content for the new feature.
+
+License and Acknowledgments
+
+This project was developed as part of an academic research initiative at Swinburne University of Technology.
+It utilizes the Basilisk Astrodynamics Framework, which is developed and maintained by the University of Colorado Boulder.
+All other software components were developed by the project team for educational and research purposes.
+
+Acknowledgments:
+
+The Basilisk Development Team for providing the simulation framework.
+
+Swinburne University for supervision and technical resources.
+
+All student contributors who developed and refined the simulator.
