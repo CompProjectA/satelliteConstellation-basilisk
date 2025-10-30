@@ -842,21 +842,74 @@ def add_enhanced_targets_to_vizard(viz, config, sc_objects, rich_clusters, verbo
 
     for target in config.targets:
         assigned_to = target.assigned_to if hasattr(target, 'assigned_to') else []
-
+        
         if not assigned_to:
             coverage_report["unassigned_targets"] += 1
             if verbose:
                 print(f"\nTarget '{target.name}': UNASSIGNED (not added to Vizard)")
             continue
-
+        
         coverage_report["assigned_targets"] += 1
-
+        
         try:
             target_pos = calculate_ground_target_position(
                 target.latitude,
                 target.longitude,
                 altitude_m=100000.0
             )
+        
+            try:
+                # Try to get cluster-based color
+                primary_sat_name = assigned_to[0]
+                primary_sat_idx = sat_name_to_idx.get(primary_sat_name, 0)
+                
+                if primary_sat_idx in sat_idx_to_color:
+                    target_color_rgba = sat_idx_to_color[primary_sat_idx]
+                    target_viz_color = vizSupport.toRGBA255(target_color_rgba)
+                else:
+                    # Fallback to default red
+                    target_viz_color = vizSupport.toRGBA255([1.0, 0.0, 0.0, 1.0])
+            except Exception as color_err:
+                print(f"Color conversion failed for {target.name}, using default: {color_err}")
+                target_viz_color = vizSupport.toRGBA255([1.0, 0.0, 0.0, 1.0])
+
+            try:
+                vizSupport.addLocation(
+                    viz,
+                    stationName=target.name,
+                    parentBodyName="earth",
+                    r_GP_P=target_pos,
+                    gHat_P=_unit(target_pos),
+                    fieldOfView=70.0 * macros.D2R,
+                    color=target_viz_color,
+                    range=4000000.0
+                )
+                targets_added += 1
+                coverage_report["visible_targets"] += 1
+                
+            except Exception as add_err:
+                print(f"Could not add target {target.name}: {add_err}")
+                # Try with simple string color as fallback
+                try:
+                    vizSupport.addLocation(
+                        viz,
+                        stationName=target.name,
+                        parentBodyName="earth",
+                        r_GP_P=target_pos,
+                        gHat_P=_unit(target_pos),
+                        fieldOfView=70.0 * macros.D2R,
+                        color='red',  # Simple string color
+                        range=4000000.0
+                    )
+                    targets_added += 1
+                    print(f"Added {target.name} with fallback color")
+                except:
+                    print(f"Failed to add {target.name} even with fallback")
+                    
+        except Exception as e:
+            if verbose:
+                print(f"\nCould not add target {target.name}: {e}")
+
 
             primary_sat_name = assigned_to[0]
             primary_sat_idx = sat_name_to_idx.get(primary_sat_name, 0)
@@ -936,14 +989,15 @@ def enable_satellite_to_target_lines(viz, verbose=True):
 
 
 def create_optimal_camera(viz, sc_objects, config):
-    """
-    Create optimally positioned camera for formation viewing.
-    """
+    """Create optimally positioned camera for formation viewing."""
     if not viz or not sc_objects:
         return False
 
     camera_created = False
 
+    
+    
+    #  NEW: Better constellation view
     if config.active_camera_name:
         for sc in sc_objects:
             if getattr(sc, "ModelTag", None) == config.active_camera_name:
@@ -955,42 +1009,30 @@ def create_optimal_camera(viz, sc_objects, config):
                         fieldOfView=config.camera_fov * macros.D2R,
                         displayName=f"{sc.ModelTag} View",
                         pointingVector_B=[0, 0, -1],
-                        position_B=config.camera_position
+                        position_B=[0.0, 0.0, 5000.0]  #  5000 km for full view
                     )
                     camera_created = True
-                    print(f"Camera created for {sc.ModelTag} at {config.camera_position}")
+                    print(f"Camera created for {sc.ModelTag} at 5000 km altitude")
                     break
                 except Exception as e:
                     print(f"Could not create user camera: {e}")
 
+    # Fallback: Wide-angle overview
     if not camera_created and sc_objects:
         try:
             vizSupport.createStandardCamera(
                 viz,
                 setMode=1,
                 spacecraftName=sc_objects[0].ModelTag,
-                fieldOfView=70.0 * macros.D2R,
+                fieldOfView=90.0 * macros.D2R,  #  Wider FOV
                 displayName="Constellation Overview",
                 pointingVector_B=[0, 0, -1],
-                position_B=[0.0, 0.0, 200.0]
+                position_B=[0.0, 0.0, 10000.0]  #  10,000 km back
             )
             camera_created = True
-            print("Camera: Constellation Overview (wide-angle)")
+            print("Camera: Constellation Overview (10,000 km altitude)")
         except Exception as e:
             print(f"Could not create overview camera: {e}")
-
-    if viz and not camera_created:
-        try:
-            vizSupport.createStandardCamera(
-                viz,
-                setMode=0,
-                displayName="Earth View",
-                fieldOfView=80.0 * macros.D2R
-            )
-            print("Camera: Earth-centered fallback")
-            camera_created = True
-        except Exception:
-            pass
 
     return camera_created
 
@@ -1118,7 +1160,31 @@ def run_custom_simulation(config, fault_detection_tab=None):
         sc_objects = integrate_clusters_with_simulation(
             config, cluster_manager, scSim, simTaskName, gravFactory, mu
         )
+
+        print(f"\n{'='*60}")
+        print(f"SPACECRAFT VERIFICATION FOR VIZARD")
+        print(f"{'='*60}")
+        print(f"Total spacecraft objects: {len(sc_objects)}")
+        print(f"Expected from config: {len(config.spacecraft_list)}")
+        
+        for idx, sc in enumerate(sc_objects):
+            tag = getattr(sc, 'ModelTag', 'NO_TAG')
+            # Ensure cluster and role are always strings, not None
+            cluster = str(config.spacecraft_list[idx].get('cluster') or 'none') if idx < len(config.spacecraft_list) else 'none'
+            role = str(config.spacecraft_list[idx].get('role') or 'none') if idx < len(config.spacecraft_list) else 'none'
+            print(f"  SC[{idx:2d}]: {tag:20s} | cluster={cluster:10s} | role={role}")
+        
+        if len(sc_objects) != len(config.spacecraft_list):
+            print(f"\n WARNING: Spacecraft count mismatch!")
+            print(f"   Expected: {len(config.spacecraft_list)}")
+            print(f"   Got:      {len(sc_objects)}")
+        print(f"{'='*60}\n")
         print(f"Created {len(sc_objects)} spacecraft objects using ClusterManager")
+        
+        
+        print(f"Spacecraft ModelTags for Vizard:")
+        for idx, sc in enumerate(sc_objects):
+            print(f"  [{idx}] {sc.ModelTag}")
         try:
             comm_status = cluster_manager.get_communication_status()
             print(f"Communication setup: {comm_status}")

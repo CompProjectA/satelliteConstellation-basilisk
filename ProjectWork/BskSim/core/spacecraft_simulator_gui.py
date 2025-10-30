@@ -5,6 +5,8 @@ spacecraft_simulator_gui.py
 Main GUI application for the Basilisk Spacecraft Constellation Fault Simulator.
 Provides a modular interface for configuring and running spacecraft simulations.
 Includes DRL task reassignment integration and enhanced cluster plotting.
+
+MERGED VERSION - Includes progress dialog and improved thread safety
 """
 import os
 import sys
@@ -32,19 +34,10 @@ ASSETS_DIR = os.path.join(ROOT_DIR, 'assets')
 
 sys.path.extend([ROOT_DIR, CORE_DIR])
 
-
 # DRL path (project-standard) + optional override via drl_config
 DRL_DIR = os.path.join(ROOT_DIR, "DRL")
 if DRL_DIR not in sys.path:
     sys.path.insert(0, DRL_DIR)
-try:
-    from drl_config import DRL_DIR as _CONF_DRL_DIR
-    if os.path.isdir(_CONF_DRL_DIR):
-        DRL_DIR = _CONF_DRL_DIR
-except Exception:
-    pass
-
-# Optional override via drl_config
 try:
     from drl_config import DRL_DIR as _CONF_DRL_DIR
     if os.path.isdir(_CONF_DRL_DIR):
@@ -123,6 +116,7 @@ except ImportError:
     PLOTTER_AVAILABLE = False
     ConstellationPlotter = None
 
+
 class ProgressDialog:
     """Simple progress dialog to show simulation is running"""
     def __init__(self, parent, title="Processing..."):
@@ -167,12 +161,13 @@ class ProgressDialog:
         except:
             pass
 
+
 class SatelliteSimulatorApp:
     """Main application class for the Spacecraft Fault Simulator GUI"""
     
     def __init__(self, root):
         self.root = root
-        self.root.title("Spacecraft Constellation Fault Simulator")
+        self.root.title("Spacecraft Constellation Fault Simulator with DRL Integration")
         self.root.update_idletasks()
         try:
             self.root.state("zoomed")
@@ -314,13 +309,11 @@ class SatelliteSimulatorApp:
                     try:
                         current_subtab = self.constellation_tab.constellation_notebook.index('current')
                         if current_subtab == 3 and hasattr(self.constellation_tab, "update_communication_plot"):
-
                             self.constellation_tab.update_communication_plot()
                     except:
                         pass
                         
             elif selected_tab == 'Results':
-                # Refresh results if needed
                 # Refresh results tab
                 if hasattr(self, 'results_tab'):
                     self._thread_safe(self.results_tab.refresh_plot_list)
@@ -358,7 +351,6 @@ class SatelliteSimulatorApp:
                                 'leader': type('obj', (object,), {'model_tag': leader_name})(),
                                 'children': [ type('obj', (object,), {'model_tag': ch})() for ch in children_names ]
                             }
-
                 
                 if hasattr(self.constellation_tab, 'clusters'):
                     cluster_manager = SimpleClusterManager(self.constellation_tab.clusters)
@@ -688,7 +680,7 @@ class SatelliteSimulatorApp:
         # Title
         ttk.Label(
             title_frame, 
-            text="Spacecraft Constellation Fault Simulator",
+            text="Spacecraft Constellation Fault Simulator with DRL",
             font=('Segoe UI', 16, 'bold'),
             anchor="center"
         ).grid(row=0, column=1)
@@ -724,7 +716,7 @@ class SatelliteSimulatorApp:
             self.visualization_frame = ttk.Frame(self.notebook)
             self.output_frame = ttk.Frame(self.notebook)
             self.results_frame = ttk.Frame(self.notebook)
-            self.drl_frame = ttk.Frame(self.notebook)  # ✅ ADDED - DRL frame
+            self.drl_frame = ttk.Frame(self.notebook)
             
             # Add tabs
             self.notebook.add(self.constellation_frame, text="Constellation")
@@ -735,7 +727,7 @@ class SatelliteSimulatorApp:
             self.notebook.add(self.visualization_frame, text="Visualization")
             self.notebook.add(self.output_frame, text="Output Settings")
             self.notebook.add(self.results_frame, text="Results")
-            self.notebook.add(self.drl_frame, text="DRL")  # ✅ ADDED - DRL tab
+            self.notebook.add(self.drl_frame, text="DRL")
             
             # Create tab objects
             try:
@@ -748,7 +740,7 @@ class SatelliteSimulatorApp:
                 self.output_tab = OutputTab(self, self.output_frame)
                 self.results_tab = ResultsTab(self, self.results_frame)
                 
-                # ✅ ADDED - Create DRL tab with default paths
+                # Create DRL tab with default paths
                 default_drl_script = os.path.join(ROOT_DIR, "DRL", "PPO_Year2.py")
                 default_drl_results = os.path.join(ROOT_DIR, "DRL")
                 self.drl_tab = DRLTab(
@@ -757,9 +749,7 @@ class SatelliteSimulatorApp:
                     default_script=default_drl_script if os.path.exists(default_drl_script) else None,
                     default_results_dir=default_drl_results if os.path.isdir(default_drl_results) else None
                 )
-                self.drl_tab.pack(fill=tk.BOTH, expand=True)  # ✅ CRITICAL - Pack the tab!
-                
-                
+                self.drl_tab.pack(fill=tk.BOTH, expand=True)
                 
             except Exception as e:
                 messagebox.showerror("Tab Creation Error", f"Error creating tabs: {e}")
@@ -892,9 +882,9 @@ class SatelliteSimulatorApp:
         """Add a new satellite to the constellation with all required fields"""
         satellite = {
             "name": name,
-            "type": "individual",  # Add type field for compatibility
-            "cluster": None,       # Not part of a cluster
-            "role": "independent", # Independent satellite
+            "type": "individual",
+            "cluster": None,
+            "role": "independent",
             "orbit": {
                 "a": 6371 + altitude,
                 "e": 0.01,
@@ -921,9 +911,9 @@ class SatelliteSimulatorApp:
                 "fov": 80.0,
                 "enabled": name == "Satellite1"
             },
-            "communication": {  # Add communication settings
-                "range": 2000.0,  # km
-                "fov": 30.0,      # degrees
+            "communication": {
+                "range": 2000.0,
+                "fov": 30.0,
                 "aHat_B": [0.0, 0.0, -1.0]
             },
             "targets": [],
@@ -971,7 +961,6 @@ class SatelliteSimulatorApp:
                     self.ml_detection_status.config(text="ML: Unknown", foreground='gray')
         except:
             pass
-
 
     def add_log(self, message, level="INFO"):
         """Add a message to the application log with filtering"""
@@ -1023,7 +1012,6 @@ class SatelliteSimulatorApp:
         except Exception:
             # Failsafe
             print(f"Log: {message}")
-
                 
     def update_satellite_dropdowns(self):
         """Update all satellite dropdown menus"""
@@ -1060,27 +1048,12 @@ class SatelliteSimulatorApp:
         self.root.after(60000, self.update_time)  # Update every minute
 
     def _thread_safe(self, fn, *a, **kw):
+        """Execute function on main thread safely"""
         self.root.after(0, lambda: fn(*a, **kw))
 
     def _build_rich_clusters_for_sim(self, sc_index_map):
         """
-        Build a 'rich' cluster dict for the simulation layer:
-
-        {
-          "<cluster_name>": {
-            "satellites": [
-              {"name": "<sat>", "role": "leader|child", "index": <int>,
-               "formation": "<formation>", "orbit": "<orbit str>", "separation": <float>},
-              ...
-            ],
-            "leader": {...},                 # the leader entry from 'satellites'
-            "children": [...],               # child entries from 'satellites'
-            "formation": "<formation>",      # cluster-level formation
-            "orbit": "<orbit str>",          # cluster-level orbit label
-            "separation": <float>            # typical spacing (km)
-          },
-          ...
-        }
+        Build a 'rich' cluster dict for the simulation layer
         """
         rich = {}
 
@@ -1091,30 +1064,26 @@ class SatelliteSimulatorApp:
         if isinstance(clusters_src, dict):
             items = clusters_src.items()
         elif isinstance(clusters_src, list):
-            # Each entry expected: {'name': ..., 'leader': ..., 'children': [...], 'formation': ..., 'orbit': ..., 'separation': ...}
             items = [(c.get('name') or f"CLUSTER_{i+1}", c) for i, c in enumerate(clusters_src)]
         else:
             items = []
 
         def _get_name(x):
-            # Leader/child can be a string OR an object with .get('name') or .name
             if isinstance(x, str):
                 return x
             if isinstance(x, dict):
                 return x.get('name')
             return getattr(x, 'name', getattr(x, 'model_tag', None))
 
-        # ---- Path 1: Use ConstellationTab clusters if available ----
+        # Path 1: Use ConstellationTab clusters if available
         for cname, cd in items:
             if not cname:
                 continue
 
-            # cluster-level attributes
             formation = cd.get('formation') or cd.get('type') or 'Line'
             separation = float(cd.get('separation', 10.0))
             orbit_lbl = cd.get('orbit') or cd.get('orbit_name') or 'LEO 600km'
 
-            # source membership (children or satellites by name)
             leader_name = _get_name(cd.get('leader'))
             sat_names = []
 
@@ -1124,11 +1093,9 @@ class SatelliteSimulatorApp:
             elif isinstance(cd.get('children'), list) and cd['children']:
                 sat_names = [leader_name] + [ _get_name(s) for s in cd['children'] ]
 
-            # Build entries
             sats, leader_entry, children = [], None, []
             for nm in filter(None, sat_names):
                 idx = sc_index_map.get(nm)
-                # Index may be None if the sat exists in the GUI but not in the final list
                 entry = {
                     "name": nm,
                     "role": "leader" if nm == leader_name else "child",
@@ -1144,7 +1111,6 @@ class SatelliteSimulatorApp:
                     children.append(entry)
 
             if sats:
-                # If no leader resolved, promote first sat as leader to keep sim robust
                 leader_entry = leader_entry or sats[0]
                 rich[cname] = {
                     "satellites": sats,
@@ -1156,14 +1122,13 @@ class SatelliteSimulatorApp:
                 }
 
         if rich:
-            # Keep only clusters with a leader and at least one child with a valid index
             cleaned = {}
             for k, v in rich.items():
                 if v.get("leader") and any(s.get("role") == "child" for s in v["satellites"]):
                     cleaned[k] = v
             return cleaned
 
-        # ---- Path 2: Derive from self.satellites (fallback) ----
+        # Path 2: Derive from self.satellites (fallback)
         by_cluster = {}
         for idx, sat in enumerate(self.satellites):
             cname = sat.get('cluster')
@@ -1193,7 +1158,6 @@ class SatelliteSimulatorApp:
             else:
                 by_cluster[cname]["children"].append(entry)
 
-        # Filter invalid
         rich = {
             k: v for k, v in by_cluster.items()
             if v.get("leader") and len(v.get("children", [])) > 0
@@ -1201,12 +1165,11 @@ class SatelliteSimulatorApp:
         return rich
 
     # Simulation methods
-
     def run_simulation(self):
         """Run the simulation with progress dialog"""
         if self.is_running:
             messagebox.showinfo("Simulation Running",
-                                "A simulation is already running. Please wait.")
+                              "A simulation is already running. Please wait.")
             return
 
         # Pull the latest Output tab settings
@@ -1261,225 +1224,6 @@ class SatelliteSimulatorApp:
         # Background worker
         thread = threading.Thread(target=simulation_thread, daemon=True)
         thread.start()
-
-
-    def _run_simulation_process(self):
-        """Run the simulation process with integrated DRL task reassignment"""
-        try:
-            # Create configuration
-            config = SimulationConfig()
-            
-            # General parameters
-            config.simulation_time = self.simulation_time.get()
-            config.show_plots = self.show_plots.get()
-            config.save_plots = self.save_plots.get()
-            config.save_binary = self.save_binary.get()
-            config.binary_filename = os.path.basename(self.binary_filename)
-            
-            # -----------------------------
-            # Build spacecraft configuration
-            # -----------------------------
-            config.spacecraft_list = []
-            for sat in self.satellites:
-                spacecraft_config = {
-                    "name": sat["name"],
-                    "type": sat.get("type", "cluster_member" if sat.get("cluster") else "individual"),
-                    "cluster": sat.get("cluster"),
-                    "role": sat.get("role", "independent"),
-                    "communication": sat.get("communication", {
-                        "range": 2000.0,
-                        "fov": 30.0,
-                        "aHat_B": [0.0, 0.0, -1.0]
-                    }),
-                    "orbit_name": sat.get("orbit_name", "Default Orbit"),
-                    "orbit": sat["orbit"],
-                    "fault": sat["fault"],
-                    "camera": sat["camera"],
-                    "targets": sat.get("targets", []),
-                    # Optional per-satellite hints the sim can use if needed:
-                    "formation": sat.get("formation"),
-                    "separation": sat.get("separation")
-                }
-                config.spacecraft_list.append(spacecraft_config)
-                
-            # Camera configuration
-            if hasattr(self, 'visualization_tab'):
-                try:
-                    active_camera = self.visualization_tab.get_active_camera_satellite()
-                    if active_camera:
-                        config.active_camera_name = active_camera["name"]
-                        config.camera_position = active_camera["camera"]["position"]
-                        config.camera_fov = active_camera["camera"]["fov"]
-                except:
-                    pass
-                
-            # Target configuration
-            config.targets = []
-            for target in self.targets:
-                if target["assigned_to"]:
-                    t = TargetDefinition(
-                        target["name"],
-                        target["lat"],
-                        target["lon"],
-                        self._convert_color(target["color"])
-                    )
-                    t.assigned_to = target["assigned_to"]
-                    config.targets.append(t)
-                    
-            # -----------------------------------------
-            # Build RICH clusters (preferred for sim/viz)
-            # -----------------------------------------
-            # Map spacecraft name -> index (matches construction order above)
-            sc_index_map = {sc["name"]: i for i, sc in enumerate(config.spacecraft_list)}
-            rich_clusters = self._build_rich_clusters_for_sim(sc_index_map)
-
-            if rich_clusters:
-                config.clusters = rich_clusters
-                self.add_log(f"Using rich cluster config: {len(rich_clusters)} cluster(s)")
-            else:
-                # Fallback to lightweight index map (kept for compatibility)
-                clusters_map = {}
-                for idx, sat in enumerate(self.satellites):
-                    c = sat.get('cluster')
-                    r = sat.get('role')
-                    if not c:
-                        continue
-                    clusters_map.setdefault(c, {'leader': None, 'children': []})
-                    if r == 'leader':
-                        clusters_map[c]['leader'] = sc_index_map.get(sat["name"], idx)
-                    elif r == 'child':
-                        clusters_map[c]['children'].append(sc_index_map.get(sat["name"], idx))
-                if clusters_map:
-                    config.clusters = clusters_map
-                    self.add_log(f"Using lightweight cluster map: {len(clusters_map)} cluster(s)")
-                else:
-                    # No clusters defined; proceed without
-                    config.clusters = {}
-
-            # Log summary
-            self.add_log(
-                f"Simulation: {len(config.spacecraft_list)} satellites, "
-                f"{len(config.targets)} targets, {config.simulation_time} minutes"
-            )
-            
-            # ----------------
-            # Run simulation
-            # ----------------
-            result = run_custom_simulation(config, self.fault_detection_tab)
-            
-            # Handle the return value (could be 4 or 5 elements)
-            if len(result) == 5:
-                scenario, viz, figureList, output_dir, ml_results = result
-                self.ml_detection_results = ml_results
-            else:
-                scenario, viz, figureList, output_dir = result
-                self.ml_detection_results = None
-                
-            self.add_log("Basilisk simulation completed")
-            
-            # Extract telemetry data for GNN Analysis
-            if scenario:
-                self._extract_telemetry_data(scenario)
-            else:
-                self._create_synthetic_telemetry_data()
-            
-            # STEP 2: Check if we need DRL integration
-            has_faults = any(sat["fault"]["enabled"] for sat in self.satellites)
-            
-            if has_faults:
-                self.add_log("Faults detected in configuration - starting DRL integration...")
-                
-                try:
-                    # Import the DRL integration system
-                    from main_integration_script import run_integrated_analysis
-                    
-                    self.add_log("Running integrated fault detection + DRL analysis...")
-                    
-                    # Run the complete integrated analysis
-                    integrated_results = run_integrated_analysis(
-                        scenario=scenario,
-                        scenario_config=config,
-                        output_dir=output_dir,
-                        config_profile="development",  # Can be made configurable
-                        fault_detection_tab=self.fault_detection_tab  # ← ADD THIS LINE
-                    )
-                    
-                    if "error" not in integrated_results:
-                        # Successfully completed DRL integration
-                        self.add_log("DRL integration completed successfully!")
-                        
-                        # Extract key results
-                        health_status = integrated_results["system_health"]["overall_system_status"]
-                        faults_detected = integrated_results["performance_metrics"]["total_faults_detected"]
-                        tasks_reassigned = integrated_results["system_health"]["tasks_reassigned"]
-                        drl_strategy = integrated_results["drl_decision_results"]["strategy"]
-                        
-                        # Log results
-                        self.add_log(f"System Health: {health_status}")
-                        self.add_log(f"Faults Detected: {faults_detected}")
-                        self.add_log(f"Tasks Reassigned: {tasks_reassigned}")
-                        self.add_log(f"DRL Strategy: {drl_strategy}")
-                        
-                        # Store integrated results for display
-                        self.integrated_drl_results = integrated_results
-                        
-                        # Update ML detection results with DRL info
-                        if integrated_results.get("fault_detection_results"):
-                            self.ml_detection_results = integrated_results["fault_detection_results"]
-                        
-                    else:
-                        # DRL integration failed
-                        error_msg = integrated_results.get("error", "Unknown error")
-                        self.add_log(f"DRL integration failed: {error_msg}")
-                        self.add_log("Continuing with standard fault detection only...")
-                        
-                        # Set flag to indicate partial results
-                        self.integrated_drl_results = {"error": error_msg, "partial": True}
-                        
-                except ImportError as e:
-                    self.add_log(f"DRL integration not available: {e}")
-                    self.add_log("Please ensure DRL files are copied to core/Agent-based-Architecture-for-Proactive-Fault-Tolerance-and-Management-in-Small-Satellite-Missions/")
-                    self.integrated_drl_results = {"error": "DRL files not found", "partial": True}
-                    
-                except Exception as e:
-                    self.add_log(f"DRL integration error: {e}")
-                    self.integrated_drl_results = {"error": str(e), "partial": True}
-            else:
-                self.add_log("No faults configured - skipping DRL integration")
-                self.integrated_drl_results = None
-            
-            # Handle standard simulation results
-            self._handle_simulation_results(figureList, output_dir, config)
-            
-            # Handle ML detection results (may include DRL results now)
-            if self.ml_detection_results:
-                self._handle_ml_detection_results(self.ml_detection_results)
-            
-            # Handle DRL-specific results
-            if hasattr(self, 'integrated_drl_results') and self.integrated_drl_results:
-                self._handle_drl_results(self.integrated_drl_results)
-            
-            # Show completion message
-            self._show_completion_message_with_drl(config, output_dir)
-            
-        except Exception as e:
-            self.add_log(f"Simulation error: {e}")
-            self.update_status("Simulation error")
-            self._thread_safe(messagebox.showerror, "Simulation Error", f"Error: {str(e)}")
-            
-        finally:
-            # Clean up matplotlib
-            try:
-                import matplotlib.pyplot as plt
-                plt.close('all')
-            except:
-                pass
-                
-            self.is_running = False
-            self.run_button.config(state="normal")
-            self._thread_safe(self.update_status, "Ready")
-
-
 
     def _run_simulation_process_with_progress(self, progress):
         """Run simulation with progress updates (UI marshalled to main thread)."""
@@ -1559,7 +1303,7 @@ class SatelliteSimulatorApp:
 
             # ---- Run Basilisk simulation ----
             pupdate("Running Basilisk simulation...", f"{config.simulation_time} minutes")
-            result = run_custom_simulation(config)
+            result = run_custom_simulation(config, self.fault_detection_tab)
 
             if len(result) == 5:
                 scenario, viz, figureList, output_dir, ml_results = result
@@ -1569,6 +1313,12 @@ class SatelliteSimulatorApp:
                 self.ml_detection_results = None
 
             self.add_log("Basilisk simulation completed")
+
+            # Extract telemetry
+            if scenario:
+                self._extract_telemetry_data(scenario)
+            else:
+                self._create_synthetic_telemetry_data()
 
             # ---- DRL Integration (if faults are enabled) ----
             has_faults = any(sat.get("fault", {}).get("enabled") for sat in self.satellites)
@@ -1583,7 +1333,8 @@ class SatelliteSimulatorApp:
                         scenario=scenario,
                         scenario_config=config,
                         output_dir=output_dir,
-                        config_profile="development"
+                        config_profile="development",
+                        fault_detection_tab=self.fault_detection_tab
                     )
 
                     if "error" not in integrated_results:
@@ -1621,7 +1372,6 @@ class SatelliteSimulatorApp:
             self.add_log(f"Simulation error: {e}", "ERROR")
             raise
 
-
     def _convert_color(self, hex_color):
         """Convert hex color to name for Basilisk"""
         color_map = {
@@ -1644,7 +1394,6 @@ class SatelliteSimulatorApp:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             self.add_log(f"Saving {len(figureList)} plots...")
             
-            # Import matplotlib here to ensure correct backend
             import matplotlib.pyplot as plt
             
             for name, fig in figureList.items():
@@ -1655,27 +1404,23 @@ class SatelliteSimulatorApp:
                         fig.savefig(path, bbox_inches='tight', dpi=300)
                         self.latest_plots.append(filename)
                         self.add_log(f"Saved: {filename}")
-                        
-                        # Close figure immediately after saving
                         plt.close(fig)
                 except Exception as e:
                     self.add_log(f"Error saving {name}: {e}")
                     
         # Refresh results tab
         if hasattr(self, 'results_tab'):
-            self.results_tab.refresh_plot_list()
+            self._thread_safe(self.results_tab.refresh_plot_list)
         
         # Switch to results if plots created
         if self.latest_plots and self.save_plots.get():
             self._thread_safe(self.notebook.select, self.results_frame)
 
-
     def _extract_telemetry_data(self, scenario):
-        """Extract telemetry data from Basilisk scenario (falls back to synthetic)"""
+        """Extract telemetry data from Basilisk scenario"""
         try:
             import pandas as pd
             self.add_log("Attempting to extract telemetry data from scenario...")
-            # For now, always use synthetic data (can be enhanced later to extract real Basilisk data)
             return self._create_synthetic_telemetry_data()
         except Exception as e:
             self.add_log(f"Error extracting data: {e}")
@@ -1699,7 +1444,7 @@ class SatelliteSimulatorApp:
                 sat_name = sat['name']
                 sat_data = {'time': time, 'spacecraft': sat_name}
                 
-                # Reaction wheels (4 wheels)
+                # Reaction wheels
                 for i in range(1, 5):
                     base = 1000 + np.random.randn() * 100
                     sat_data[f'rw{i}_speed'] = base + np.cumsum(np.random.randn(n_samples) * 5)
@@ -1738,20 +1483,16 @@ class SatelliteSimulatorApp:
             
         except Exception as e:
             self.add_log(f"Error creating telemetry: {e}")
-            import traceback
-            traceback.print_exc()
             return False
 
     def _handle_ml_detection_results(self, ml_results):
-        """Handle ML detection results and display them in the fault detection tab (thread-safe)"""
+        """Handle ML detection results (thread-safe)"""
         try:
-            # Update the fault detection tab with results (UI on main thread)
             if hasattr(self, 'fault_detection_tab') and ml_results:
                 if hasattr(self.fault_detection_tab, 'display_ml_results'):
                     self._thread_safe(self.fault_detection_tab.display_ml_results, ml_results)
                 self.add_log("ML detection results processed and displayed")
 
-                # Update ML status in status bar (UI on main thread)
                 summary = ml_results.get('summary', {})
                 total_detections = summary.get('total_detections', 0)
 
@@ -1767,24 +1508,15 @@ class SatelliteSimulatorApp:
         except Exception as e:
             self.add_log(f"Error processing ML detection results: {e}")
 
-
     def _handle_drl_results(self, drl_results):
-        """Handle DRL-specific results and update UI accordingly"""
+        """Handle DRL-specific results and update UI"""
         try:
-            print("\n" + "="*60)
-            print("DEBUG: _handle_drl_results ENTRY POINT")
-            print(f"DEBUG: Thread: {threading.current_thread().name}")
-            print(f"DEBUG: Data type: {type(drl_results)}")
-            print(f"DEBUG: Has task_reassignment_tab: {hasattr(self, 'task_reassignment_tab')}")
-            print("="*60 + "\n")
-            
             if "error" in drl_results:
                 error_msg = drl_results.get("error", "Unknown error")
                 self.add_log(f"DRL Results: Error - {error_msg}")
                 self._thread_safe(self.drl_status.config, text="DRL: Error", foreground='red')
                 return
 
-            
             system_health = drl_results.get("system_health", {})
             health_status = system_health.get("overall_system_status", "unknown")
             
@@ -1795,52 +1527,26 @@ class SatelliteSimulatorApp:
             self.add_log(f"  Tasks Reassigned: {system_health.get('tasks_reassigned', 0)}")
             
             if not hasattr(self, 'task_reassignment_tab'):
-                print("ERROR: task_reassignment_tab attribute does not exist!")
                 self.add_log("ERROR: task_reassignment_tab not found!")
                 return
             
-            print(f"DEBUG: task_reassignment_tab type: {type(self.task_reassignment_tab)}")
-            print(f"DEBUG: Has display_drl_results: {hasattr(self.task_reassignment_tab, 'display_drl_results')}")
-            
             self.add_log("Scheduling Task Reassignment tab update on main thread...")
             
-            # Store reference to avoid lambda issues
             tab = self.task_reassignment_tab
             data = drl_results
             
             def update_on_main_thread():
-                print("\n" + "="*60)
-                print("DEBUG: update_on_main_thread CALLED")
-                print(f"DEBUG: Thread: {threading.current_thread().name}")
-                print("="*60 + "\n")
-                
                 try:
-                    print("DEBUG: About to call display_drl_results...")
                     tab.display_drl_results(data)
-                    print("DEBUG: display_drl_results returned successfully")
-                    
-                    print("DEBUG: About to switch notebook tab...")
                     self.notebook.select(self.task_reassignment_frame)
-                    print("DEBUG: Notebook tab switched")
-                    
                     self.add_log("Task Reassignment tab updated successfully")
-                    
                 except Exception as e:
-                    print(f"ERROR in update_on_main_thread: {e}")
                     self.add_log(f"ERROR updating tab: {e}")
-                    import traceback
-                    traceback.print_exc()
             
-            # Schedule on main thread
-            print("DEBUG: Calling root.after()...")
             self.root.after(100, update_on_main_thread)
-            print("DEBUG: root.after() returned")
                     
         except Exception as e:
-            print(f"ERROR in _handle_drl_results: {e}")
             self.add_log(f"Error processing DRL results: {e}")
-            import traceback
-            traceback.print_exc()
 
     def _show_completion_message_with_drl(self, config, output_dir):
         """Show simulation completion message including DRL results"""
@@ -1853,13 +1559,11 @@ class SatelliteSimulatorApp:
         if self.latest_plots:
             message += f"\n{len(self.latest_plots)} plots saved"
             
-        # Add ML detection info
         if self.ml_detection_results:
             summary = self.ml_detection_results.get('summary', {})
             ml_detections = summary.get('total_detections', 0)
             message += f"\nML Detection: {ml_detections} faults detected"
         
-        # Add DRL integration info
         if hasattr(self, 'integrated_drl_results') and self.integrated_drl_results:
             if "error" in self.integrated_drl_results:
                 message += f"\nDRL Integration: Failed ({self.integrated_drl_results['error']})"
@@ -1873,7 +1577,6 @@ class SatelliteSimulatorApp:
         
         self._thread_safe(messagebox.showinfo, "Simulation Complete", message)
 
-
     # File operations
     def new_constellation(self):
         """Create a new constellation"""
@@ -1882,17 +1585,14 @@ class SatelliteSimulatorApp:
             self.satellites.clear()
             self._initialize_default_satellites()
             
-            # Reset targets
             for i, target in enumerate(self.targets):
                 target["assigned_to"] = [f"Satellite{i+1}"] if i < 4 else []
                 
-            # Reset ML detection results
             self.ml_detection_results = None
             self.integrated_drl_results = None
             if hasattr(self, 'fault_detection_tab') and hasattr(self.fault_detection_tab, 'clear_results'):
                 self.fault_detection_tab.clear_results()
                 
-            # Update UI
             if hasattr(self, 'constellation_tab') and hasattr(self.constellation_tab, 'update_satellite_listbox'):
                 self.constellation_tab.update_satellite_listbox()
             self.update_satellite_dropdowns()
@@ -1916,7 +1616,6 @@ class SatelliteSimulatorApp:
             with open(file_path, 'r') as f:
                 config = json.load(f)
                 
-            # Apply configuration
             self._apply_configuration(config)
             
             self.update_status(f"Loaded: {os.path.basename(file_path)}")
@@ -1964,7 +1663,6 @@ class SatelliteSimulatorApp:
             "active_satellite_index": self.current_satellite_index.get()
         }
         
-        # Add ML detection configuration if available
         if hasattr(self, 'fault_detection_tab'):
             try:
                 config["ml_detection"] = {
@@ -1980,38 +1678,32 @@ class SatelliteSimulatorApp:
                     "update_interval": getattr(self.fault_detection_tab, 'update_interval_var', tk.IntVar()).get()
                 }
             except AttributeError:
-                # Some fault detection attributes may not exist yet
                 pass
         
         return config
 
     def _apply_configuration(self, config):
         """Apply loaded configuration"""
-        # Simulation parameters
         self.simulation_time.set(config.get("simulation_time", 30.0))
         self.show_plots.set(config.get("show_plots", True))
         self.save_plots.set(config.get("save_plots", True))
         self.save_binary.set(config.get("save_binary", True))
         self.binary_filename = config.get("binary_filename", "spacecraft_viz")
         
-        # Satellites
         if "satellites" in config:
             self.satellites = config["satellites"]
             self.update_satellite_dropdowns()
             
-        # Targets
         if "targets" in config:
             self.targets = config["targets"]
             self.update_target_assignments()
             
-        # Active satellite
         index = config.get("active_satellite_index", 0)
         if 0 <= index < len(self.satellites):
             self.current_satellite_index.set(index)
             if hasattr(self, 'fault_tab') and hasattr(self.fault_tab, 'set_active_satellite'):
                 self.fault_tab.set_active_satellite(index)
             
-        # ML detection configuration
         if "ml_detection" in config and hasattr(self, 'fault_detection_tab'):
             try:
                 ml_config = config["ml_detection"]
@@ -2035,7 +1727,6 @@ class SatelliteSimulatorApp:
                 if hasattr(self.fault_detection_tab, 'update_interval_var'):
                     self.fault_detection_tab.update_interval_var.set(ml_config.get("update_interval", 5))
             except AttributeError:
-                # Some fault detection attributes may not exist yet
                 pass
             
         self.update_status_counts()
@@ -2065,11 +1756,9 @@ class SatelliteSimulatorApp:
         help_window.transient(self.root)
         help_window.grab_set()
         
-        # Create notebook
         notebook = ttk.Notebook(help_window)
         notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Add tabs
         if HELP_AVAILABLE:
             topics = [
                 ("Overview", get_general_help("overview")),
@@ -2097,7 +1786,6 @@ class SatelliteSimulatorApp:
             text.insert(tk.END, content)
             text.config(state=tk.DISABLED)
             
-        # Close button
         ttk.Button(help_window, text="Close", command=help_window.destroy).pack(pady=10)
 
     def show_fault_detection_help(self):
@@ -2111,14 +1799,12 @@ class SatelliteSimulatorApp:
         frame = ttk.Frame(help_window, padding=20)
         frame.pack(fill=tk.BOTH, expand=True)
         
-        # Title
         ttk.Label(
             frame,
             text="AI Fault Detection System Help",
             font=('Segoe UI', 14, 'bold')
         ).pack(pady=(0, 20))
         
-        # Help content
         help_content = """AI FAULT DETECTION OVERVIEW:
 The AI Fault Detection system uses machine learning to automatically detect spacecraft faults in real-time during simulation.
 
@@ -2160,7 +1846,6 @@ The system integrates with your existing fault injection to provide comprehensiv
         text_widget.insert(tk.END, help_content)
         text_widget.config(state=tk.DISABLED)
         
-        # Close button
         ttk.Button(help_window, text="Close", command=help_window.destroy).pack(pady=10)
 
     def show_drl_help(self):
@@ -2174,14 +1859,12 @@ The system integrates with your existing fault injection to provide comprehensiv
         frame = ttk.Frame(help_window, padding=20)
         frame.pack(fill=tk.BOTH, expand=True)
         
-        # Title
         ttk.Label(
             frame,
             text="DRL Task Reassignment System Help",
             font=('Segoe UI', 14, 'bold')
         ).pack(pady=(0, 20))
         
-        # Help content
         help_content = """DRL TASK REASSIGNMENT OVERVIEW:
 The Deep Reinforcement Learning (DRL) system automatically reassigns tasks among healthy spacecraft when faults are detected.
 
@@ -2225,7 +1908,6 @@ The DRL system enhances mission resilience by intelligently managing task distri
         text_widget.insert(tk.END, help_content)
         text_widget.config(state=tk.DISABLED)
         
-        # Close button
         ttk.Button(help_window, text="Close", command=help_window.destroy).pack(pady=10)
 
     def show_about(self):
@@ -2239,14 +1921,12 @@ The DRL system enhances mission resilience by intelligently managing task distri
         frame = ttk.Frame(about_window, padding=20)
         frame.pack(fill=tk.BOTH, expand=True)
         
-        # Title
         ttk.Label(
             frame,
             text="Spacecraft Constellation Fault Simulator",
             font=('Segoe UI', 16, 'bold')
         ).pack(pady=(0, 20))
         
-        # Description
         description = """A high-fidelity simulation tool for spacecraft reaction wheel
 fault analysis in multi-satellite constellations.
 
@@ -2267,7 +1947,6 @@ Built with Python, Tkinter, Matplotlib, TensorFlow, and Basilisk
         
         ttk.Label(frame, text=description, justify=tk.LEFT).pack()
         
-        # Close button
         ttk.Button(frame, text="Close", command=about_window.destroy).pack(
             side=tk.BOTTOM, pady=20
         )
@@ -2285,14 +1964,12 @@ Built with Python, Tkinter, Matplotlib, TensorFlow, and Basilisk
         frame = ttk.Frame(status_window, padding=20)
         frame.pack(fill=tk.BOTH, expand=True)
         
-        # Title
         ttk.Label(
             frame,
             text="DRL Integration Requirements Status",
             font=('Segoe UI', 14, 'bold')
         ).pack(pady=(0, 20))
         
-        # Status text
         text_widget = tk.Text(frame, wrap=tk.WORD, font=('Segoe UI', 10))
         scrollbar = ttk.Scrollbar(frame, command=text_widget.yview)
         text_widget.config(yscrollcommand=scrollbar.set)
@@ -2325,30 +2002,26 @@ Built with Python, Tkinter, Matplotlib, TensorFlow, and Basilisk
         
         text_widget.config(state=tk.DISABLED)
         
-        # Close button
         ttk.Button(frame, text="Close", command=status_window.destroy).pack(pady=10)
 
     def show_drl_config(self):
         """Show DRL configuration dialog"""
-        messagebox.showinfo("DRL Configuration", "DRL configuration interface not yet implemented.\n\nDRL parameters are currently managed through configuration files.")
+        messagebox.showinfo("DRL Configuration", 
+                          "DRL configuration interface not yet implemented.\n\nDRL parameters are currently managed through configuration files.")
 
     def refresh_plot_list(self):
         """Delegate to ResultsTab"""
         if hasattr(self, 'results_tab'):
             self.results_tab.refresh_plot_list()
 
-
-
     def check_drl_requirements(self):
         """Verify that DRL integration components and dependencies are available."""
         try:
-            # Prefer the resolved DRL_DIR computed at module import time
             try:
                 drl_path = DRL_DIR
             except Exception:
                 drl_path = None
 
-            # Fallback (legacy) path for backward compatibility
             legacy_path = os.path.join(
                 self.ROOT_DIR,
                 "core",
@@ -2359,7 +2032,6 @@ Built with Python, Tkinter, Matplotlib, TensorFlow, and Basilisk
 
             print(f"Checking DRL path: {drl_path}")
 
-            # Required DRL files
             required_files = [
                 "Envs.py",
                 "PPO.py",
@@ -2379,38 +2051,33 @@ Built with Python, Tkinter, Matplotlib, TensorFlow, and Basilisk
             print(f"Existing DRL files: {existing_files}")
             print(f"Missing DRL files: {missing_files}")
 
-            # Handle missing files early
             if missing_files:
                 self.add_log(f"DRL files missing: {missing_files}")
                 self.add_log(f"DRL path checked: {drl_path}")
                 self.drl_status.config(text="DRL: Missing Files", foreground='red')
                 return False, {"missing_files": missing_files, "drl_path": drl_path}
 
-            # TensorFlow check
             try:
-                import tensorflow as tf  # noqa
+                import tensorflow as tf
                 tf_available = True
                 self.add_log("TensorFlow available")
             except Exception:
                 tf_available = False
                 self.add_log("TensorFlow not available")
 
-            # Integration bridge check (main_integration_script.py)
             try:
                 core_path = os.path.join(self.ROOT_DIR, "core")
                 if core_path not in sys.path:
                     sys.path.insert(0, core_path)
-                from main_integration_script import run_integrated_analysis  # noqa
+                from main_integration_script import run_integrated_analysis
                 bridge_available = True
                 self.add_log("Integration bridge available")
             except Exception as e:
                 bridge_available = False
                 self.add_log(f"Integration bridge not available: {e}")
 
-            # Determine overall readiness
             ready = tf_available and bridge_available and not missing_files
 
-            # Update DRL status label
             if ready:
                 self.drl_status.config(text="DRL: Ready", foreground='green')
             elif not tf_available:
@@ -2420,7 +2087,6 @@ Built with Python, Tkinter, Matplotlib, TensorFlow, and Basilisk
             else:
                 self.drl_status.config(text="DRL: Partial", foreground='orange')
 
-            # Return structured result
             return ready, {
                 "tensorflow": tf_available,
                 "integration_bridge": bridge_available,
@@ -2434,8 +2100,6 @@ Built with Python, Tkinter, Matplotlib, TensorFlow, and Basilisk
             self.add_log(f"Error checking DRL requirements: {e}")
             self.drl_status.config(text="DRL: Error", foreground='red')
             return False, str(e)
-
-
 
     def _view_results(self):
         """Switch to results tab"""
