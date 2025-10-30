@@ -167,7 +167,7 @@ class SatelliteSimulatorApp:
     
     def __init__(self, root):
         self.root = root
-        self.root.title("Spacecraft Constellation Fault Simulator with DRL Integration")
+        self.root.title("Spacecraft Constellation Fault Simulator")
         self.root.update_idletasks()
         try:
             self.root.state("zoomed")
