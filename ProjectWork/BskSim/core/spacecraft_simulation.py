@@ -234,6 +234,31 @@ def check_plots_module(verbose=True):
 
     return PLOTS_AVAILABLE
 
+def _panel_name_from_clusters(rich_clusters, sat_index_or_name, fallback_name):
+    """
+    Reliable cluster-aware naming using spacecraft ModelTag instead of loop index.
+    Fixes cross-cluster mixups when multiple clusters exist.
+    """
+    if not rich_clusters:
+        return fallback_name
+
+    # Allow both int (index) or str (ModelTag)
+    if isinstance(sat_index_or_name, str):
+        sat_name = sat_index_or_name
+    else:
+        sat_name = str(sat_index_or_name)
+
+    for cname, c in rich_clusters.items():
+        leader = c.get("leader")
+        if leader and (leader.get("name") == sat_name or str(leader.get("index")) == sat_name):
+            return f"{cname}_Leader"
+
+        for j, child in enumerate(c.get("children", []), start=2):
+            if child.get("name") == sat_name or str(child.get("index")) == sat_name:
+                return f"{cname}_satellite {j}"
+
+    return fallback_name
+
 
 def inject_fault_into_spacecraft(sc_object, fault_config, current_time_nano):
     """
@@ -1173,96 +1198,226 @@ def run_custom_simulation(config, fault_detection_tab=None):
                 from Basilisk.architecture import messaging
 
                 print("Battery fault detected - setting up battery visualization panels...")
+                
+
+
+                try:
+                    cluster_order = list(rich_clusters.keys())  # e.g. ['cl1', 'cl2']
+                    def cluster_sort_key(sc):
+                        cname = sc.get("cluster")
+                        if not cname:
+                            return 9999  # non-cluster last
+                        return cluster_order.index(cname) if cname in cluster_order else 9998
+                    config.spacecraft_list.sort(key=cluster_sort_key)
+                except Exception as e:
+                    print(f"[warning] could not reorder spacecraft list for fault injection: {e}")
+                                
+
 
                 for i, sc_config in enumerate(config.spacecraft_list):
                     if sc_config["fault"]["enabled"] and sc_config["fault"]["type"] == "battery":
+                        
                         sc = sc_objects[i]
 
-                        # Battery
+                         # --- Main Battery ---
                         battery = simpleBattery.SimpleBattery()
                         battery.ModelTag = f"{sc.ModelTag}_battery"
-                        battery.storageCapacity = 100.0  # Wh
-                        battery.storedCharge_Init = 50.0  # Wh
+                        battery.storageCapacity = 100.0
+                        battery.storedCharge_Init = 50.0
                         scSim.AddModelToTask(simTaskName, battery)
 
-                        # Solar panel
+
+                        # --- Camera Battery ---
+                        cameraBattery = simpleBattery.SimpleBattery()
+                        cameraBattery.ModelTag = f"{sc.ModelTag}_cameraBattery"
+                        cameraBattery.storageCapacity = 100.0
+                        cameraBattery.storedCharge_Init = 100.0  # camera starts ON
+                        scSim.AddModelToTask(simTaskName, cameraBattery)
+
+
+                         # --- Recorders (unique) ---
+                        battRec = battery.batPowerOutMsg.recorder(simulationTimeStep)
+                        camBattRec = cameraBattery.batPowerOutMsg.recorder(simulationTimeStep)
+                        scSim.AddModelToTask(simTaskName, battRec)
+                        scSim.AddModelToTask(simTaskName, camBattRec)
+
+                        # store recorders uniquely by ModelTag
+                        scSim.__dict__[f"battRec_{sc.ModelTag}"] = battRec
+                        scSim.__dict__[f"cameraBattRec_{sc.ModelTag}"] = camBattRec
+
+
+                        # --- Camera Power Sink ---
+                        cameraPowerSink = simplePowerSink.SimplePowerSink()
+                        cameraPowerSink.ModelTag = f"{sc.ModelTag}_cameraPowerSink"
+                        cameraPowerSink.nodePowerOut = 0.0
+                        scSim.AddModelToTask(simTaskName, cameraPowerSink)
+                        cameraBattery.addPowerNodeToModel(cameraPowerSink.nodePowerOutMsg)
+
+                        # --- Main Power Sink ---
+                        powerSink = simplePowerSink.SimplePowerSink()
+                        powerSink.ModelTag = f"{sc.ModelTag}_powerSink"
+                        powerSink.nodePowerOut = -0.01  # nominal draw
+                        scSim.AddModelToTask(simTaskName, powerSink)
+                        battery.addPowerNodeToModel(powerSink.nodePowerOutMsg)
+
+                        # --- Fault Injection Sink ---
+                        powerSinkFault = simplePowerSink.SimplePowerSink()
+                        powerSinkFault.ModelTag = f"{sc.ModelTag}_powerSinkFault"
+                        powerSinkFault.nodePowerOut = 0.0
+                        scSim.AddModelToTask(simTaskName, powerSinkFault)
+                        battery.addPowerNodeToModel(powerSinkFault.nodePowerOutMsg)
+
+                        # --- Solar Panels ---
                         solarPanel = simpleSolarPanel.SimpleSolarPanel()
                         solarPanel.ModelTag = f"{sc.ModelTag}_solarPanel"
-                        solarPanel.setPanelParameters([-1.0, 0.0, 0.0], 0.05, 0.3)
+                        solarPanel.setPanelParameters([-1.0, -10.0, -1.0], 0.00001, 0.0000001)
                         solarPanel.stateInMsg.subscribeTo(sc.scStateOutMsg)
                         scSim.AddModelToTask(simTaskName, solarPanel)
                         battery.addPowerNodeToModel(solarPanel.nodePowerOutMsg)
 
-                        # Sun message
+                        camSolarPanel = simpleSolarPanel.SimpleSolarPanel()
+                        camSolarPanel.ModelTag = f"{sc.ModelTag}_camSolarPanel"
+                        camSolarPanel.setPanelParameters([-1.0, -10.0, -1.0], 0.1, 0.1)
+                        camSolarPanel.stateInMsg.subscribeTo(sc.scStateOutMsg)
+                        scSim.AddModelToTask(simTaskName, camSolarPanel)
+                        cameraBattery.addPowerNodeToModel(camSolarPanel.nodePowerOutMsg)
+
+                        # --- Sun Message ---
                         sunMsgData = messaging.SpicePlanetStateMsgPayload()
-                        sunMsgData.PositionVector = [-1.0, 0.0, 0.0]
+                        sunMsgData.PositionVector = [-1.0, -10.0, -1.0]
                         sunMsg = messaging.SpicePlanetStateMsg().write(sunMsgData)
                         solarPanel.sunInMsg.subscribeTo(sunMsg)
+                        camSolarPanel.sunInMsg.subscribeTo(sunMsg)
 
-                        # Power sinks
-                        powerSink = simplePowerSink.SimplePowerSink()
-                        powerSink.ModelTag = f"{sc.ModelTag}_powerSink"
-                        powerSink.nodePowerOut = -0.01  # 10 W nominal
-                        scSim.AddModelToTask(simTaskName, powerSink)
-                        battery.addPowerNodeToModel(powerSink.nodePowerOutMsg)
+                        # --- Recorders ---
+                        battRec = battery.batPowerOutMsg.recorder(simulationTimeStep*10)
+                        scSim.AddModelToTask(simTaskName, battRec)
+                        scSim.__dict__[f"battRec_{i}"] = battRec
+                        scSim.__dict__[f"powerSink_{i}"] = powerSink
+                        scSim.__dict__[f"powerSinkFault_{i}"] = powerSinkFault
+                        scSim.__dict__[f"cameraPowerSink_{i}"] = cameraPowerSink
 
-                        powerSinkFault = simplePowerSink.SimplePowerSink()
-                        powerSinkFault.ModelTag = f"{sc.ModelTag}_powerSinkFault"
-                        powerSinkFault.nodePowerOut = 0.0  # Initially off
-                        scSim.AddModelToTask(simTaskName, powerSinkFault)
-                        battery.addPowerNodeToModel(powerSinkFault.nodePowerOutMsg)
+                        cameraBattLog = cameraBattery.batPowerOutMsg.recorder(simulationTimeStep)
+                        scSim.AddModelToTask(simTaskName, cameraBattLog)
 
-                        battery_components[sc.ModelTag] = {
-                            'battery': battery,
-                            'solarPanel': solarPanel,
-                            'powerSink': powerSink,
-                            'powerSinkFault': powerSinkFault
-                        }
 
-                        # Generic storage panels
+                        # --- Solar Battery (virtual battery to visualize solar panel output) ---
+                        solarBattery = simpleBattery.SimpleBattery()
+                        solarBattery.ModelTag = f"{sc.ModelTag}_solarBattery"
+                        solarBattery.storageCapacity = 100.0
+                        solarBattery.storedCharge_Init = 0.0   # start empty
+                        scSim.AddModelToTask(simTaskName, solarBattery)
+
+                        # Connect the solar panel output to charge this solarBattery
+                        solarBattery.addPowerNodeToModel(solarPanel.nodePowerOutMsg)
+
+                        # --- Solar drain to simulate eclipse (power loss) ---
+                        solarDrain = simplePowerSink.SimplePowerSink()
+                        solarDrain.ModelTag = f"{sc.ModelTag}_solarDrain"
+                        solarDrain.nodePowerOut = -0.02   # adjust drain rate (W equivalent)
+                        scSim.AddModelToTask(simTaskName, solarDrain)
+
+                        # Hook drain into solar battery
+                        solarBattery.addPowerNodeToModel(solarDrain.nodePowerOutMsg)
+
+
+                        # --- Safe Mode Event (SOC ≤ 20%) ---
+                        safeThresh = battery.storageCapacity * 0.2
+                        cond = (
+                            f"(self.TotalSim.CurrentNanos > {macros.min2nano(0.2)}) and "  # wait 0.2 min (~12 s)
+                            f"(len(self.battRec_{i}.storageLevel) > 0) and "
+                            f"(self.battRec_{i}.storageLevel[-1] <= {safeThresh})"
+                        )
+
+                        scSim.createNewEvent(
+                            f"batterySafeMode_{sc.ModelTag}",
+                            simulationTimeStep,
+                            True,
+                            [cond],
+                            [
+                                f"print('*** {sc.ModelTag} ENTERING SAFE MODE: SOC ≤ 20% ***')",
+                                f"self.powerSink_{i}.nodePowerOut = 0.0",
+                                f"self.powerSinkFault_{i}.nodePowerOut = 0.0",
+                                f"self.cameraPowerSink_{i}.nodePowerOut = -100",
+                                f"self.setEventActivity('batterySafeMode_{sc.ModelTag}', True)"
+                            ]
+                        )
+
+                        # --- Fault Event (time-based extra drain) ---
+                        fault_time_nano = macros.min2nano(sc_config["fault"]["time"])
+                        scSim.createNewEvent(
+                            f"powerSinkFaultEvent_{sc.ModelTag}",
+                            simulationTimeStep,
+                            True,
+                            [f"self.TotalSim.CurrentNanos >= {fault_time_nano}"],
+                            [
+                                f"self.powerSinkFault_{i}.nodePowerOut = -0.05",
+                                f"self.setEventActivity('powerSinkFaultEvent_{sc.ModelTag}', False)"
+                            ]
+                        )
+
+                        # --- Visualization Panels ---
                         batteryPanel = vizSupport.vizInterface.GenericStorage()
                         batteryPanel.label = f"{sc.ModelTag} Battery (%)"
                         batteryPanel.units = "%"
                         batteryPanel.minValue = 0
                         batteryPanel.maxValue = 100
                         batteryPanel.useStorageLevel = True
-
-                        batteryReader = messaging.PowerStorageStatusMsgReader()
-                        batteryReader.subscribeTo(battery.batPowerOutMsg)
-                        batteryPanel.batteryStateInMsg = batteryReader
-                        batteryPanel.this.disown()
-
-                        solarViz = vizSupport.vizInterface.GenericStorage()
-                        solarViz.label = f"{sc.ModelTag} Solar Power"
-                        solarViz.units = "W"
-                        solarViz.minValue = 0.0
-                        solarViz.maxValue = 60.0
-                        solarViz.useStorageLevel = False
-
-                        solarReader = messaging.PowerNodeUsageMsgReader()
-                        solarReader.subscribeTo(solarPanel.nodePowerOutMsg)
-                        solarViz.powerNodeUsageInMsg = solarReader
-                        solarViz.this.disown()
-
-                        gsList[i] = [batteryPanel, solarViz]
-
-                        # Fault activation event
-                        fault_time_nano = macros.min2nano(sc_config["fault"]["time"])
-                        scSim.__dict__[f'powerSinkFault_{i}'] = powerSinkFault
-
-                        scSim.createNewEvent(
-                            f"batteryFault_{sc.ModelTag}",
-                            simulationTimeStep,
-                            True,
-                            [f"self.TotalSim.CurrentNanos >= {fault_time_nano}"],
-                            [
-                                f"self.powerSinkFault_{i}.nodePowerOut = -0.05",
-                                f"print('Battery fault activated for {sc.ModelTag}')",
-                                f"self.setEventActivity('batteryFault_{sc.ModelTag}', False)"
-                            ]
+                        batteryInMsg = messaging.PowerStorageStatusMsgReader()
+                        batteryInMsg.subscribeTo(battery.batPowerOutMsg)
+                        batteryPanel.batteryStateInMsg = batteryInMsg
+                        #batteryPanel.this.disown()
+                        batteryPanel.thresholds = vizSupport.vizInterface.IntVector([20, 50, 80])
+                        batteryPanel.color = vizSupport.vizInterface.IntVector(
+                            vizSupport.toRGBA255("red") +
+                            vizSupport.toRGBA255("orange") +
+                            vizSupport.toRGBA255("yellow") +
+                            vizSupport.toRGBA255("green")
                         )
 
-                        print(f"Set up battery visualization for {sc.ModelTag}")
+                        solarPanelViz = vizSupport.vizInterface.GenericStorage()
+                        solarPanelViz.label = f"{sc.ModelTag} Solar Power (%)"
+                        solarPanelViz.units = "%"
+                        solarPanelViz.minValue = 0
+                        solarPanelViz.maxValue = 100
+                        solarPanelViz.useStorageLevel = True
+
+                        solarBatteryInMsg = messaging.PowerStorageStatusMsgReader()
+                        solarBatteryInMsg.subscribeTo(solarBattery.batPowerOutMsg)
+                        solarPanelViz.batteryStateInMsg = solarBatteryInMsg
+                        #solarPanelViz.this.disown()
+
+                        # --- Use only 3 color zones: red, yellow, green ---
+                        solarPanelViz.thresholds = vizSupport.vizInterface.IntVector([33, 66])
+                        solarPanelViz.color = vizSupport.vizInterface.IntVector(
+                            vizSupport.toRGBA255("red") +
+                            vizSupport.toRGBA255("yellow") +
+                            vizSupport.toRGBA255("green")
+                        )
+
+
+
+                        cameraPanel = vizSupport.vizInterface.GenericStorage()
+                        cameraPanel.label = f"{sc.ModelTag} Camera Power(%)"
+                        cameraPanel.units = "%"
+                        cameraPanel.minValue = 0
+                        cameraPanel.maxValue = 100
+                        cameraPanel.useStorageLevel = True
+                        cameraInMsg = messaging.PowerStorageStatusMsgReader()
+                        cameraInMsg.subscribeTo(cameraBattery.batPowerOutMsg)
+                        cameraPanel.batteryStateInMsg = cameraInMsg
+                        #cameraPanel.this.disown()
+                        # Always show in green, no thresholds
+                        cameraPanel.thresholds = vizSupport.vizInterface.IntVector()  # <-- empty
+                        cameraPanel.color = vizSupport.vizInterface.IntVector(
+                            vizSupport.toRGBA255("green")
+                        )
+
+
+                        # Add panels for this spacecraft
+                        gsList[i] = [batteryPanel, solarPanelViz, cameraPanel]
+
+                        print(f"Set up SAFE MODE battery visualization for {sc.ModelTag}")
 
             except Exception as e:
                 print(f"Battery visualization setup failed (continuing without panels): {e}")
@@ -1280,6 +1435,17 @@ def run_custom_simulation(config, fault_detection_tab=None):
                     genericStorageList=gsList
                 )
                 # Turn on instrument GUI for those sats
+                # Rename Vizard window titles (the grey "… Storage" bars)
+                for i, sc in enumerate(sc_objects):
+                    label_base = _panel_name_from_clusters(rich_clusters, sc.ModelTag, sc.ModelTag)
+
+                    try:
+                        viz.scData[i].spacecraftName = label_base
+                        sc.ModelTag = label_base
+                    except Exception as e:
+                        print(f"[viz rename] could not set name for sat {i}: {e}")
+
+                # Turn on instrument GUI for those sats (keep your existing code)
                 for i, sc in enumerate(sc_objects):
                     if sc.ModelTag in battery_components:
                         vizSupport.setInstrumentGuiSetting(
@@ -1295,6 +1461,14 @@ def run_custom_simulation(config, fault_detection_tab=None):
                     saveFile=binary_full_path,
                     liveStream=False
                 )
+
+                # Rename Vizard window titles here too
+                for i, sc in enumerate(sc_objects):
+                    label_base = _panel_name_from_clusters(rich_clusters, sc.ModelTag, sc.ModelTag)
+                    try:
+                        viz.scData[i].spacecraftName = label_base
+                    except Exception as e:
+                        print(f"[viz rename] could not set name for sat {i}: {e}")
 
             print(f"Vizard enabled for {len(sc_objects)} spacecraft")
 
@@ -1457,6 +1631,60 @@ def run_custom_simulation(config, fault_detection_tab=None):
                         plot_counts['fault'] += len(fps)
         except Exception as e:
             print(f"Fault plots failed: {e}")
+
+        
+         # ----------------------------------------------------------------------
+        # Add battery fault plots ONLY if a spacecraft had a battery fault enabled
+        # ----------------------------------------------------------------------
+        # --- Custom Battery Safe Mode Plots ---
+        for i, sc_config in enumerate(config.spacecraft_list):
+            if sc_config["fault"]["enabled"] and sc_config["fault"]["type"] == "battery":
+                sc = sc_objects[i]
+
+                # Retrieve the unique recorder per satellite
+                battRec = scSim.__dict__.get(f"battRec_{sc.ModelTag}", None)
+                camBattRec = scSim.__dict__.get(f"cameraBattRec_{sc.ModelTag}", None)
+
+                if battRec:
+                    try:
+                        timeData = battRec.times() * macros.NANO2SEC
+                        storageData = battRec.storageLevel
+                        plt.figure(figsize=(8, 4.5))
+                        plt.plot(timeData, storageData, color='blue', linewidth=2,
+                                label=f'{sc.ModelTag} Battery SOC')
+                        plt.axhline(20, color='r', linestyle='--', label='Safe Mode Threshold (20%)')
+                        plt.xlabel('Time [s]')
+                        plt.ylabel('Stored Charge [%]')
+                        plt.title(f'{sc.ModelTag} Battery Safe Mode')
+                        plt.legend()
+                        plt.grid(True, linestyle='--', alpha=0.7)
+                        pltName = f"{sc.ModelTag}_Battery_SOC_REAL"
+                        figureList[pltName] = plt.gcf()
+                        print(f"✓ Added Battery SOC plot for {sc.ModelTag}")
+                    except Exception as e:
+                        print(f"✗ Could not generate Battery SOC plot for {sc.ModelTag}: {e}")
+
+                if camBattRec:
+                    try:
+                        camTime = camBattRec.times() * macros.NANO2SEC
+                        camStorage = camBattRec.storageLevel
+                        plt.figure(figsize=(8, 4.5))
+                        plt.plot(camTime, camStorage, color='green', linewidth=2,
+                                label=f'{sc.ModelTag} Camera Battery SOC')
+                        plt.axhline(20, color='red', linestyle='--',
+                                    label='Safe Mode Threshold (20%)')
+                        plt.xlabel('Time [s]')
+                        plt.ylabel('Stored Charge [%]')
+                        plt.title(f'{sc.ModelTag} Camera Battery Behaviour')
+                        plt.legend()
+                        plt.grid(True, linestyle='--', alpha=0.7)
+                        pltName = f"{sc.ModelTag}_Camera_SOC_REAL"
+                        figureList[pltName] = plt.gcf()
+                        print(f"✓ Added Camera SOC plot for {sc.ModelTag}")
+                    except Exception as e:
+                        print(f"✗ Could not generate Camera SOC plot for {sc.ModelTag}: {e}")
+
+
 
         print("\nPlot generation complete:")
         print(f"  Constellation: {plot_counts['constellation']}")
