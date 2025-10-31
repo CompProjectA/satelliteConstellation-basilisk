@@ -8,7 +8,7 @@
     "minimum_data_points": 30
   },
   "drl": {
-    "model_path": "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\core\\anomaly_detection_model.keras",
+    "model_path": "C:\\Uni\\Uni\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\core\\anomaly_detection_model.keras",
     "state_dim": 10,
     "action_dim": 3,
     "learning_rate": 0.001,
@@ -36,5 +36,5 @@
   "simulation_time_limit_minutes": 30.0,
   "enable_real_time_detection": false,
   "enable_drl_logging": true,
-  "output_directory": "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\logs"
+  "output_directory": "C:\\Uni\\Uni\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\logs"
 }
