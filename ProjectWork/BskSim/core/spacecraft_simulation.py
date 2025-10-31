@@ -1088,7 +1088,8 @@ def run_custom_simulation(config, fault_detection_tab=None):
         fault_detection_tab: Optional FaultDetectionTab for ML model selection
 
     Returns:
-        tuple: (scenario, viz, figureList, output_dir, ml_results)
+    tuple: (scenario, viz, figureList, output_dir, ml_results)
+
     """
     # Check modules (quiet)
     print("\nChecking module availability...")
@@ -1108,7 +1109,8 @@ def run_custom_simulation(config, fault_detection_tab=None):
 
     if not config.spacecraft_list:
         print("ERROR: No spacecraft configured in simulation")
-        return None, None, {}, output_dir
+        return None, None, {}, output_dir, None
+
 
     print("\n" + "="*60)
     print("SPACECRAFT CONSTELLATION SIMULATION")
@@ -1601,7 +1603,10 @@ def run_custom_simulation(config, fault_detection_tab=None):
     print("-"*50)
 
     sim_logger.info("Initializing simulation...")
-    ensure_fault_detector_ready(fault_detection_tab)
+    # Before InitializeSimulation()
+    if fault_detection_tab:
+        ensure_fault_detector_ready(fault_detection_tab)
+
     scSim.InitializeSimulation()
 
     print(f"Setting stop time to {simulationTime} ns...")
@@ -1745,8 +1750,6 @@ def run_custom_simulation(config, fault_detection_tab=None):
                     except Exception as e:
                         print(f"✗ Could not generate Camera SOC plot for {sc.ModelTag}: {e}")
 
-
-
         print("\nPlot generation complete:")
         print(f"  Constellation: {plot_counts['constellation']}")
         print(f"  Cluster:       {plot_counts['cluster']}")
@@ -1782,7 +1785,7 @@ def run_custom_simulation(config, fault_detection_tab=None):
                 except Exception:
                     pass
             figureList.clear()
-  # ---- Build per-satellite fault map for ML router (always build) ----
+    # ---- Build per-satellite fault map for ML router (always build) ----
     fault_map = {}
     for sc in config.spacecraft_list:
         f = sc.get("fault", {}) or {}
@@ -1807,8 +1810,6 @@ def run_custom_simulation(config, fault_detection_tab=None):
             self.fault_map = fault_map or {}
 
     scenario = ConstellationScenario(scSim, sc_objects, config, cluster_manager, fault_map)
-
-
     # ---------------- REAL ML Detection ----------------
     print("\n" + "="*60)
     print("FAULT DETECTION (LSTM OR ISOLATION FOREST)")
@@ -1958,11 +1959,7 @@ def run_custom_simulation(config, fault_detection_tab=None):
     print(f"Total Satellites: {len(sc_objects)}")
     print(f"Simulation Time: {config.simulation_time} minutes")
     print(f"Real Fault Simulations: {'Available' if FAULT_LOADER_AVAILABLE else 'Not available'}")
-
     return scenario, viz, figureList, output_dir, ml_results
-
-
-
 
 # ============= MODULE TEST =============
 if __name__ == "__main__":
@@ -2033,7 +2030,7 @@ if __name__ == "__main__":
             config.validate()
             print("Configuration validation passed")
             print("\nRunning test simulation...")
-            scenario, viz, figureList, output_dir = run_custom_simulation(config)
+            scenario, viz, figureList, output_dir, ml_results = run_custom_simulation(config)
             if scenario:
                 print("\nTest simulation completed successfully!")
                 print(f"Results saved to: {output_dir}")
