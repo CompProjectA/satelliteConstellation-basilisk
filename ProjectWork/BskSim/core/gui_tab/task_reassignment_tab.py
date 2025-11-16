@@ -49,21 +49,18 @@ class TaskReassignmentTab:
         decisions_frame = ttk.Frame(self.reassignment_notebook)
         spacecraft_frame = ttk.Frame(self.reassignment_notebook)
         strategy_frame = ttk.Frame(self.reassignment_notebook)
-        analysis_frame = ttk.Frame(self.reassignment_notebook)
         
         # Add sub-tabs
         self.reassignment_notebook.add(overview_frame, text="Overview")
         self.reassignment_notebook.add(decisions_frame, text="DRL Decisions")
         self.reassignment_notebook.add(spacecraft_frame, text="Spacecraft Status")
         self.reassignment_notebook.add(strategy_frame, text="Reassignment Strategy")
-        self.reassignment_notebook.add(analysis_frame, text="Analysis")
         
         # Create tab contents
         self._create_overview_tab(overview_frame)
         self._create_decisions_tab(decisions_frame)
         self._create_spacecraft_tab(spacecraft_frame)
         self._create_strategy_tab(strategy_frame)
-        self._create_analysis_tab(analysis_frame)
         
     def _create_overview_tab(self, parent):
         """Create the overview tab content"""
@@ -303,38 +300,6 @@ class TaskReassignmentTab:
         
         # Initialize strategy plot
         self.init_strategy_plot()
-        
-    def _create_analysis_tab(self, parent):
-        """Create the analysis tab content"""
-        # Analysis controls
-        controls_frame = ttk.Frame(parent)
-        controls_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        ttk.Label(controls_frame, text="Analysis Type:").pack(side=tk.LEFT)
-        
-        self.analysis_type_var = tk.StringVar(value="System Health Over Time")
-        analysis_types = [
-            "System Health Over Time",
-            "Task Distribution Analysis", 
-            "DRL Decision Confidence",
-            "Reassignment Effectiveness",
-            "Performance Metrics"
-        ]
-        self.analysis_type_combo = ttk.Combobox(controls_frame, textvariable=self.analysis_type_var,
-                                               values=analysis_types, state="readonly")
-        self.analysis_type_combo.pack(side=tk.LEFT, padx=5)
-        
-        ttk.Button(controls_frame, text="Generate Analysis", 
-                  command=self.generate_analysis).pack(side=tk.LEFT, padx=5)
-        
-        # Analysis plot frame
-        plot_frame = ttk.LabelFrame(parent, text="Analysis Results", padding=10)
-        plot_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        
-        # Create matplotlib figure for analysis
-        self.analysis_figure = Figure(figsize=(10, 8), dpi=100)
-        self.analysis_canvas = FigureCanvasTkAgg(self.analysis_figure, plot_frame)
-        self.analysis_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         
     def init_strategy_plot(self):
         """Initialize the strategy comparison plot"""
@@ -866,182 +831,3 @@ NEXT ACTIONS:
 """
         
         self.redistribution_text.insert(tk.END, summary_text)
-        
-    def generate_analysis(self):
-        """Generate analysis plot based on selected type"""
-        analysis_type = self.analysis_type_var.get()
-        
-        try:
-            self.analysis_figure.clear()
-            
-            if analysis_type == "System Health Over Time":
-                self.plot_system_health_over_time()
-            elif analysis_type == "Task Distribution Analysis":
-                self.plot_task_distribution()
-            elif analysis_type == "DRL Decision Confidence":
-                self.plot_drl_confidence()
-            elif analysis_type == "Reassignment Effectiveness":
-                self.plot_reassignment_effectiveness()
-            elif analysis_type == "Performance Metrics":
-                self.plot_performance_metrics()
-            
-            self.analysis_canvas.draw()
-            self.parent_app.add_log(f"Generated analysis: {analysis_type}")
-            
-        except Exception as e:
-            error_msg = f"Failed to generate analysis: {str(e)}"
-            self.parent_app.add_log(error_msg)
-            messagebox.showerror("Error", error_msg)
-            
-    def plot_system_health_over_time(self):
-        """Plot system health over time"""
-        ax = self.analysis_figure.add_subplot(111)
-        
-        # Simulate health timeline
-        time_points = np.linspace(0, 30, 100)
-        health_score = np.ones(100) * 100  # Start at 100%
-        
-        # Add fault at 15 minutes
-        fault_time_idx = 50  # 15 minutes
-        health_score[fault_time_idx:] = 75  # Drop to 75% after fault
-        
-        ax.plot(time_points, health_score, 'b-', linewidth=2, label='System Health')
-        ax.axvline(x=15, color='red', linestyle='--', alpha=0.7, label='Fault Detected')
-        ax.axhline(y=75, color='orange', linestyle=':', alpha=0.7, label='Post-Fault Level')
-        
-        ax.set_xlabel('Time (minutes)')
-        ax.set_ylabel('System Health (%)')
-        ax.set_title('System Health Over Time')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        ax.set_ylim(0, 105)
-        
-        # Add annotations
-        ax.annotate('Fault Occurs', xy=(15, 100), xytext=(20, 90),
-                   arrowprops=dict(arrowstyle='->', color='red'))
-        ax.annotate('DRL Reassignment', xy=(15.1, 75), xytext=(25, 60),
-                   arrowprops=dict(arrowstyle='->', color='green'))
-        
-    def plot_task_distribution(self):
-        """Plot task distribution analysis"""
-        ax = self.analysis_figure.add_subplot(111)
-        
-        if self.drl_results:
-            task_results = self.drl_results.get("task_reassignment_results", {})
-            healthy_sc = task_results.get("healthy_spacecraft", [])
-            faulty_sc = task_results.get("faulty_spacecraft", [])
-            
-            spacecraft_names = [sc.get('name', f'SC{i}') for i, sc in enumerate(healthy_sc + faulty_sc)]
-            task_loads = [90, 85, 88] + [0] * len(faulty_sc)  # Healthy have load, faulty don't
-            
-        else:
-            spacecraft_names = ['Satellite1', 'Satellite2', 'Satellite3', 'Satellite4']
-            task_loads = [0, 90, 85, 88]  # Satellite1 faulty
-        
-        colors = ['red' if load == 0 else 'green' for load in task_loads]
-        bars = ax.bar(spacecraft_names, task_loads, color=colors, alpha=0.7)
-        
-        ax.set_xlabel('Spacecraft')
-        ax.set_ylabel('Task Load (%)')
-        ax.set_title('Task Distribution After Reassignment')
-        ax.set_ylim(0, 100)
-        
-        # Add load labels
-        for bar, load in zip(bars, task_loads):
-            if load > 0:
-                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 2,
-                       f'{load}%', ha='center', va='bottom')
-            else:
-                ax.text(bar.get_x() + bar.get_width()/2, 5,
-                       'FAULTY', ha='center', va='bottom', color='white', fontweight='bold')
-        
-    def plot_drl_confidence(self):
-        """Plot DRL decision confidence"""
-        ax = self.analysis_figure.add_subplot(111)
-        
-        decisions = ['Even Distribution', 'Capability Based', 'Load Balanced']
-        confidences = [0.4, 0.5, 0.6]  # Load balanced had highest confidence
-        
-        bars = ax.bar(decisions, confidences, color=['lightcoral', 'lightsalmon', 'lightgreen'])
-        
-        ax.set_ylabel('Decision Confidence')
-        ax.set_title('DRL Decision Confidence by Strategy')
-        ax.set_ylim(0, 1.0)
-        
-        # Add confidence labels
-        for bar, conf in zip(bars, confidences):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
-                   f'{conf:.3f}', ha='center', va='bottom', fontweight='bold')
-        
-        # Highlight selected strategy
-        bars[2].set_color('darkgreen')  # Load balanced
-        ax.text(2, 0.65, 'SELECTED', ha='center', va='bottom', fontweight='bold', color='darkgreen')
-        
-    def plot_reassignment_effectiveness(self):
-        """Plot reassignment effectiveness metrics"""
-        fig = self.analysis_figure
-        fig.clear()
-        
-        # Create 2x2 subplot layout
-        ax1 = fig.add_subplot(221)
-        ax2 = fig.add_subplot(222)
-        ax3 = fig.add_subplot(223)
-        ax4 = fig.add_subplot(224)
-        
-        # Response Time
-        ax1.bar(['Response Time'], [0.1], color='green')
-        ax1.set_ylabel('Seconds')
-        ax1.set_title('Reassignment Response Time')
-        ax1.set_ylim(0, 1)
-        ax1.text(0, 0.15, '0.1s', ha='center', va='bottom', fontweight='bold')
-        
-        # Success Rate
-        ax2.pie([100, 0], labels=['Success', 'Failure'], colors=['green', 'red'], startangle=90)
-        ax2.set_title('Reassignment Success Rate')
-        
-        # System Availability
-        availability_data = [75, 25]  # 75% after 1 faulty spacecraft
-        ax3.pie(availability_data, labels=['Available', 'Unavailable'], 
-               colors=['lightgreen', 'lightcoral'], startangle=90)
-        ax3.set_title('System Availability')
-        
-        # Load Distribution
-        spacecraft = ['Sat2', 'Sat3', 'Sat4']
-        loads = [90, 85, 88]
-        ax4.bar(spacecraft, loads, color='skyblue')
-        ax4.set_ylabel('Load (%)')
-        ax4.set_title('Post-Reassignment Load')
-        ax4.set_ylim(0, 100)
-        
-        fig.tight_layout()
-        
-    def plot_performance_metrics(self):
-        """Plot performance metrics overview"""
-        fig = self.analysis_figure
-        fig.clear()
-        
-        # Single comprehensive metrics plot
-        ax = fig.add_subplot(111)
-        
-        metrics = ['Detection\nAccuracy', 'Response\nTime', 'System\nAvailability', 
-                  'Load\nBalance', 'Fault\nTolerance']
-        scores = [100, 95, 75, 88, 85]  # Based on your results
-        
-        bars = ax.bar(metrics, scores, color=['green', 'blue', 'orange', 'purple', 'red'], alpha=0.7)
-        
-        ax.set_ylabel('Performance Score (%)')
-        ax.set_title('Overall System Performance Metrics')
-        ax.set_ylim(0, 105)
-        ax.grid(True, alpha=0.3)
-        
-        # Add score labels
-        for bar, score in zip(bars, scores):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 2,
-                   f'{score}%', ha='center', va='bottom', fontweight='bold')
-        
-        # Add average line
-        avg_score = np.mean(scores)
-        ax.axhline(y=avg_score, color='red', linestyle='--', alpha=0.7, 
-                  label=f'Average: {avg_score:.1f}%')
-        ax.legend()
-
