@@ -1,0 +1,224 @@
+SPACECRAFT CONSTELLATION SIMULATION SUMMARY
+==================================================
+
+Date: 2025-10-31 13:47:11
+
+MODULE STATUS:
+  Basilisk: Available
+  Cluster Integration: Available
+  Plotting: Available (APIs: new, old)
+  Fault Loader: Available
+  Available Faults: ['friction', 'power_limit', 'encoder', 'battery']
+
+SIMULATION CONFIGURATION:
+  Duration: 30.0 minutes
+  Time Step: 1 second
+  Spacecraft: 16
+  Clusters: 2
+
+SPACECRAFT DETAILS:
+
+Spacecraft 1: Satellite1
+  Type: individual
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+  Fault: DISABLED
+
+Spacecraft 2: Satellite2
+  Type: individual
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+  Fault: DISABLED
+
+Spacecraft 3: Satellite3
+  Type: individual
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+  Fault: DISABLED
+
+Spacecraft 4: Satellite4
+  Type: individual
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+  Fault: DISABLED
+
+Spacecraft 5: GBO_Leader
+  Type: cluster_member
+  Cluster: GBO
+  Role: leader
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: ENABLED
+    - Type: friction
+    - Magnitude: 0.0005
+    - Wheel: 2
+    - Injection time: 15.0 minutes
+
+Spacecraft 6: GBO_Sat2
+  Type: cluster_member
+  Cluster: GBO
+  Role: child
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.12°
+    - RAAN: 0.0°
+  Fault: ENABLED
+    - Type: power_limit
+    - Magnitude: 0.5
+    - Wheel: 3
+    - Injection time: 15.0 minutes
+
+Spacecraft 7: GBO_Sat3
+  Type: cluster_member
+  Cluster: GBO
+  Role: child
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.001
+    - Inclination: 54.88°
+    - RAAN: 0.0°
+  Fault: ENABLED
+    - Type: encoder
+    - Magnitude: 20.0
+    - Wheel: 3
+    - Injection time: 15.0 minutes
+
+Spacecraft 8: GBO_Sat4
+  Type: cluster_member
+  Cluster: GBO
+  Role: child
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: ENABLED
+    - Type: battery
+    - Magnitude: 50.0
+    - Wheel: 3
+    - Injection time: 15.0 minutes
+
+Spacecraft 9: GBO_Sat5
+  Type: cluster_member
+  Cluster: GBO
+  Role: child
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 10: GBO_Sat6
+  Type: cluster_member
+  Cluster: GBO
+  Role: child
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 11: HEM_Leader
+  Type: cluster_member
+  Cluster: HEM
+  Role: leader
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 12: HEM_Sat2
+  Type: cluster_member
+  Cluster: HEM
+  Role: child
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.12°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 13: HEM_Sat3
+  Type: cluster_member
+  Cluster: HEM
+  Role: child
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 54.88°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 14: HEM_Sat4
+  Type: cluster_member
+  Cluster: HEM
+  Role: child
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 15: HEM_Sat5
+  Type: cluster_member
+  Cluster: HEM
+  Role: child
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 16: HEM_Sat6
+  Type: cluster_member
+  Cluster: HEM
+  Role: child
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+OUTPUT:
+  Results Directory: D:\Swinburne University\Sem01 2025\Computing Technology Project A\Github\satelliteConstellation-basilisk\ProjectWork\BskSim\logs\sim_results_20251031_134617
+  Plots Generated: 0
+  Binary File: D:\Swinburne University\Sem01 2025\Computing Technology Project A\Github\satelliteConstellation-basilisk\ProjectWork\BskSim\Vizfile\_VizFiles\spacecraft_viz_UnityViz.bin (3.94 MB)

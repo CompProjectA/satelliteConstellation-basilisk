@@ -1,0 +1,302 @@
+SPACECRAFT CONSTELLATION SIMULATION SUMMARY
+==================================================
+
+Date: 2025-10-31 13:41:50
+
+MODULE STATUS:
+  Basilisk: Available
+  Cluster Integration: Available
+  Plotting: Available (APIs: new, old)
+  Fault Loader: Available
+  Available Faults: ['friction', 'power_limit', 'encoder', 'battery']
+
+SIMULATION CONFIGURATION:
+  Duration: 60.0 minutes
+  Time Step: 1 second
+  Spacecraft: 24
+  Clusters: 4
+
+SPACECRAFT DETAILS:
+
+Spacecraft 1: Satellite1
+  Type: individual
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+  Fault: DISABLED
+
+Spacecraft 2: Satellite2
+  Type: individual
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+  Fault: DISABLED
+
+Spacecraft 3: Satellite3
+  Type: individual
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+  Fault: DISABLED
+
+Spacecraft 4: Satellite4
+  Type: individual
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+  Fault: DISABLED
+
+Spacecraft 5: HBO_Leader
+  Type: cluster_member
+  Cluster: HBO
+  Role: leader
+  Orbit:
+    - Semi-major axis: 7071 km
+    - Altitude: 700.0 km
+    - Eccentricity: 0.001
+    - Inclination: 56.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 6: HBO_Sat2
+  Type: cluster_member
+  Cluster: HBO
+  Role: child
+  Orbit:
+    - Semi-major axis: 7071 km
+    - Altitude: 700.0 km
+    - Eccentricity: 0.001
+    - Inclination: 56.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 7: HBO_Sat3
+  Type: cluster_member
+  Cluster: HBO
+  Role: child
+  Orbit:
+    - Semi-major axis: 7071 km
+    - Altitude: 700.0 km
+    - Eccentricity: 0.001
+    - Inclination: 56.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 8: HBO_Sat4
+  Type: cluster_member
+  Cluster: HBO
+  Role: child
+  Orbit:
+    - Semi-major axis: 7071 km
+    - Altitude: 700.0 km
+    - Eccentricity: 0.001
+    - Inclination: 56.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 9: HBO_Sat5
+  Type: cluster_member
+  Cluster: HBO
+  Role: child
+  Orbit:
+    - Semi-major axis: 7071 km
+    - Altitude: 700.0 km
+    - Eccentricity: 0.001
+    - Inclination: 56.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 10: HBO_Sat6
+  Type: cluster_member
+  Cluster: HBO
+  Role: child
+  Orbit:
+    - Semi-major axis: 7071 km
+    - Altitude: 700.0 km
+    - Eccentricity: 0.001
+    - Inclination: 56.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 11: SE
+  Type: individual
+  Orbit:
+    - Semi-major axis: 12371.0 km
+    - Altitude: 6000.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 12: UZI_Leader
+  Type: cluster_member
+  Cluster: UZI
+  Role: leader
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 13: UZI_Sat2
+  Type: cluster_member
+  Cluster: UZI
+  Role: child
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.12°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 14: UZI_Sat3
+  Type: cluster_member
+  Cluster: UZI
+  Role: child
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 54.88°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 15: MMM_Leader
+  Type: cluster_member
+  Cluster: MMM
+  Role: leader
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 16: MMM_Sat2
+  Type: cluster_member
+  Cluster: MMM
+  Role: child
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 17: MMM_Sat3
+  Type: cluster_member
+  Cluster: MMM
+  Role: child
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 18: MMM_Sat4
+  Type: cluster_member
+  Cluster: MMM
+  Role: child
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 19: MMM_Sat5
+  Type: cluster_member
+  Cluster: MMM
+  Role: child
+  Orbit:
+    - Semi-major axis: 16371 km
+    - Altitude: 10000.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 20: GNO_Leader
+  Type: cluster_member
+  Cluster: GNO
+  Role: leader
+  Orbit:
+    - Semi-major axis: 7071 km
+    - Altitude: 700.0 km
+    - Eccentricity: 0.001
+    - Inclination: 56.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 21: GNO_Sat2
+  Type: cluster_member
+  Cluster: GNO
+  Role: child
+  Orbit:
+    - Semi-major axis: 7071 km
+    - Altitude: 700.0 km
+    - Eccentricity: 0.001
+    - Inclination: 56.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 22: GNO_Sat3
+  Type: cluster_member
+  Cluster: GNO
+  Role: child
+  Orbit:
+    - Semi-major axis: 7071 km
+    - Altitude: 700.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.88°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 23: GNO_Sat4
+  Type: cluster_member
+  Cluster: GNO
+  Role: child
+  Orbit:
+    - Semi-major axis: 7071 km
+    - Altitude: 700.0 km
+    - Eccentricity: 0.001
+    - Inclination: 56.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 24: GNO_Sat5
+  Type: cluster_member
+  Cluster: GNO
+  Role: child
+  Orbit:
+    - Semi-major axis: 7071 km
+    - Altitude: 700.0 km
+    - Eccentricity: 0.001
+    - Inclination: 56.12°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+OUTPUT:
+  Results Directory: D:\Swinburne University\Sem01 2025\Computing Technology Project A\Github\satelliteConstellation-basilisk\ProjectWork\BskSim\logs\sim_results_20251031_134139
+  Plots Generated: 0
+  Binary File: D:\Swinburne University\Sem01 2025\Computing Technology Project A\Github\satelliteConstellation-basilisk\ProjectWork\BskSim\Vizfile\_VizFiles\spacecraft_viz_UnityViz.bin (10.43 MB)

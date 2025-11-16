@@ -1,0 +1,68 @@
+{
+  "timestamp": "2025-11-15T02:37:49.561811",
+  "episodes": 100,
+  "spacecraft": [
+    "Satellite1",
+    "Satellite2",
+    "Satellite3",
+    "Satellite4",
+    "assa_Leader",
+    "assa_Sat2",
+    "assa_Sat3",
+    "assa_Sat4"
+  ],
+  "n_satellites": 8,
+  "clusters": {
+    "assa": {
+      "formation": "Leader-Follower",
+      "satellites": [
+        "assa_Leader",
+        "assa_Sat2",
+        "assa_Sat3",
+        "assa_Sat4"
+      ]
+    }
+  },
+  "faults": {
+    "assa_Sat2": {
+      "enabled": true,
+      "type": "friction",
+      "time": 15.0,
+      "magnitude": 0.0005
+    },
+    "assa_Sat3": {
+      "enabled": true,
+      "type": "encoder",
+      "time": 15.0,
+      "magnitude": 20.0
+    }
+  },
+  "total_timesteps": 1000,
+  "avg_test_reward": 10.0,
+  "test_rewards": [
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0
+  ],
+  "strategy_distribution": [
+    0.0,
+    0.0,
+    10.0
+  ],
+  "avg_load_variance": 1.2434497664043516e-15,
+  "avg_max_load": 0.5321442484855652,
+  "model_path": "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\DRL\\results\\ppo_task_reassignment_20251115_023746.zip",
+  "plot_paths": [
+    "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\DRL\\results\\training_reward_curve_20251115_023746.png",
+    "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\DRL\\results\\strategy_distribution_20251115_023746.png",
+    "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\DRL\\results\\load_distribution_20251115_023746.png",
+    "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\DRL\\results\\performance_metrics_20251115_023746.png"
+  ]
+}

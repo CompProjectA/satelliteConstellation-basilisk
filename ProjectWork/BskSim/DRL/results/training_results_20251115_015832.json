@@ -1,0 +1,33 @@
+{
+  "timestamp": "2025-11-15T01:58:36.601858",
+  "episodes": 100,
+  "satellites": 8,
+  "total_timesteps": 1000,
+  "avg_test_reward": 10.0,
+  "test_rewards": [
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0
+  ],
+  "strategy_distribution": [
+    0.0,
+    2.0,
+    8.0
+  ],
+  "avg_load_variance": 0.0013079291675239801,
+  "avg_max_load": 0.5007970929145813,
+  "model_path": "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\DRL\\results\\ppo_task_reassignment_20251115_015832.zip",
+  "plot_paths": [
+    "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\DRL\\results\\training_reward_curve_20251115_015832.png",
+    "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\DRL\\results\\strategy_distribution_20251115_015832.png",
+    "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\DRL\\results\\load_distribution_20251115_015832.png",
+    "D:\\Swinburne University\\Sem01 2025\\Computing Technology Project A\\Github\\satelliteConstellation-basilisk\\ProjectWork\\BskSim\\DRL\\results\\performance_metrics_20251115_015832.png"
+  ]
+}

@@ -1,0 +1,53 @@
+REAL ML FAULT DETECTION REPORT
+ MODEL ON BASILISK DATA
+============================================================
+
+Analysis Date: 2025-11-15 02:00:19
+Data Source: Real Basilisk Simulation
+ML Model: Client's anomaly_detection_model.keras
+
+SUMMARY:
+  Spacecraft Analyzed: 8
+  Total ML Detections: 1
+  Spacecraft with Faults: 1
+  Success Rate: 50.0%
+
+  Average Confidence: 1.000
+  Max Confidence: 1.000
+  Min Confidence: 1.000
+
+SPACECRAFT ANALYSIS:
+
+Satellite1:
+  Real ML Detections: 1
+    1. Time: 15.00 min
+       Confidence: 1.000
+       Anomaly Score: 141.215
+       Data Points: 60
+
+Satellite2:
+  Real ML Detections: 0
+
+Satellite3:
+  Real ML Detections: 0
+
+Satellite4:
+  Real ML Detections: 0
+
+asa_Leader:
+  Real ML Detections: 0
+
+asa_Sat2:
+  Real ML Detections: 0
+
+asa_Sat3:
+  Real ML Detections: 0
+
+asa_Sat4:
+  Real ML Detections: 0
+
+REAL DATA INTEGRATION:
+SUCCESS: Client's ML model successfully loaded
+SUCCESS: Real Basilisk telemetry extracted
+SUCCESS: ML inference on real simulation data
+SUCCESS: Fault detection on actual spacecraft behavior

@@ -1,0 +1,80 @@
+COMPREHENSIVE FAULT DETECTION + DRL ANALYSIS REPORT
+=================================================================
+
+Analysis Date: 2025-11-15T02:00:20.248956
+Duration: 0.7 seconds
+Components Used:
+  AVAILABLE: Fault Detection
+  AVAILABLE: Drl Available
+  AVAILABLE: Ml Model
+
+FAULT DETECTION SUMMARY:
+------------------------------
+Spacecraft Analyzed: 8
+Faults Detected: 1
+Success Rate: 50.0%
+Average Confidence: 1.000
+Max Confidence: 1.000
+
+DRL DECISION MAKING SUMMARY:
+------------------------------
+Strategy Selected: load_balanced
+Action Taken: 2
+Decision Confidence: 0.534
+DRL Model Used: True
+Model Type: Neural Network (Expert-Supervised)
+
+TASK REASSIGNMENT SUMMARY:
+------------------------------
+Assignments Created: 7
+Execution Success: True
+Healthy Spacecraft: 7
+Faulty Spacecraft: 1
+
+SYSTEM HEALTH ASSESSMENT:
+------------------------------
+Overall Status: EXCELLENT
+Healthy Spacecraft: 7
+Faulty Spacecraft: 1
+Tasks Reassigned: 7
+
+DETAILED FAULT ANALYSIS:
+------------------------------
+
+Satellite1:
+  Fault 1:
+    Type: telemetry_attitude_error_change
+    Time: 15.00 min
+    Confidence: 1.000
+    Anomaly Score: 64.07
+
+Satellite2:
+  No faults detected
+
+Satellite3:
+  No faults detected
+
+Satellite4:
+  No faults detected
+
+asa_Leader:
+  No faults detected
+
+asa_Sat2:
+  No faults detected
+
+asa_Sat3:
+  No faults detected
+
+asa_Sat4:
+  No faults detected
+
+RECOMMENDATIONS:
+------------------------------
+1. Continue normal operations
+2. Maintain routine monitoring
+4. Investigate root causes of 1 detected faults
+5. Update fault detection thresholds if needed
+6. Review DRL model decisions
+7. Consider retraining with additional scenarios
+8. Archive analysis results for future reference

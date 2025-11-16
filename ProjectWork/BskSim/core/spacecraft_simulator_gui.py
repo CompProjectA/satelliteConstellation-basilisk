@@ -1365,6 +1365,18 @@ class SatelliteSimulatorApp:
             if getattr(self, 'integrated_drl_results', None):
                 self._handle_drl_results(self.integrated_drl_results)
 
+            if hasattr(self, 'drl_tab'):
+                        try:
+                            self._thread_safe(
+                                self.drl_tab.update_simulation_results,
+                                scenario=scenario,
+                                config=config,
+                                ml_results=self.ml_detection_results,
+                                drl_results=getattr(self, 'integrated_drl_results', None)
+                            )
+                            self.add_log("DRL tab updated with simulation results")
+                        except Exception as e:
+                            self.add_log(f"Warning: Could not update DRL tab: {e}", "WARNING")
             pupdate("Simulation complete!", "Processing results...")
             self._show_completion_message_with_drl(config, output_dir)
 

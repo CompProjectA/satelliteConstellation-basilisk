@@ -1,0 +1,112 @@
+SPACECRAFT CONSTELLATION SIMULATION SUMMARY
+==================================================
+
+Date: 2025-10-31 11:55:03
+
+MODULE STATUS:
+  Basilisk: Available
+  Cluster Integration: Available
+  Plotting: Available (APIs: new, old)
+  Fault Loader: Available
+  Available Faults: ['friction', 'power_limit', 'encoder', 'battery']
+
+SIMULATION CONFIGURATION:
+  Duration: 30.0 minutes
+  Time Step: 1 second
+  Spacecraft: 8
+  Clusters: 1
+
+SPACECRAFT DETAILS:
+
+Spacecraft 1: Satellite1
+  Type: individual
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+  Fault: DISABLED
+
+Spacecraft 2: Satellite2
+  Type: individual
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+  Fault: DISABLED
+
+Spacecraft 3: Satellite3
+  Type: individual
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+  Fault: DISABLED
+
+Spacecraft 4: Satellite4
+  Type: individual
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.01
+    - Inclination: 55.0°
+    - RAAN: 45.0°
+  Fault: DISABLED
+
+Spacecraft 5: assa_Leader
+  Type: cluster_member
+  Cluster: assa
+  Role: leader
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 6: assa_Sat2
+  Type: cluster_member
+  Cluster: assa
+  Role: child
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 7: assa_Sat3
+  Type: cluster_member
+  Cluster: assa
+  Role: child
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+Spacecraft 8: assa_Sat4
+  Type: cluster_member
+  Cluster: assa
+  Role: child
+  Orbit:
+    - Semi-major axis: 6971 km
+    - Altitude: 600.0 km
+    - Eccentricity: 0.001
+    - Inclination: 55.0°
+    - RAAN: 0.0°
+  Fault: DISABLED
+
+OUTPUT:
+  Results Directory: D:\Swinburne University\Sem01 2025\Computing Technology Project A\Github\satelliteConstellation-basilisk\ProjectWork\BskSim\logs\sim_results_20251031_115459
+  Plots Generated: 0
+  Binary File: D:\Swinburne University\Sem01 2025\Computing Technology Project A\Github\satelliteConstellation-basilisk\ProjectWork\BskSim\Vizfile\_VizFiles\spacecraft_viz_UnityViz.bin (2.27 MB)

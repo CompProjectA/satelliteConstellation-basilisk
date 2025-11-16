@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-drl_tab.py — Fully Integrated DRL Tab
+drl_tab_enhanced.py — FIXED DRL Tab with Proper GUI Integration
 
-Integrates with:
-- GUI system (spacecraft_simulator_gui.py)
-- DRL algorithms (PPO, DQN from DRL/ folder)
-- Spacecraft simulation (spacecraft_simulation.py)
+KEY FIXES:
+1. Pulls actual spacecraft names from constellation_tab
+2. Passes cluster configuration to training
+3. Passes fault configuration to training
+4. Updates Integration Status tab with real data
+5. Shows actual names in training visualizations
 """
 
 import os
@@ -21,7 +23,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import numpy as np
 
-# Add paths for integration
+# Add paths
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 root_dir = os.path.dirname(parent_dir)
@@ -51,10 +53,9 @@ except Exception:
     MPL_AVAILABLE = False
 
 
-
 class DRLTab(ttk.Frame):
     """
-    Fully integrated DRL tab with training, fault detection, and task reassignment
+    ENHANCED DRL Tab with proper GUI integration
     """
 
     def __init__(self, parent, parent_app=None, default_script=None, default_results_dir=None):
@@ -73,100 +74,170 @@ class DRLTab(ttk.Frame):
             rd = os.path.join(drl_dir, "results")
             self.results_dir.set(rd)
 
-        os.makedirs(self.results_dir.get(), exist_ok=True)  # ensure it exists
+        os.makedirs(self.results_dir.get(), exist_ok=True)
         self.status_text = tk.StringVar(value="Idle")
-        self.algorithm_var = tk.StringVar(value="PPO")
-        self.training_mode = tk.BooleanVar(value=False)
         self._log_lines = 0
+        
+        # Integration state
+        self.last_scenario = None
+        self.last_config = None
+        self.fault_detection_results = None
+        self.drl_results = None
 
-
-        # Layout: nested notebook
+        # Layout
         nb = ttk.Notebook(self)
         nb.pack(fill="both", expand=True, padx=5, pady=5)
         self._nb = nb
 
         self.overview = ttk.Frame(nb)
         self.training = ttk.Frame(nb)
+        self.integration = ttk.Frame(nb)
         self.results = ttk.Frame(nb)
         
         nb.add(self.overview, text="Overview")
-        nb.add(self.training, text="Training")
+        nb.add(self.training, text="PPO Training")
+        nb.add(self.integration, text="Integration Status")
         nb.add(self.results, text="Results")
 
         self._build_overview(self.overview)
         self._build_training(self.training)
+        self._build_integration(self.integration)
         self._build_results(self.results)
 
-        # Poll the queue for subprocess output
+        # Poll queue
         self.after(150, self._drain_queue)
 
-    # ------------------------------ Overview ------------------------------
+    # ============================= OVERVIEW TAB =============================
     def _build_overview(self, root):
+        """Build overview tab"""
         pad = {"padx": 10, "pady": 6}
 
-        # Header
-        ttk.Label(root, text="Deep Reinforcement Learning System",
+        ttk.Label(root, text="DRL Task Reassignment System",
                   font=("TkDefaultFont", 14, "bold")).pack(anchor="w", **pad)
         
-        # Status frame
-        status_frame = ttk.LabelFrame(root, text="System Status", padding=10)
+        # Integration status
+        status_frame = ttk.LabelFrame(root, text="Integration Status", padding=10)
         status_frame.pack(fill="x", **pad)
         
-        # Component availability
         components = [
-            ("Matplotlib", MPL_AVAILABLE),
-            ("Pandas", PD_AVAILABLE)
+            ("Constellation Tab", hasattr(self.parent_app, 'constellation_tab') if self.parent_app else False),
+            ("Fault Tab", hasattr(self.parent_app, 'fault_tab') if self.parent_app else False),
+            ("Fault Detection Tab", hasattr(self.parent_app, 'fault_detection_tab') if self.parent_app else False),
+            ("Task Reassignment Tab", hasattr(self.parent_app, 'task_reassignment_tab') if self.parent_app else False),
         ]
         
         for name, available in components:
             row = ttk.Frame(status_frame)
             row.pack(fill="x", pady=2)
-            ttk.Label(row, text=f"{name}:", width=20).pack(side="left")
-            status = "✓ Available" if available else "✗ Not Available"
+            ttk.Label(row, text=f"{name}:", width=25).pack(side="left")
+            status = "✓ Connected" if available else "✗ Not Available"
             color = "green" if available else "red"
             lbl = ttk.Label(row, text=status, foreground=color)
             lbl.pack(side="left")
         
-        # Separator
-        ttk.Separator(root, orient="horizontal").pack(fill="x", pady=10)
+        # Configuration summary
+        config_frame = ttk.LabelFrame(root, text="Current Configuration", padding=10)
+        config_frame.pack(fill="x", **pad)
+        
+        row = ttk.Frame(config_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Spacecraft:", width=25).pack(side="left")
+        self.spacecraft_count_label = ttk.Label(row, text="Not configured")
+        self.spacecraft_count_label.pack(side="left")
+        
+        row = ttk.Frame(config_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Spacecraft Names:", width=25).pack(side="left")
+        self.spacecraft_names_label = ttk.Label(row, text="Not configured")
+        self.spacecraft_names_label.pack(side="left")
+        
+        row = ttk.Frame(config_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Faults Configured:", width=25).pack(side="left")
+        self.faults_count_label = ttk.Label(row, text="Not configured")
+        self.faults_count_label.pack(side="left")
+        
+        row = ttk.Frame(config_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Clusters:", width=25).pack(side="left")
+        self.clusters_count_label = ttk.Label(row, text="Not configured")
+        self.clusters_count_label.pack(side="left")
+        
+        ttk.Button(config_frame, text="Refresh Configuration", 
+                  command=self._refresh_config_summary).pack(pady=(10, 0))
         
         # Info text
-        info_text = """DRL System Components:
+        ttk.Separator(root, orient="horizontal").pack(fill="x", pady=10)
+        
+        info_text = """ENHANCED DRL TASK REASSIGNMENT:
 
-1. Training: Train PPO, or DQN algorithms for task reassignment
-2. Results: View training metrics, fault detection outputs, and reassignment plans
+✓ Now pulls actual spacecraft names from Constellation tab
+✓ Uses real cluster configuration
+✓ Uses real fault scenarios
+✓ Training visualizations show YOUR spacecraft names
 
-Workflow:
-- Use Training tab to train DRL agents (or load pre-trained models)
-- Use Integration tab to run complete fault detection + task reassignment
-- View results in the Results tab with plots and data files
+WORKFLOW:
+1. Configure spacecraft in Constellation tab
+2. Configure faults in Fault tab
+3. Click "Refresh Configuration" to pull latest config
+4. Start Training to train DRL with your configuration
+5. Run Simulation to see DRL in action
+6. View results in Task Reassignment tab
 
-Getting Started:
-1. Click on the Training tab to configure and train DRL models
-2. Or click Integration to run fault detection with existing models
-3. Check Results tab for output files and visualizations
+WHAT'S FIXED:
+• Training now uses actual spacecraft names (not Sat1-Sat8)
+• Load distribution charts show real names
+• Cluster configuration is passed to training
+• Fault scenarios are used in training environment
         """
         
         info_box = tk.Text(root, height=15, wrap="word", font=("TkDefaultFont", 9))
         info_box.pack(fill="both", expand=True, **pad)
         info_box.insert("1.0", info_text)
         info_box.configure(state="disabled", bg="#f0f0f0")
+        
+        # Auto-refresh
+        self._refresh_config_summary()
 
-    # ------------------------------ Training ------------------------------
+    # ============================= TRAINING TAB =============================
     def _build_training(self, root):
+        """Build training tab"""
         pad = {"padx": 10, "pady": 6}
 
-        ttk.Label(root, text="DRL Training Configuration",
+        ttk.Label(root, text="PPO Training Configuration",
                   font=("TkDefaultFont", 12, "bold")).pack(anchor="w", **pad)
 
-        # Algorithm selection
-        algo_frame = ttk.LabelFrame(root, text="Algorithm", padding=10)
-        algo_frame.pack(fill="x", **pad)
+        # Configuration source
+        config_frame = ttk.LabelFrame(root, text="Configuration Source", padding=10)
+        config_frame.pack(fill="x", **pad)
         
-        ttk.Radiobutton(algo_frame, text="PPO (Proximal Policy Optimization)", 
-                       variable=self.algorithm_var, value="PPO").pack(anchor="w", pady=2)
-        ttk.Radiobutton(algo_frame, text="DQN (Deep Q-Network)", 
-                       variable=self.algorithm_var, value="DQN").pack(anchor="w", pady=2)
+        ttk.Label(config_frame, text="✓ Training will use current GUI configuration",
+                 font=("TkDefaultFont", 9, "bold"), foreground="green").pack(anchor="w", pady=(0, 5))
+        
+        ttk.Label(config_frame, text="This includes:",
+                 font=("TkDefaultFont", 9)).pack(anchor="w", pady=(5, 2))
+        ttk.Label(config_frame, text="  • Actual spacecraft names from Constellation tab",
+                 font=("TkDefaultFont", 9)).pack(anchor="w")
+        ttk.Label(config_frame, text="  • Cluster configurations",
+                 font=("TkDefaultFont", 9)).pack(anchor="w")
+        ttk.Label(config_frame, text="  • Fault scenarios from Fault tab",
+                 font=("TkDefaultFont", 9)).pack(anchor="w")
+        
+        # Training parameters
+        param_frame = ttk.LabelFrame(root, text="Training Parameters", padding=10)
+        param_frame.pack(fill="x", **pad)
+        
+        row = ttk.Frame(param_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Training Episodes:", width=20).pack(side="left")
+        self.episodes_var = tk.IntVar(value=100)
+        ttk.Spinbox(row, from_=10, to=1000, textvariable=self.episodes_var, width=10).pack(side="left")
+        
+        row = ttk.Frame(param_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Max Steps/Episode:", width=20).pack(side="left")
+        self.max_steps_var = tk.IntVar(value=20)
+        ttk.Spinbox(row, from_=5, to=100, textvariable=self.max_steps_var, width=10).pack(side="left")
 
         # Control buttons
         ctrl_frame = ttk.Frame(root)
@@ -184,7 +255,6 @@ Getting Started:
         
         ttk.Label(log_frame, text="Training Log:").pack(anchor="w")
         
-        # Text widget with scrollbar
         text_frame = ttk.Frame(log_frame)
         text_frame.pack(fill="both", expand=True, pady=(2, 0))
         
@@ -195,11 +265,92 @@ Getting Started:
         self.train_log.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-   # ------------------------------ Results ------------------------------
-    def _build_results(self, root):
+    # ============================= INTEGRATION TAB =============================
+    def _build_integration(self, root):
+        """Build integration status tab"""
         pad = {"padx": 10, "pady": 6}
 
-        # Header
+        ttk.Label(root, text="Integration with Simulation Pipeline",
+                  font=("TkDefaultFont", 12, "bold")).pack(anchor="w", **pad)
+
+        # Last simulation info
+        sim_frame = ttk.LabelFrame(root, text="Last Simulation Run", padding=10)
+        sim_frame.pack(fill="x", **pad)
+        
+        row = ttk.Frame(sim_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Status:", width=20).pack(side="left")
+        self.sim_status_label = ttk.Label(row, text="No simulation run yet")
+        self.sim_status_label.pack(side="left")
+        
+        row = ttk.Frame(sim_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Spacecraft:", width=20).pack(side="left")
+        self.sim_spacecraft_label = ttk.Label(row, text="-")
+        self.sim_spacecraft_label.pack(side="left")
+        
+        row = ttk.Frame(sim_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Spacecraft Names:", width=20).pack(side="left")
+        self.sim_names_label = ttk.Label(row, text="-")
+        self.sim_names_label.pack(side="left")
+        
+        row = ttk.Frame(sim_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Faults Detected:", width=20).pack(side="left")
+        self.sim_faults_label = ttk.Label(row, text="-")
+        self.sim_faults_label.pack(side="left")
+        
+        # DRL results summary
+        drl_frame = ttk.LabelFrame(root, text="DRL Task Reassignment Results", padding=10)
+        drl_frame.pack(fill="x", **pad)
+        
+        row = ttk.Frame(drl_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="System Health:", width=20).pack(side="left")
+        self.health_label = ttk.Label(row, text="-")
+        self.health_label.pack(side="left")
+        
+        row = ttk.Frame(drl_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Tasks Reassigned:", width=20).pack(side="left")
+        self.tasks_label = ttk.Label(row, text="-")
+        self.tasks_label.pack(side="left")
+        
+        row = ttk.Frame(drl_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Healthy Spacecraft:", width=20).pack(side="left")
+        self.healthy_label = ttk.Label(row, text="-")
+        self.healthy_label.pack(side="left")
+        
+        row = ttk.Frame(drl_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Faulty Spacecraft:", width=20).pack(side="left")
+        self.faulty_label = ttk.Label(row, text="-")
+        self.faulty_label.pack(side="left")
+        
+        ttk.Button(drl_frame, text="View Detailed Results in Task Reassignment Tab",
+                  command=self._view_task_reassignment).pack(pady=(10, 0))
+        
+        # Integration log
+        log_frame = ttk.LabelFrame(root, text="Integration Log", padding=10)
+        log_frame.pack(fill="both", expand=True, **pad)
+        
+        text_frame = ttk.Frame(log_frame)
+        text_frame.pack(fill="both", expand=True)
+        
+        self.integration_log = tk.Text(text_frame, height=10, state="disabled", wrap="word")
+        scrollbar = ttk.Scrollbar(text_frame, command=self.integration_log.yview)
+        self.integration_log.configure(yscrollcommand=scrollbar.set)
+        
+        self.integration_log.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    # ============================= RESULTS TAB =============================
+    def _build_results(self, root):
+        """Build results tab"""
+        pad = {"padx": 10, "pady": 6}
+
         hdr = ttk.Frame(root)
         hdr.pack(fill="x", **pad)
         
@@ -209,7 +360,7 @@ Getting Started:
         ttk.Button(hdr, text="Refresh", command=self._refresh_results).pack(side="left", padx=(0, 5))
         ttk.Button(hdr, text="Open Folder", command=self._open_results_folder).pack(side="left")
 
-        # Treeview for files
+        # Treeview
         cols = ("name","size","modified")
         tvf = ttk.Frame(root)
         tvf.pack(fill="x", expand=False, **pad)
@@ -225,7 +376,7 @@ Getting Started:
         self.tree.pack(side="left", fill="both", expand=True)
         tree_scroll.pack(side="right", fill="y")
 
-        # Preview area
+        # Preview
         self.preview_frame = ttk.LabelFrame(root, text="Preview")
         self.preview_frame.pack(fill="both", expand=True, **pad)
 
@@ -234,62 +385,109 @@ Getting Started:
             self.ax = self.fig.add_subplot(111)
             self.canvas = FigureCanvasTkAgg(self.fig, master=self.preview_frame)
             self.canvas.get_tk_widget().pack(fill="x", expand=True)
-            
         else:
             self.fig = None
-            ttk.Label(self.preview_frame, text="Matplotlib not available - preview disabled").pack(pady=20)
+            ttk.Label(self.preview_frame, text="Matplotlib not available").pack(pady=20)
 
         self.tree.bind("<<TreeviewSelect>>", self._on_select_artifact)
         
-        # Auto-refresh if results dir exists
         if self.results_dir.get() and os.path.isdir(self.results_dir.get()):
             self._refresh_results()
 
-    # ------------------------------ Training Actions ------------------------------
+    # ============================= CORE METHODS =============================
+    def _refresh_config_summary(self):
+        """Refresh configuration summary - PULL FROM GUI"""
+        if not self.parent_app:
+            return
+        
+        try:
+            # Spacecraft count and names
+            if hasattr(self.parent_app, 'satellites'):
+                count = len(self.parent_app.satellites)
+                names = [sat.get('name', f'Sat{i+1}') for i, sat in enumerate(self.parent_app.satellites)]
+                self.spacecraft_count_label.config(text=f"{count} spacecraft configured")
+                self.spacecraft_names_label.config(text=f"{', '.join(names[:3])}{'...' if len(names) > 3 else ''}")
+            
+            # Faults
+            if hasattr(self.parent_app, 'satellites'):
+                faults = sum(1 for sat in self.parent_app.satellites 
+                           if sat.get('fault', {}).get('enabled', False))
+                self.faults_count_label.config(text=f"{faults} faults configured")
+            
+            # Clusters
+            if hasattr(self.parent_app, 'constellation_tab') and hasattr(self.parent_app.constellation_tab, 'clusters'):
+                clusters = len(self.parent_app.constellation_tab.clusters)
+                self.clusters_count_label.config(text=f"{clusters} clusters configured")
+        except Exception as e:
+            print(f"Error refreshing config: {e}")
+
     def _start_training(self):
-        """Start DRL training"""
-        algo = self.algorithm_var.get()
-        
-        # Map algorithm to script
-        script_map = {
-            "PPO": "PPO.py",
-            "DQN": "DQN.py"
-        }
-        
-        script_name = script_map.get(algo)
-        if not script_name:
-            messagebox.showerror("Error", f"Unknown algorithm: {algo}")
+        """Start PPO training WITH GUI CONFIGURATION"""
+        if not self.parent_app or not hasattr(self.parent_app, 'satellites'):
+            messagebox.showerror("Configuration Error", 
+                            "No spacecraft configuration available.\nPlease configure constellation first.")
             return
         
-        script_path = os.path.join(drl_dir, script_name)
-        if not os.path.exists(script_path):
-            messagebox.showerror("Error", f"Script not found:\n{script_path}\n\nPlease ensure DRL scripts are in the DRL/ folder.")
+        if len(self.parent_app.satellites) == 0:
+            messagebox.showerror("Configuration Error", 
+                            "No spacecraft configured.\nPlease add satellites in Constellation tab.")
+            return
+        
+        # Find enhanced PPO script
+        ppo_script = os.path.join(drl_dir, "PPO_simple_enhanced.py")
+        if not os.path.exists(ppo_script):
+            messagebox.showerror("Script Not Found", 
+                            f"Enhanced PPO script not found at:\n{ppo_script}\n\n"
+                            f"Please ensure PPO_simple_enhanced.py is in the DRL/ folder.")
             return
 
-        self._append_train_log(f"Starting {algo} training...\n")
-        self._append_train_log(f"Script: {script_path}\n")
+        # Extract configuration from GUI
+        spacecraft_names = [sat.get('name') for sat in self.parent_app.satellites]
         
-        # Run the script
-        self._run_script(script_path)
+        # Cluster configuration
+        cluster_config = {}
+        if hasattr(self.parent_app, 'constellation_tab') and hasattr(self.parent_app.constellation_tab, 'clusters'):
+            for cluster in self.parent_app.constellation_tab.clusters:
+                cluster_config[cluster['name']] = {
+                    'formation': cluster.get('formation', 'Leader-Follower'),
+                    'satellites': cluster.get('satellites', [])
+                }
+        
+        # Fault configuration
+        fault_config = {}
+        for sat in self.parent_app.satellites:
+            if sat.get('fault', {}).get('enabled'):
+                fault_config[sat['name']] = {
+                    'enabled': True,
+                    'type': sat['fault'].get('type'),
+                    'time': sat['fault'].get('time'),
+                    'magnitude': sat['fault'].get('magnitude')
+                }
 
-    def _stop_training(self):
-        """Stop training"""
-        if self.proc and self.proc.poll() is None:
-            try:
-                self.proc.terminate()
-                self._append_train_log("\n[Training stopped by user]\n")
-            except Exception as e:
-                self._append_train_log(f"\n[Stop failed: {e}]\n")
-        self.status_text.set("Stopped")
-        self._stop_reader.set()
+        self._append_train_log(f"\n=== Starting Enhanced PPO Training ===\n")
+        self._append_train_log(f"Configuration:\n")
+        self._append_train_log(f"  • Spacecraft: {len(spacecraft_names)}\n")
+        self._append_train_log(f"  • Names: {', '.join(spacecraft_names)}\n")
+        self._append_train_log(f"  • Clusters: {len(cluster_config)}\n")
+        self._append_train_log(f"  • Faults: {len(fault_config)}\n")
+        self._append_train_log(f"  • Episodes: {self.episodes_var.get()}\n")
+        self._append_train_log(f"\nScript: {ppo_script}\n\n")
+        
+        # Run with configuration
+        self._run_script_with_config(ppo_script, spacecraft_names, cluster_config, fault_config)
 
-
-
-    # ------------------------------ Script Execution ------------------------------
-    def _run_script(self, script_path):
-        """Run a Python script in a subprocess"""
+    def _run_script_with_config(self, script_path, spacecraft_names, cluster_config, fault_config):
+        """Run script with GUI configuration passed via environment variables"""
         python = sys.executable
         cmd = [python, script_path]
+        
+        # Add environment variables with GUI configuration
+        env = os.environ.copy()
+        env['DRL_EPISODES'] = str(self.episodes_var.get())
+        env['DRL_MAX_STEPS'] = str(self.max_steps_var.get())
+        env['DRL_SPACECRAFT_NAMES'] = json.dumps(spacecraft_names)
+        env['DRL_CLUSTER_CONFIG'] = json.dumps(cluster_config)
+        env['DRL_FAULT_CONFIG'] = json.dumps(fault_config)
 
         try:
             self.status_text.set("Running...")
@@ -302,7 +500,8 @@ Getting Started:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 bufsize=1,
-                universal_newlines=True
+                universal_newlines=True,
+                env=env
             )
         except Exception as e:
             messagebox.showerror("Error", f"Failed to start:\n{e}")
@@ -332,7 +531,7 @@ Getting Started:
             self.queue.put(("done", None))
 
     def _drain_queue(self):
-        """Drain the output queue"""
+        """Drain output queue"""
         drained = False
         while True:
             try:
@@ -352,7 +551,93 @@ Getting Started:
 
         self.after(150 if drained else 250, self._drain_queue)
 
-    # ------------------------------ Logging Helpers ------------------------------
+    def _stop_training(self):
+        """Stop training"""
+        if self.proc and self.proc.poll() is None:
+            try:
+                self.proc.terminate()
+                self._append_train_log("\n[Training stopped by user]\n")
+            except Exception as e:
+                self._append_train_log(f"\n[Stop failed: {e}]\n")
+        self.status_text.set("Stopped")
+        self._stop_reader.set()
+
+    def update_simulation_results(self, scenario, config, ml_results=None, drl_results=None):
+        """Called by main GUI after simulation - UPDATE INTEGRATION STATUS"""
+        self.last_scenario = scenario
+        self.last_config = config
+        self.fault_detection_results = ml_results
+        self.drl_results = drl_results
+        
+        # Update integration display
+        self._update_integration_display()
+        
+        # Log
+        self._log_integration(f"\n[{datetime.datetime.now().strftime('%H:%M:%S')}] Simulation completed")
+        
+        if ml_results:
+            summary = ml_results.get('summary', {})
+            detections = summary.get('total_detections', 0)
+            self._log_integration(f"  • Fault Detection: {detections} faults detected")
+        
+        if drl_results:
+            if "error" not in drl_results:
+                health = drl_results.get("system_health", {})
+                self._log_integration(f"  • DRL: {health.get('tasks_reassigned', 0)} tasks reassigned")
+                self._log_integration(f"  • System Health: {health.get('overall_system_status', 'unknown')}")
+            else:
+                self._log_integration(f"  • DRL: Error - {drl_results.get('error')}")
+
+    def _update_integration_display(self):
+        """Update integration status display WITH SPACECRAFT NAMES"""
+        if self.last_scenario:
+            spacecraft_count = len(getattr(self.last_scenario, 'sc_objects', []))
+            self.sim_status_label.config(text="✓ Completed", foreground="green")
+            self.sim_spacecraft_label.config(text=f"{spacecraft_count} spacecraft")
+            
+            # Show spacecraft names
+            if self.last_config and hasattr(self.last_config, 'spacecraft_list'):
+                names = [sc.get('name') for sc in self.last_config.spacecraft_list]
+                self.sim_names_label.config(text=f"{', '.join(names[:3])}{'...' if len(names) > 3 else ''}")
+        
+        if self.fault_detection_results:
+            summary = self.fault_detection_results.get('summary', {})
+            detections = summary.get('total_detections', 0)
+            self.sim_faults_label.config(text=f"{detections} faults detected")
+        
+        if self.drl_results and "error" not in self.drl_results:
+            health = self.drl_results.get("system_health", {})
+            
+            status = health.get("overall_system_status", "unknown")
+            self.health_label.config(text=status.title())
+            
+            tasks = health.get("tasks_reassigned", 0)
+            self.tasks_label.config(text=f"{tasks} tasks")
+            
+            healthy = health.get("healthy_spacecraft_count", 0)
+            self.healthy_label.config(text=f"{healthy} spacecraft")
+            
+            faulty = health.get("faulty_spacecraft_count", 0)
+            self.faulty_label.config(text=f"{faulty} spacecraft")
+
+    def _view_task_reassignment(self):
+        """Switch to Task Reassignment tab"""
+        if self.parent_app and hasattr(self.parent_app, 'notebook'):
+            try:
+                for i in range(self.parent_app.notebook.index("end")):
+                    if self.parent_app.notebook.tab(i, "text") == "Task Reassignment":
+                        self.parent_app.notebook.select(i)
+                        break
+            except Exception as e:
+                print(f"Error switching tabs: {e}")
+
+    def _log_integration(self, message):
+        """Log to integration log"""
+        self.integration_log.configure(state="normal")
+        self.integration_log.insert("end", message + "\n")
+        self.integration_log.see("end")
+        self.integration_log.configure(state="disabled")
+
     def _append_train_log(self, s: str):
         """Append to training log"""
         self.train_log.configure(state="normal")
@@ -364,9 +649,8 @@ Getting Started:
         self.train_log.see("end")
         self.train_log.configure(state="disabled")
 
-    # ------------------------------ Results Handling ------------------------------
     def _refresh_results(self):
-        """Refresh results file list"""
+        """Refresh results list"""
         folder = self.results_dir.get().strip()
         self.tree.delete(*self.tree.get_children())
         if not folder or not os.path.isdir(folder):
@@ -409,7 +693,7 @@ Getting Started:
             self._preview_json(path)
 
     def _preview_image(self, path):
-        """Preview an image file"""
+        """Preview image"""
         if self.fig is None:
             return
         try:
@@ -424,7 +708,7 @@ Getting Started:
             print(f"Error previewing image: {e}")
 
     def _preview_json(self, path):
-        """Preview JSON file"""
+        """Preview JSON"""
         if self.fig is None:
             return
         try:
@@ -442,7 +726,7 @@ Getting Started:
             print(f"Error previewing JSON: {e}")
 
     def _open_results_folder(self):
-        """Open results folder in file explorer"""
+        """Open results folder"""
         folder = self.results_dir.get().strip()
         if not folder or not os.path.isdir(folder):
             messagebox.showinfo("DRL", "No folder selected or folder not found.")

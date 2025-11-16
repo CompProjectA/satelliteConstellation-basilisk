@@ -1,0 +1,13 @@
+{
+  "error": "Fault detection failed",
+  "timestamp": "2025-10-31T13:19:16.061141",
+  "partial_fault_detection": {
+    "error": "LSTM not initialized"
+  },
+  "partial_drl_results": {},
+  "components_status": {
+    "fault_detection": true,
+    "drl_available": true,
+    "ml_available": true
+  }
+}
